@@ -30,7 +30,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     // Cool Down
     val COOLDOWN_TEMP_REGEXP = """^\s*cooldown_temp=(\d*)""".toRegex(RegexOption.MULTILINE)
     val MAX_TEMP_REGEXP = """^\s*max_temp=(\d*)""".toRegex(RegexOption.MULTILINE)
-    val MAX_TEMP_PAUSE_REGEXP = """^\s*max_temp_pause=(\d*)""".toRegex(RegexOption.MULTILINE)
+    val MAX_TEMP_PAUSE_REGEXP = """^\s*(?:max_temp_pause|resume_temp)=(\d*)""".toRegex(RegexOption.MULTILINE)
 
     val COOLDOWN_CHARGE_REGEXP = """^\s*cooldown_charge=(\d*)""".toRegex(RegexOption.MULTILINE)
     val COOLDOWN_PAUSE_REGEXP  = """^\s*cooldown_pause=(\d*)""".toRegex(RegexOption.MULTILINE)
@@ -331,7 +331,7 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     override fun getUpdateAccCapacityCommand(shutdown: Int, coolDown: Int, resume: Int, pause: Int): String = "/dev/.vr25/acc/acca -s shutdown_capacity=$shutdown cooldown_capacity=$coolDown resume_capacity=$resume pause_capacity=$pause"
 
-    override fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int): String = "/dev/.vr25/acc/acca -s cooldown_temp=${coolDownTemperature} max_temp=${temperatureMax} max_temp_pause=$wait"
+    override fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int): String = "/dev/.vr25/acc/acca -s cooldown_temp=${coolDownTemperature} max_temp=${temperatureMax} max_temp_pause=$wait resume_temp=$wait"
 
     override fun getUpdateAccVoltControlCommand(voltFile: String?, voltMax: Int?): String = "/dev/.vr25/acc/acca --set --voltage ${voltMax?.toString() ?: "-"}"
 
