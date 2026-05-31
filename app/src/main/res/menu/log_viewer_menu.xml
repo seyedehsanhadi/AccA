@@ -3,6 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/menu_capture"
+        android:title="@string/log_capture"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_export_bundle"
         android:title="@string/log_export_bundle"
         app:showAsAction="never" />

@@ -12,6 +12,7 @@ import android.view.View
 import android.widget.Toast
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
@@ -183,6 +184,126 @@ class LogViewerActivity : ScopedAppActivity()
         }
     }
 
+    /**
+     * Charge-activity capture. A one-shot snapshot can't reveal a 1-2s charge
+     * flicker, so this samples `acca -i` once per second for ~20s and records
+     * level / status / current / voltage per second, then classifies the active
+     * charging switch (level-type vs clean on/off) and flags an on/off
+     * oscillation near the pause cap. User-initiated and time-bounded, so there
+     * is no ongoing battery cost; it reads only, never changes charging.
+     */
+    private fun captureCharging()
+    {
+        setBusy(true)
+        binding.logReportText.text = getString(R.string.log_capturing)
+        launch {
+            val text = withContext(Dispatchers.IO) { runCapture(samples = 20) }
+            report = text
+            binding.logReportText.text = text
+            setBusy(false)
+        }
+    }
+
+    private suspend fun runCapture(samples: Int): String
+    {
+        val acca = "/dev/.vr25/acc/acca"
+        val sb = StringBuilder()
+        sb.append("# AccA charge capture\n")
+        sb.append("app          : ").append(appVersion()).append('\n')
+        sb.append("device       : ").append(Build.MANUFACTURER).append(' ')
+            .append(Build.MODEL).append(" (").append(Build.DEVICE).append(")\n")
+
+        if (!Shell.rootAccess()) {
+            sb.append("\nroot         : NOT GRANTED\n")
+            return sb.toString()
+        }
+
+        // Active switch + config band, captured once up front.
+        val head = Shell.su(
+            "echo @@SW; $acca -sp charging_switch 2>/dev/null; " +
+            "echo @@CAP; $acca -sp capacity 2>/dev/null"
+        ).exec().out.joinToString("\n")
+        val swLine = sectionBody(head, "@@SW", "@@CAP")
+        val capLine = sectionBody(head, "@@CAP", null)
+        val switchVal = Regex("""charging_switch=(.*)""").find(swLine)
+            ?.groupValues?.get(1)?.trim()?.trim('"')?.ifBlank { null }
+        val switchType = classifySwitch(switchVal)
+
+        sb.append("switch       : ").append(switchVal ?: "(automatic)").append('\n')
+        sb.append("switch_type  : ").append(switchType).append('\n')
+        if (capLine.isNotBlank()) sb.append("capacity     : ").append(capLine.trim()).append('\n')
+        sb.append("\n## Samples (1/sec)\n")
+        sb.append("t   level  status        current   voltage\n")
+
+        var statusChanges = 0
+        var prevStatus: String? = null
+        var sawCharging = false
+        var sawNotCharging = false
+
+        for (t in 0 until samples) {
+            val info = Shell.su("$acca -i 2>/dev/null").exec().out.joinToString("\n")
+            val level = grab(info, """level\s+(\d+)""") ?: grab(info, """CAPACITY=(\d+)""") ?: "?"
+            val status = (grab(info, """status\s+(\S+)""") ?: grab(info, """STATUS=(\S+)""") ?: "?")
+            val curr = grab(info, """current_now\s+(\S+)""") ?: grab(info, """CURRENT_NOW=(\S+)""") ?: "?"
+            val volt = grab(info, """voltage_now\s+(\S+)""") ?: grab(info, """VOLTAGE_NOW=(\S+)""") ?: "?"
+
+            sb.append(String.format("%-3d %-6s %-13s %-9s %s\n", t, level, status, curr, volt))
+
+            val chg = status.contains("Charging", true) && !status.contains("Not", true)
+            if (chg) sawCharging = true else if (status != "?") sawNotCharging = true
+            if (prevStatus != null && prevStatus != status) statusChanges++
+            prevStatus = status
+
+            if (t < samples - 1) delay(1000)
+        }
+
+        sb.append("\n## Verdict\n")
+        val flicker = statusChanges >= 4 && sawCharging && sawNotCharging
+        when {
+            flicker && switchType == "level" ->
+                sb.append("SWITCH FIGHT (flicker). Status changed ").append(statusChanges)
+                    .append(" times in ").append(samples).append("s while a LEVEL-type switch is active.\n")
+                    .append("The level switch (").append(switchVal)
+                    .append(") is being re-armed by the charger firmware. Pin a clean on/off switch instead, ")
+                    .append("or flash an ACC build with the switch stability gate.\n")
+            flicker ->
+                sb.append("Charging oscillated ").append(statusChanges)
+                    .append(" times in ").append(samples).append("s. Possible switch fight; capture the active switch and test alternatives.\n")
+            sawCharging && !sawNotCharging ->
+                sb.append("Steady charging, no pause seen in ").append(samples).append("s (battery likely below the stop level).\n")
+            !sawCharging && sawNotCharging ->
+                sb.append("Steady paused/idle, no flicker — the limit is holding.\n")
+            else ->
+                sb.append("No clear pattern in ").append(samples).append("s.\n")
+        }
+
+        return sb.toString().trimEnd() + "\n"
+    }
+
+    /** Classify a switch value: a percent-like off value (e.g. "100 5") is a
+     *  level/throttle node; a discrete pair (e.g. "0 1") is a clean on/off. */
+    private fun classifySwitch(sw: String?): String
+    {
+        if (sw.isNullOrBlank()) return "automatic"
+        val low = sw.lowercase()
+        if (low.contains("charge_stop_level") || low.contains("siop_level") ||
+            low.contains("temp_level") || low.contains("control_limit") ||
+            Regex("""\b100\b""").containsMatchIn(sw)) return "level"
+        return "clean on/off"
+    }
+
+    private fun grab(text: String, pattern: String): String? =
+        Regex(pattern, RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)
+
+    private fun sectionBody(all: String, start: String, end: String?): String
+    {
+        val s = all.indexOf(start)
+        if (s < 0) return ""
+        val from = s + start.length
+        val e = if (end != null) all.indexOf(end, from) else -1
+        return (if (e < 0) all.substring(from) else all.substring(from, e)).trim()
+    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean
     {
         menuInflater.inflate(R.menu.log_viewer_menu, menu)
@@ -194,6 +315,7 @@ class LogViewerActivity : ScopedAppActivity()
         when (item.itemId)
         {
             android.R.id.home -> { finish(); return true }
+            R.id.menu_capture -> { captureCharging(); return true }
             R.id.menu_export_bundle -> { exportFullBundle(); return true }
         }
         return super.onOptionsItemSelected(item)
