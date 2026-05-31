@@ -1,0 +1,3 @@
+1.1.0 — first stable
+
+The charge limit now holds exactly where you set it: no overshoot, never sits above your limit, and stops exactly at the target. Default holds the battery at your limit (battery-idle); you can lock a discharge-cycle instead from Scripts. Settings apply within ~1s, a switch scan can't leave charging uncapped, and bad config is fail-safe. Bundles ACC v2025.5.18-stable. Consolidates and hardens the 1.0.36–1.0.56 fixes.

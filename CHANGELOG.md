@@ -2,6 +2,26 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.0] - 2026-05-31
+
+**First stable release** — the charge limit holds exactly where you set it. Consolidates and hardens the 1.0.36–1.0.56 fixes.
+
+### Charge limit
+- **Holds exactly at your limit** on Pixel/Tensor — no overshoot. The limit node is driven to your target level on both sides, never "charge to 100% then interrupt" (the old 75→77 breach).
+- **Never sits above your limit.** If the battery is over it (e.g. you set 75 % while at 80 %), it discharges *down* to the limit (`allow_idle_above_pcap` now defaults off).
+- **Default: hold at the limit** (battery-idle). Turn battery-idle off for a discharge-cycle between your resume level and the limit.
+- **Lock a method** from Scripts: "Scan & lock: hold at limit" (default) or "Scan & lock: discharge-cycle".
+
+### Reliability
+- Settings apply within ~1 second — no daemon restart, no app freeze.
+- A switch scan can no longer leave the daemon stopped / charging uncapped.
+- Fail-safe against bad config: an empty or non-numeric limit pauses instead of running on.
+- A breach watchdog warns if the cap ever isn't holding.
+
+### Under the hood
+- Bundled ACC daemon: **v2025.5.18-stable** (versionCode 202505187).
+- Version **1.1.0** (build 61).
+
 ## [1.0.56] - 2026-05-31
 
 Choose and lock your charging method — hold at the limit, or discharge-cycle.
