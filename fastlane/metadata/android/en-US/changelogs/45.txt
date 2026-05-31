@@ -1,0 +1,2 @@
+- Rework the Logs screen into a readable Diagnostics report (selectable, Copy/Share/Refresh) instead of a raw shell trace
+- Gather it once in the background so the screen no longer keeps the CPU busy

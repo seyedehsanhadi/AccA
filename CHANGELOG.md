@@ -2,6 +2,13 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.41] - 2026-05-31
+
+### Changed
+- Reworked the Logs screen into a Diagnostics report. It used to stream ACC's raw shell execution trace one line at a time, and you could only copy a single line at a time. Now it gathers one readable report: app, device, Android, kernel, ACC version, daemon status, battery, the active config, detected charging switches, and the tail of the daemon log. The text is selectable with Copy, Share, and Refresh buttons, and the full log bundle (dmesg, logcat, config, switch maps) is still one tap away under the menu for deep bug reports.
+- The report is gathered once in the background instead of polling continuously, so the screen no longer keeps the CPU busy.
+- Version is now 1.0.41 (build 45).
+
 ## [1.0.40] - 2026-05-31
 
 ### Fixed
@@ -64,6 +71,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.41]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.41
 [1.0.40]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.40
 [1.0.39]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.39
 [1.0.38]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.38
