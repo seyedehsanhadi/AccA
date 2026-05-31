@@ -278,8 +278,12 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             viewModel.enables.eCapacity = true
             viewModel.enables.eTemperature = true
             viewModel.enables.eCoolDown = viewModel.coolDown != null
-            viewModel.enables.eRunOnBoot = true
-            viewModel.enables.eRunOnPlug = true
+            // Derive the toggles from the actual config, like the sections above.
+            // apply_on_boot / apply_on_plug are optional command hooks; ACC ships
+            // them empty. Forcing the switches ON made the editor show them enabled
+            // with an empty value. Reflect "is a command set" instead.
+            viewModel.enables.eRunOnBoot = !viewModel.onBoot.isNullOrBlank()
+            viewModel.enables.eRunOnPlug = !viewModel.onPlug.isNullOrBlank()
         }
     }
 
