@@ -349,7 +349,7 @@ open class AccHandler(override val version: Int) : AccInterface {
         if (switch.isNullOrBlank())
             "acc -s s-"
         else
-            "acc --set switch $switch"
+            "acc --set switch $switch${if (automaticSwitchingEnabled) "" else " --"}"
 
     override fun getUpgradeCommand(version: String) = "acc --upgrade $version"
 

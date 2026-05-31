@@ -88,6 +88,13 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
 
         LogExt().d(TAG, "ConfigUpdateResult()=${temp.isSuccessful()}")
 
+        // charging_switch / current_workaround only take effect on a daemon (re)start.
+        // AccA applies settings through the `acca` applet, which (unlike `acc --set`)
+        // never restarts the daemon, so those changes used to sit dormant until a manual
+        // restart. Re-init the daemon here so every setting applies immediately; ACC
+        // re-reads the whole config on restart, so this is safe and idempotent.
+        if (temp.isSuccessful()) acc.accRestartDaemon()
+
         temp
     }
 

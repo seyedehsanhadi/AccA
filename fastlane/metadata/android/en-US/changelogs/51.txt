@@ -1,0 +1,3 @@
+1.0.47
+
+Settings apply immediately now — AccA restarts the ACC daemon after a config change, so you no longer have to restart it by hand for it to take effect. Turning off battery idle mode now makes ACC prefer a clean on/off switch (sends "no"), which stops the charge limit cycling on Pixel/Tensor. Bundled ACC daemon stays v2025.5.18-dev-fix5.

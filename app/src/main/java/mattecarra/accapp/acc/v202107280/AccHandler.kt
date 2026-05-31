@@ -446,7 +446,10 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     override fun getUpgradeCommand(version: String) = "/dev/.vr25/acc/acca --upgrade $version"
 
-    override fun getUpdatePrioritizeBatteryIdleModeCommand(enabled: Boolean): String = "/dev/.vr25/acc/acca --set prioritize_batt_idle_mode=$enabled"
+    // Off must send ACC's tri-state "no" (actively prefer clean on/off switches), not
+    // "false" (no preference) — with "false", auto-select can still grab a flicker-prone
+    // idle switch on Pixel/Tensor and the limit cycles on/off.
+    override fun getUpdatePrioritizeBatteryIdleModeCommand(enabled: Boolean): String = "/dev/.vr25/acc/acca --set prioritize_batt_idle_mode=${if (enabled) "true" else "no"}"
 
     override fun getAddChargingSwitchCommand(switch: String): String = getUpdateAccChargingSwitchCommand(switch, false)
 }

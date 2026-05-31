@@ -23,5 +23,5 @@ class AccHandler(override val version: Int) : mattecarra.accapp.acc.legacy.AccHa
         if (switch.isNullOrBlank())
             "acc -s s-"
         else
-            "acc -s s $switch"
+            "acc -s s $switch${if (automaticSwitchingEnabled) "" else " --"}"
 }

@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.47] - 2026-05-31
+
+Settings take effect immediately now — no more restarting the daemon by hand.
+
+### Fixed
+- Changing a setting used to need a manual daemon restart to apply. AccA writes config through ACC's `acca` applet, which (unlike `acc --set`) never restarts the daemon, and the apply path didn't restart it either — so the charging switch and a few other settings sat dormant until you hit Restart. AccA now restarts the daemon right after applying a change, so what you set is what runs.
+- Turning off "Prioritize battery idle mode" now tells ACC to actively prefer a clean on/off switch (it sends `no`, not just `false`). On Pixel/Tensor that's what stops the charge limit cycling on and off.
+- Picking a specific charging switch on older ACC builds now locks it (appends ` --`) so the daemon holds it instead of auto-cycling. The current ACC build already did this.
+
+### Changed
+- Version is now 1.0.47 (build 51). Bundled ACC daemon stays v2025.5.18-dev-fix5.
+
 ## [1.0.46] - 2026-05-31
 
 A polish pass on the charging-limit fix, specifically for Pixel / Tensor devices.
@@ -114,6 +126,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.47]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.47
 [1.0.46]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.46
 [1.0.44]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.44
 [1.0.43]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.43
