@@ -87,6 +87,10 @@ class AccProfileTileService: TileService(), CoroutineScope {
         val mSharedPrefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(this)
 
         profilesViewModel.getLiveData().value?.let { profileList ->
+            // Guard: an empty list makes indexOfFirst(...) return -1, +1 = 0, then
+            // profileList[0] throws IndexOutOfBounds. Nothing to cycle to, so bail.
+            if (profileList.isEmpty()) return@let
+
             val currentProfile = ProfileUtils.getCurrentProfile(mSharedPrefs)
 
             var index = profileList.indexOfFirst { it.uid ==  currentProfile} + 1

@@ -50,14 +50,22 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     @WorkerThread
     fun parseConfig(config: String): AccConfig {
-        val capacityShutdown = SHUTDOWN_CAPACITY_REGEXP.find(config)!!.destructured.component1()
-        val capacityCoolDown = COOLDOWN_CAPACITY_REGEXP.find(config)!!.destructured.component1()
-        val capacityResume   = RESUME_CAPACITY_REGEXP.find(config)!!.destructured.component1()
-        val capacityPause    = PAUSE_CAPACITY_REGEXP.find(config)!!.destructured.component1()
+        // Robustness: ACC renames/drops config keys between releases (e.g. max_temp_pause ->
+        // resume_temp in 2025.x) and a custom/minimal acc.conf may omit keys entirely, while a
+        // present-but-empty key (regex group is \d*) matches "" and used to crash .toInt().
+        // Read every value null-safely and fall back to ACC's documented defaults so the parser
+        // can never throw, regardless of which ACC version produced the config.
+        fun matchInt(regex: Regex): Int? =
+            regex.find(config)?.destructured?.component1()?.toIntOrNull()
 
-        val temperatureCooldown = COOLDOWN_TEMP_REGEXP.find(config)!!.destructured.component1()
-        val temperatureMax      = MAX_TEMP_REGEXP.find(config)!!.destructured.component1()
-        val waitSeconds         = MAX_TEMP_PAUSE_REGEXP.find(config)!!.destructured.component1()
+        val capacityShutdown = matchInt(SHUTDOWN_CAPACITY_REGEXP) ?: 0
+        val capacityCoolDown = matchInt(COOLDOWN_CAPACITY_REGEXP) ?: 101
+        val capacityResume   = matchInt(RESUME_CAPACITY_REGEXP) ?: 70
+        val capacityPause    = matchInt(PAUSE_CAPACITY_REGEXP) ?: 80
+
+        val temperatureCooldown = matchInt(COOLDOWN_TEMP_REGEXP) ?: 90
+        val temperatureMax      = matchInt(MAX_TEMP_REGEXP) ?: 95
+        val waitSeconds         = matchInt(MAX_TEMP_PAUSE_REGEXP) ?: 90
 
         val coolDownChargeSeconds = COOLDOWN_CHARGE_REGEXP.find(config)?.destructured?.component1()?.toIntOrNull()
         val coolDownPauseSeconds = COOLDOWN_PAUSE_REGEXP.find(config)?.destructured?.component1()?.toIntOrNull()
@@ -66,16 +74,14 @@ open class AccHandler(override val version: Int) : AccInterface {
         val maxChargingCurrent = MAX_CHARGING_CURRENT.find(config)?.destructured?.component1()
 
         return AccConfig(
-            AccConfig.ConfigCapacity(capacityShutdown.toIntOrNull() ?: 0, capacityResume.toInt(), capacityPause.toInt()),
+            AccConfig.ConfigCapacity(capacityShutdown, capacityResume, capacityPause),
             AccConfig.ConfigVoltage(null, maxChargingVoltage?.toIntOrNull()),
             maxChargingCurrent?.toIntOrNull(),
-            AccConfig.ConfigTemperature(temperatureCooldown.toIntOrNull() ?: 90,
-                temperatureMax.toIntOrNull() ?: 95,
-                waitSeconds.toIntOrNull() ?: 90),
+            AccConfig.ConfigTemperature(temperatureCooldown, temperatureMax, waitSeconds),
             getOnBoot(config),
             getOnPlugged(config),
             if(coolDownChargeSeconds != null && coolDownPauseSeconds != null)
-                AccConfig.ConfigCoolDown(capacityCoolDown.toInt(), coolDownChargeSeconds, coolDownPauseSeconds)
+                AccConfig.ConfigCoolDown(capacityCoolDown, coolDownChargeSeconds, coolDownPauseSeconds)
             else null,
             getResetUnplugged(config),
             getResetOnPause(config),

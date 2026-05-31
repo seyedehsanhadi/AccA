@@ -14,17 +14,27 @@ class AccBootReceiver: BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (Intent.ACTION_BOOT_COMPLETED == intent.action) {
-            if(Shell.rootAccess()) {
-                val preferences = Preferences(context)
+            // Shell.rootAccess() and the daemon init below are blocking root calls. Running them
+            // directly here would block the main thread during the boot broadcast and ANR.
+            // Hand off to a background thread and keep the broadcast alive via goAsync().
+            val pendingResult = goAsync()
+            Thread {
+                try {
+                    if (Shell.rootAccess()) {
+                        val preferences = Preferences(context)
 
-                val accInitResult = Acc.initAcc(context.filesDir)
-                Log.d(LOG_TAG, "Acc deamon init. Success=$accInitResult")
+                        val accInitResult = Acc.initAcc(context.filesDir)
+                        Log.d(LOG_TAG, "Acc deamon init. Success=$accInitResult")
 
-                if(preferences.djsEnabled) {
-                    val djsInitResult = Djs.initDjs(context.filesDir)
-                    Log.d(LOG_TAG, "DJS deamon init. Success=$djsInitResult")
+                        if (preferences.djsEnabled) {
+                            val djsInitResult = Djs.initDjs(context.filesDir)
+                            Log.d(LOG_TAG, "DJS deamon init. Success=$djsInitResult")
+                        }
+                    }
+                } finally {
+                    pendingResult.finish()
                 }
-            }
+            }.start()
         }
     }
 }
