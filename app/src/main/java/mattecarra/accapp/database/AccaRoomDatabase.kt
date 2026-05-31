@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mattecarra.accapp.models.*
 
-@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 11)
+@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 12)
 @TypeConverters(ConfigConverter::class)
 abstract class AccaRoomDatabase : RoomDatabase()
 {
@@ -104,6 +104,18 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
+        // 1.0.50: add the fast charging-switch scanner scripts. Data-only INSERTs
+        // (no schema/table change), same pattern as MIGRATION_9_10, so it cannot
+        // change the DB shape and is safe for existing installs.
+        private val MIGRATION_11_12: Migration = object : Migration(11, 12)
+        {
+            override fun migrate(database: SupportSQLiteDatabase)
+            {
+                database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Scan charging switches (fast)\", \"Ranked switch scan; finds which switch actually stops charging (prints BEST=)\", \"sh /data/adb/vr25/acc/acc-switch-scan.sh\", \"\", 0);")
+                database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Scan & fix charging switch\", \"Runs the fast scan and locks in the best switch (APPLIED=1 on success)\", \"sh /data/adb/vr25/acc/acc-switch-scan.sh --apply\", \"\", 0);")
+            }
+        }
+
         fun getDatabase(context: Context): AccaRoomDatabase
         {
             val tempInstance = INSTANCE
@@ -113,7 +125,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 // Create database instance here
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                         .addCallback(object : Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
@@ -182,9 +194,15 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 "", 0)
             )
 
-            db.scriptsDao().insert(AccaScript(0, "Test charging switches",
-                "-t|--test [file] Test charging switches from a file (default: /dev/.vr25/acc/ch-switches)",
-                "acca -t",
+            db.scriptsDao().insert(AccaScript(0, "Scan charging switches (fast)",
+                "Ranked switch scan; finds which switch actually stops charging (prints BEST=)",
+                "sh /data/adb/vr25/acc/acc-switch-scan.sh",
+                "", 0)
+            )
+
+            db.scriptsDao().insert(AccaScript(0, "Scan & fix charging switch",
+                "Runs the fast scan and locks in the best switch (APPLIED=1 on success)",
+                "sh /data/adb/vr25/acc/acc-switch-scan.sh --apply",
                 "", 0)
             )
 

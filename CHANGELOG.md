@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.50] - 2026-05-31
+
+A fast charging-switch scanner, built into the app.
+
+### Added
+- Two entries in the Scripts tab: "Scan charging switches (fast)" and "Scan & fix charging switch". They run a new scanner that polls the charging current ~3×/second and decides each switch in 1–4 s. The old "acc -t" waited up to 35 s per switch and AccA's timeout often killed it before it finished the list. The scan ranks the switches that actually stop your charger; the "& fix" one locks the best one in automatically.
+
+### Changed
+- Bundled ACC daemon updated to v2025.5.18-dev-fix6 (ships the scanner).
+- Version is now 1.0.50 (build 54).
+
 ## [1.0.48] - 2026-05-31
 
 Reverts the 1.0.47 auto-restart, which made the app hang on every settings change.
@@ -136,6 +147,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.50]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.50
 [1.0.48]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.48
 [1.0.47]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.47
 [1.0.46]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.46
