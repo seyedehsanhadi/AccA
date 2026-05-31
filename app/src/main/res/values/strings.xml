@@ -1,8 +1,15 @@
 <resources>
     <string name="app_name">AccA</string>
     <string name="app_name_full">Advanced Charging Controller App</string>
-    <string name="title_activity_log_view">Logs</string>
-    <string name="title_activity_log_view_file_name">Logs</string>
+    <string name="title_activity_log_view">Diagnostics</string>
+    <string name="title_activity_log_view_file_name">Diagnostics</string>
+    <string name="log_copy">Copy</string>
+    <string name="log_share">Share</string>
+    <string name="log_refresh">Refresh</string>
+    <string name="log_gathering">Gathering diagnostics…</string>
+    <string name="log_report_subject">AccA diagnostics</string>
+    <string name="log_export_bundle">Export full log bundle</string>
+    <string name="log_export_failed">Export failed (need root / ACC running)</string>
 
     <!-- ACC Tile Strings -->
     <string name="tile_acc_no_root">No Root</string>
