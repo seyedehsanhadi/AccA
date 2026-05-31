@@ -2,6 +2,15 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.1] - 2026-05-31
+
+No setup needed — the corrected defaults now apply automatically on update.
+
+### Changed
+- Existing installs adopt the **"never sit above your limit"** default automatically when you update — **no manual command, no script**. The bundled installer does it once and never overrides a setting you deliberately change later. (Fresh installs already shipped this default.)
+- Bundled ACC daemon: **v2025.5.18-stable.1** (versionCode 202505188).
+- Version **1.1.1** (build 62).
+
 ## [1.1.0] - 2026-05-31
 
 **First stable release** — the charge limit holds exactly where you set it. Consolidates and hardens the 1.0.36–1.0.56 fixes.
