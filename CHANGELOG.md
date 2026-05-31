@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.2] - 2026-05-31
+
+Fixes the battery draining to ~70 % instead of holding at your limit.
+
+### Fixed
+- The previous build could drain the battery down to your resume level (~70 %) instead of holding at your limit. That came from the discharge variant; it's been removed. Now charging stops at your limit and holds there — the only behavior. Existing installs migrate automatically on update (no command).
+
+### Changed
+- Removed the "Scan & lock: discharge-cycle" script (no discharge variant anymore); the remaining one is just "Scan & lock charging switch".
+- Bundled ACC daemon: v2025.5.18-stable.2 (versionCode 202505189).
+- Version 1.1.2 (build 63).
+
 ## [1.1.1] - 2026-05-31
 
 No setup needed — the corrected defaults now apply automatically on update.

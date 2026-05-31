@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mattecarra.accapp.models.*
 
-@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 13)
+@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 14)
 @TypeConverters(ConfigConverter::class)
 abstract class AccaRoomDatabase : RoomDatabase()
 {
@@ -129,6 +129,18 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
+        // 1.1.2: hold-at-limit only. The pcap-5 discharge variant was removed from the
+        // daemon (it drained the battery to the resume level), so drop the now-pointless
+        // "discharge-cycle" script and rename the remaining one. Data-only DELETE/UPDATE.
+        private val MIGRATION_13_14: Migration = object : Migration(13, 14)
+        {
+            override fun migrate(database: SupportSQLiteDatabase)
+            {
+                database.execSQL("DELETE FROM scripts_table WHERE scBody = \"sh /data/adb/vr25/acc/acc-switch-scan.sh --apply --cycle\";")
+                database.execSQL("UPDATE scripts_table SET scName = \"Scan & lock charging switch\", scDescription = \"Finds the switch that stops charging and locks it; charging then holds at your limit.\" WHERE scBody = \"sh /data/adb/vr25/acc/acc-switch-scan.sh --apply\";")
+            }
+        }
+
         fun getDatabase(context: Context): AccaRoomDatabase
         {
             val tempInstance = INSTANCE
@@ -138,7 +150,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 // Create database instance here
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
                         .addCallback(object : Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
@@ -213,15 +225,9 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 "", 0)
             )
 
-            db.scriptsDao().insert(AccaScript(0, "Scan & lock: hold at limit (default)",
-                "Scans, then LOCKS the switch that holds the battery AT your limit (pcap). Default, longevity-friendly.",
+            db.scriptsDao().insert(AccaScript(0, "Scan & lock charging switch",
+                "Finds the switch that stops charging and locks it; charging then holds at your limit.",
                 "sh /data/adb/vr25/acc/acc-switch-scan.sh --apply",
-                "", 0)
-            )
-
-            db.scriptsDao().insert(AccaScript(0, "Scan & lock: discharge-cycle",
-                "Scans, then LOCKS the discharge-cycle method (pcap 5): drains to your resume level, recharges to the limit, repeats. Use when battery-idle is off.",
-                "sh /data/adb/vr25/acc/acc-switch-scan.sh --apply --cycle",
                 "", 0)
             )
 
