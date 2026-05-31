@@ -1,0 +1,2 @@
+- Fix the "automatically cycle through switches" flag reading wrong when apply_on_boot/plug ends in " --"
+- Harden battery-idle detection against ACC output wording changes

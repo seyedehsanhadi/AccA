@@ -2,6 +2,15 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.40] - 2026-05-31
+
+### Fixed
+- The "Automatically cycle through switches" state could read wrong. The check for a manual switch looked at the whole config, so an apply_on_boot or apply_on_plug command ending in " --" flipped the flag off by mistake. It now reads the charging-switch line only.
+- Battery idle support is detected more loosely, so a reworded ACC output line no longer quietly disables the prioritize-idle option.
+
+### Changed
+- Version is now 1.0.40 (build 44).
+
 ## [1.0.39] - 2026-05-31
 
 ### Fixed
@@ -55,6 +64,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.40]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.40
 [1.0.39]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.39
 [1.0.38]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.38
 [1.0.37]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.37

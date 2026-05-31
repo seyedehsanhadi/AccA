@@ -339,7 +339,13 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override fun isAutomaticSwitchEnabled(config: String): Boolean {
-        return AUTOMATIC_SWITCH_DISABLED.find(config) == null
+        // Only the charging_switch line decides automatic mode. ACC marks a switch
+        // manual by appending " --" to it. Matching " --" against the WHOLE config
+        // wrongly reported automatic-off whenever apply_on_boot / apply_on_plug (or
+        // any other line) ended in " --". Check the charging_switch value alone.
+        val sw = SWITCH.find(config)?.destructured?.component1()?.trim()?.removeSurrounding("\"")?.trim()
+            ?: return true
+        return !sw.endsWith(" --")
     }
 
     override fun isPrioritizeBatteryIdleMode(config: String): Boolean {
@@ -350,7 +356,9 @@ open class AccHandler(override val version: Int) : AccInterface {
         Shell.su("(acc -f $limit &) &").exec().isSuccess
     }
 
-    val BATTERY_IDLE_SUPPORTED = """^\s*-\s*battIdleMode=true""".toPattern(Pattern.MULTILINE)
+    // Structural, case-insensitive match so a reworded ACC probe line doesn't
+    // silently disable the prioritize-idle toggle (ACC output has changed before).
+    val BATTERY_IDLE_SUPPORTED = """(?i)batt.?idle.?mode\s*[=:]?\s*true""".toPattern(Pattern.MULTILINE)
     override suspend fun isBatteryIdleSupported(): Pair<Int, Boolean> = withContext(Dispatchers.IO) {
         val res = Shell.su("/dev/.vr25/acc/acca -t --").exec()
         Pair(
