@@ -194,6 +194,39 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     private val POWER_NOW_REGEXP = """^\s*POWER_NOW=([+-]?([0-9]*[.])?[0-9]+)""".toRegex(RegexOption.MULTILINE)
 
+    /**
+     * ACC 2025.x rewrote `acca -i` to a lowercase, unit-suffixed format, e.g.
+     *   level 23%
+     *   status Charging
+     *   temp 35℃
+     *   voltage_now 4.10V
+     *   current_now 3.605A
+     *   power_now 14.5W
+     *   charge_type <type>
+     * The uppercase KEY=value regexes above only match the older uevent-style
+     * output, so on ACC 2025.x every field fell back to its default (-1 / 0 /
+     * Unknown) and the dashboard showed an empty battery. These read the new
+     * format as a fallback. Values already arrive pre-scaled to %/V/A/°C, which
+     * is exactly what AccA expects for ACC >= 202002292 (volts + amps).
+     */
+    private val LEVEL_LOWER_REGEXP = """^\s*level (\d+)""".toRegex(RegexOption.MULTILINE)
+    private val STATUS_LOWER_REGEXP = """^\s*status (.+)""".toRegex(RegexOption.MULTILINE)
+    private val TEMP_LOWER_REGEXP = """^\s*temp (\d+)""".toRegex(RegexOption.MULTILINE)
+    private val VOLTAGE_NOW_LOWER_REGEXP = """^\s*voltage_now ([0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
+    private val CURRENT_NOW_LOWER_REGEXP = """^\s*current_now (-?[0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
+    private val POWER_NOW_LOWER_REGEXP = """^\s*power_now (-?[0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
+    private val CHARGE_TYPE_LOWER_REGEXP = """^\s*charge_type (.+)""".toRegex(RegexOption.MULTILINE)
+
+    private fun lowerStatus(info: String): String? =
+        STATUS_LOWER_REGEXP.find(info)?.destructured?.component1()?.trim()?.let {
+            when {
+                it.contains("Not", true) -> STRING_NOT_CHARGING
+                it.equals("Discharging", true) -> STRING_DISCHARGING
+                it.equals("Charging", true) -> STRING_CHARGING
+                else -> it
+            }
+        }
+
     override suspend fun getBatteryInfo(): BatteryInfo = withContext(Dispatchers.IO) {
         val info =  Shell.su("/dev/.vr25/acc/acca -i").exec().out.joinToString(separator = "\n")
 
@@ -202,23 +235,23 @@ open class AccHandler(override val version: Int) : AccInterface {
             INPUT_SUSPEND_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let { // If r == true (input is suspended)
                 it == 0
             },
-            STATUS_REGEXP.find(info)?.destructured?.component1() ?: STRING_DISCHARGING,
+            STATUS_REGEXP.find(info)?.destructured?.component1() ?: lowerStatus(info) ?: STRING_DISCHARGING,
             HEALTH_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
             PRESENT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            CHARGE_TYPE_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
-            CAPACTIY_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
+            CHARGE_TYPE_REGEXP.find(info)?.destructured?.component1() ?: CHARGE_TYPE_LOWER_REGEXP.find(info)?.destructured?.component1()?.trim() ?: STRING_UNKNOWN,
+            CAPACTIY_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: LEVEL_LOWER_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CHARGER_TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: -1,
             CHARGER_TEMP_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: -1,
             INPUT_CURRENT_LIMITED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
                 it == 0
             },
-            VOLTAGE_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f,
+            VOLTAGE_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: VOLTAGE_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f,
             VOLTAGE_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             VOLTAGE_QNOVO_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            CURRENT_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f,
+            CURRENT_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: CURRENT_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f,
             CURRENT_QNOVO_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CONSTANT_CHARGE_CURRENT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: -1,
+            TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: TEMP_LOWER_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             TECHNOLOGY_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
             STEP_CHARGING_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
                 it == 0
@@ -252,7 +285,7 @@ open class AccHandler(override val version: Int) : AccInterface {
             CHARGE_CONTROL_LIMIT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             INPUT_CURRENT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CYCLE_COUNT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            POWER_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f
+            POWER_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: POWER_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f
         )
     }
 
