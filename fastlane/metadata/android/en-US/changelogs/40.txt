@@ -1,0 +1,4 @@
+- Fix crash on ACC 2025.x (config key max_temp_pause renamed to resume_temp)
+- Fix crash when tapping the profile tile with no profiles saved
+- Run root setup off the main thread on boot (no more boot ANR)
+- Vendor CircleProgressBar so the app builds again; build signed APKs via GitHub Actions
