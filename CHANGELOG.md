@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.52] - 2026-05-31
+
+Safety hardening on top of 1.0.51.
+
+### Fixed
+- Fail-safe against a malformed (non-numeric) pause/resume limit: the daemon now treats it as "pause now / don't resume" instead of letting the numeric check error out and silently skip the cap.
+- A charging switch locked by "Scan & fix" (or by hand) that later stops working now auto-recovers — it re-selects a working switch and posts a warning — instead of silently letting the battery charge past the limit. The lock still prevents routine re-cycling while the switch works, so there's no churn in the normal case.
+
+### Changed
+- Bundled ACC daemon updated to v2025.5.18-dev-fix8 (versionCode 202505182).
+- Version is now 1.0.52 (build 56).
+
 ## [1.0.51] - 2026-05-31
 
 Fixes the upper charge limit being overshot on Pixel/Tensor — the cap now holds flat.
