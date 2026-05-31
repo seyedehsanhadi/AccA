@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.46] - 2026-05-31
+
+A polish pass on the charging-limit fix, specifically for Pixel / Tensor devices.
+
+### Fixed
+- No more brief on/off charge bursts near the limit on Pixel. ACC was auto-selecting the Pixel `charge_stop_level` switch in its `battery/capacity` form, whose stop level tracks the *live* battery %, so the firmware kept nudging charging back on at the threshold and the daemon kept re-testing the switch. ACC now uses the fixed-threshold form of that switch, which holds the limit cleanly without the churn — the limit just holds, with the normal slow charge/pause cycle between resume and pause.
+
+### Changed
+- Bundled ACC daemon updated to v2025.5.18-dev-fix5 (carries fix4 plus the Pixel switch fix above).
+- Version is now 1.0.46 (build 50).
+
 ## [1.0.44] - 2026-05-31
 
 Charging could pulse on and off near the limit instead of holding it. With the limit at 75% and the battery at 77%, charging ran for ~20 seconds, stopped, then started again a little later — over and over — while the level just sat above the limit. It looked like ACC was ignoring the config.
@@ -103,6 +114,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.46]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.46
 [1.0.44]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.44
 [1.0.43]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.43
 [1.0.42]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.42
