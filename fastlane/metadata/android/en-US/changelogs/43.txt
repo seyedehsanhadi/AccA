@@ -1,0 +1,1 @@
+- Fix battery health showing Unknown on ACC 2025.x (read it from the kernel)

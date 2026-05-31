@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.39] - 2026-05-31
+
+### Fixed
+- Battery health no longer reads "Unknown" on ACC 2025.x. ACC stopped printing a health field, so the app now reads it from the kernel directly and shows Good, Overheat, Cold and the rest again. On a phone without that kernel node, health stays Unknown and everything else keeps working.
+
+### Changed
+- Version is now 1.0.39 (build 43).
+
 ## [1.0.38] - 2026-05-31
 
 A round of cleanup after reading the whole app against the ACC engine it drives. The headline: AccA no longer asks for access to your photos and media, and the config editor stops showing empty quotes and wrong toggle states.
@@ -47,6 +55,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.39]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.39
 [1.0.38]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.38
 [1.0.37]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.37
 [1.0.36]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.36
