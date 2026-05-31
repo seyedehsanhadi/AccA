@@ -109,12 +109,12 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     // Returns OnBoot value
     private fun getOnBoot(config: CharSequence) : String? {
-        return ON_BOOT.find(config)?.destructured?.component1()?.trim()?.ifBlank { null }
+        return ON_BOOT.find(config)?.destructured?.component1()?.trim()?.removeSurrounding("\"")?.trim()?.ifBlank { null }
     }
 
     // Returns OnPlugged value
     private fun getOnPlugged(config: CharSequence) : String? {
-        return ON_PLUGGED.find(config)?.destructured?.component1()?.trim()?.ifBlank { null }
+        return ON_PLUGGED.find(config)?.destructured?.component1()?.trim()?.removeSurrounding("\"")?.trim()?.ifBlank { null }
     }
 
     // Returns ResetUnplugged value
@@ -326,7 +326,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override fun getCurrentChargingSwitch(config: String): String? {
-        return SWITCH.find(config)?.destructured?.component1()?.trim()?.ifBlank { null }?.replace(AUTOMATIC_SWITCH_DISABLED, "$1")
+        return SWITCH.find(config)?.destructured?.component1()?.trim()?.removeSurrounding("\"")?.trim()?.ifBlank { null }?.replace(AUTOMATIC_SWITCH_DISABLED, "$1")
     }
 
     override fun isAutomaticSwitchEnabled(config: String): Boolean {
