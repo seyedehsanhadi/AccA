@@ -1,0 +1,2 @@
+- Fix empty Battery card on ACC 2025.x (read the new lowercase acca -i format)
+- Fix voltage showing as 0.004 V (auto-detect volts vs millivolts)
