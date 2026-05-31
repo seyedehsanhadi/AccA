@@ -19,52 +19,81 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <RelativeLayout
+    <ProgressBar
+        android:id="@+id/log_progress"
+        style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content"
+        android:indeterminate="true"
+        android:visibility="gone" />
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/log_recycler"
+    <ScrollView
+        android:id="@+id/log_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <HorizontalScrollView
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:padding="10dp" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignEnd="@id/log_recycler"
-            android:layout_alignRight="@id/log_recycler"
-            android:layout_alignBottom="@+id/log_recycler"
-            android:orientation="vertical">
+            android:scrollbars="horizontal">
 
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/log_button_scroll_end"
+            <TextView
+                android:id="@+id/log_report_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="@dimen/fab_margin"
-                app:elevation="@dimen/ttlm_default_elevation"
-                app:srcCompat="@drawable/ic_baseline_scrolldown_24" />
+                android:padding="12dp"
+                android:textIsSelectable="true"
+                android:typeface="monospace"
+                android:textSize="12sp"
+                android:lineSpacingMultiplier="1.1"
+                android:textColor="?android:attr/textColorPrimary"
+                tools:text="ACC diagnostic report" />
 
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/log_button_clear"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_margin="@dimen/fab_margin"
-                app:elevation="@dimen/ttlm_default_elevation"
-                app:srcCompat="@drawable/ic_baseline_delete_24" />
+        </HorizontalScrollView>
 
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/log_button_pause"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="@dimen/fab_margin"
-                android:layout_marginBottom="@dimen/fab_margin"
-                app:elevation="@dimen/ttlm_default_elevation"
-                app:srcCompat="@drawable/ic_baseline_pause_24" />
-        </LinearLayout>
+    </ScrollView>
 
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?android:attr/listDivider" />
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="4dp">
 
-    </RelativeLayout>
+        <Button
+            android:id="@+id/log_button_copy"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="?attr/colorAccent"
+            android:text="@string/log_copy" />
+
+        <Button
+            android:id="@+id/log_button_share"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="?attr/colorAccent"
+            android:text="@string/log_share" />
+
+        <Button
+            android:id="@+id/log_button_refresh"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="?attr/colorAccent"
+            android:text="@string/log_refresh" />
+
+    </LinearLayout>
 
 </LinearLayout>
