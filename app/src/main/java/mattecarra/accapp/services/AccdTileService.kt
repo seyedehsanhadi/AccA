@@ -1,13 +1,10 @@
 package mattecarra.accapp.services
 
-import android.Manifest
 import android.annotation.TargetApi
-import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
-import androidx.core.content.ContextCompat
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -91,12 +88,10 @@ class AccdTileService: TileService(), CoroutineScope
     override fun onStartListening()
     {
         super.onStartListening()
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)
-        {
-        //TODO create a notification and ask for read external storage permission
-        }
-        else updateTile()
+        // Previously this was gated behind READ_EXTERNAL_STORAGE, which the app
+        // never declared, so the check always failed and the tile never refreshed.
+        // The tile only needs root (handled in updateTile), not storage.
+        updateTile()
     }
 
     private fun updateTile()
