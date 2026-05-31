@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.43] - 2026-05-31
+
+The switch test (acc -t) could leave charging uncontrolled. ACC stops its charge-control daemon while it tests switches, so during a test the configured stop level is not enforced, and if the test was killed (force-closing the app) the daemon could stay down, so the battery kept charging past the limit. The test also ran for minutes on one shared root shell, so every other command (daemon status, version, the diagnostics screen) hung until the app was force-closed.
+
+### Fixed
+- The daemon is now guaranteed to be running again after any switch test. After a test the app waits past ACC's own restart window and, if the daemon is still down, restarts it, so the configured stop level is always enforced and charging never stays uncontrolled.
+- The switch test can no longer hang the app. It now runs under a hard time limit, so it can never hold the root shell open indefinitely and block daemon status, version, or the diagnostics screen.
+- Running the "Test charging switches" script from the Scripts tab is bounded the same way and restores the daemon afterwards; every other script runs exactly as before.
+
+### Changed
+- Version is now 1.0.43 (build 47).
+
 ## [1.0.42] - 2026-05-31
 
 ### Added
@@ -79,6 +91,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.43]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.43
 [1.0.42]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.42
 [1.0.41]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.41
 [1.0.40]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.40

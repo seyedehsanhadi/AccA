@@ -1,0 +1,2 @@
+- Guarantee the charge-control daemon is restarted after a switch test, so the configured stop level is always enforced and charging never stays uncontrolled
+- Bound the switch test with a hard time limit so it can no longer hang the app or block daemon status, version, and diagnostics

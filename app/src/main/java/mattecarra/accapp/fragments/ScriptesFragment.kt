@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp._interface.OnScriptClickListener
+import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.adapters.ScriptListAdapter
 import mattecarra.accapp.databinding.*
 import mattecarra.accapp.models.AccaScript
@@ -216,9 +217,40 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
 
     suspend fun runScript(script: AccaScript): AccaScript = withContext(Dispatchers.IO)
     {
-        val sr = Shell.su(script.scBody).exec()
+        // Only the switch test ("acc -t") is dangerous: it stops the charge-control
+        // daemon and can run for minutes, wedging the shared root shell so every
+        // later command (-D, -v, diagnostics) hangs until the app is force-closed.
+        // For that case only, bound it with `timeout` (via a temp file to avoid
+        // quoting issues) and restore the daemon afterwards. Every other script
+        // runs exactly as before, so normal scripts are unaffected.
+        val isTest = script.scBody.contains("-t") || script.scBody.contains("--test")
+
+        val sr = if (isTest) {
+            val tmp = java.io.File(mContext.cacheDir, "acca_run.sh")
+            try {
+                tmp.writeText(script.scBody)
+                Shell.su("timeout 180 sh ${tmp.absolutePath}").exec()
+            } finally {
+                try { tmp.delete() } catch (_: Exception) {}
+            }
+        } else {
+            Shell.su(script.scBody).exec()
+        }
+
         script.scExitCode = sr.code
         script.scOutput = sr.out.joinToString(separator = "\n")
+
+        // SAFETY: a switch test stopped the daemon. Wait past ACC's own restart
+        // window, then make sure the daemon is running again so the configured
+        // stop level keeps being enforced (charging never stays uncontrolled).
+        if (isTest) {
+            try {
+                Thread.sleep(2500)
+                if (!Acc.instance.isAccdRunning())
+                    Shell.su(Acc.instance.getAccRestartDaemon()).exec()
+            } catch (_: Exception) {}
+        }
+
         script
     }
 

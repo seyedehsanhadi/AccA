@@ -331,7 +331,13 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override suspend fun testChargingSwitch(chargingSwitch: String?): Int = withContext(Dispatchers.IO) {
-        Shell.su("/dev/.vr25/acc/acca -t${chargingSwitch?.let{" $it"} ?: ""}").exec().code
+        try {
+            // Hard-bound the test (see ensureDaemonRunning): it stops the daemon
+            // and can otherwise run for minutes, wedging the shell.
+            Shell.su("timeout 150 /dev/.vr25/acc/acca -t${chargingSwitch?.let{" $it"} ?: ""}").exec().code
+        } finally {
+            ensureDaemonRunning()
+        }
     }
 
     override fun getCurrentChargingSwitch(config: String): String? {
@@ -359,12 +365,42 @@ open class AccHandler(override val version: Int) : AccInterface {
     // Structural, case-insensitive match so a reworded ACC probe line doesn't
     // silently disable the prioritize-idle toggle (ACC output has changed before).
     val BATTERY_IDLE_SUPPORTED = """(?i)batt.?idle.?mode\s*[=:]?\s*true""".toPattern(Pattern.MULTILINE)
+    /**
+     * SAFETY: `acc -t` STOPS the charge-control daemon while it tests switches,
+     * so the configured stop level is NOT enforced during a test, and if the
+     * test is killed (the app's root shell is force-closed -> SIGTERM) ACC's own
+     * deferred restart can be skipped, leaving charging UNCONTROLLED.
+     *
+     * After every test we therefore guarantee the daemon is running again: wait
+     * past ACC's own ~2s restart window, then force a restart only if it is still
+     * down. Fail-safe: the worst case is restarting an already-running daemon, and
+     * the configured limit is always enforced again. Runs on a worker thread.
+     */
+    private fun ensureDaemonRunning() {
+        try {
+            Thread.sleep(2500)
+            val code = Shell.su("/dev/.vr25/acc/acca -D").exec().code
+            // isAccdRunning() treats 0 and 8 as "running"; anything else = down.
+            if (code != 0 && code != 8)
+                Shell.su("/dev/.vr25/acc/acca -D restart").exec()
+        } catch (e: Exception) {
+            // Last resort: attempt a restart so charging never stays uncontrolled.
+            try { Shell.su("/dev/.vr25/acc/acca -D restart").exec() } catch (_: Exception) {}
+        }
+    }
+
     override suspend fun isBatteryIdleSupported(): Pair<Int, Boolean> = withContext(Dispatchers.IO) {
-        val res = Shell.su("/dev/.vr25/acc/acca -t --").exec()
-        Pair(
-            res.code,
-            BATTERY_IDLE_SUPPORTED.matcher(res.out.joinToString("\n")).find()
-        )
+        try {
+            // `timeout` (toybox) hard-bounds the test so it can never wedge the
+            // root shell and block other commands (-D, -v, diagnostics).
+            val res = Shell.su("timeout 60 /dev/.vr25/acc/acca -t --").exec()
+            Pair(
+                res.code,
+                BATTERY_IDLE_SUPPORTED.matcher(res.out.joinToString("\n")).find()
+            )
+        } finally {
+            ensureDaemonRunning()
+        }
     }
 
     //Update config part:
