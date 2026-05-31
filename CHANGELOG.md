@@ -2,6 +2,21 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.51] - 2026-05-31
+
+Fixes the upper charge limit being overshot on Pixel/Tensor — the cap now holds flat.
+
+### Fixed
+- On Pixel/Tensor the only working charge switch is `charge_stop_level`, which is a charge *limit* ("charge to N %, then hold"), not an on/off switch. The bundled daemon (fix5/fix6) drove it as 100/5 — writing `5` to pause made the firmware *discharge*, then resume at the resume level and re-charge, overshooting the cap in a 70↔limit sawtooth (e.g. a 75 % limit drifting to 77 %). The bundled daemon (now v2025.5.18-dev-fix7) instead sets the limit node to your target level, so the firmware holds the battery flat at the cap: tight, no overshoot, and true battery-idle.
+- The "Scan & fix charging switch" scanner now prefers idle/flat-hold switches over discharging ones, so it locks in the variant that actually holds the cap.
+
+### Changed
+- Bundled ACC daemon updated to v2025.5.18-dev-fix7 (versionCode 202505181, so it installs over an existing 202505180 daemon instead of being skipped).
+- Version is now 1.0.51 (build 55).
+
+### After updating
+- If you previously ran "Scan & fix charging switch" or locked a switch by hand, tap "Scan & fix charging switch" once more so the new flat-hold switch is selected. Or set it directly (75 = your pause limit): `acc -s s='/sys/devices/platform/google,charger/charge_stop_level 100 75 --'`
+
 ## [1.0.50] - 2026-05-31
 
 A fast charging-switch scanner, built into the app.
