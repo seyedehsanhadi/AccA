@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.42] - 2026-05-31
+
+### Added
+- Charge-activity capture in Diagnostics (menu: Capture charging). It samples the battery once a second for 20 seconds and records level, status, current and voltage over time, so a brief charge flicker that a single snapshot would miss actually shows up. It names the active charging switch, says whether that switch is a clean on/off one or a level one, and prints a verdict that calls out a switch fight when charging keeps flipping on and off near the stop level. The capture is started by hand and runs for a fixed 20 seconds, so it adds no background drain, and it only reads, never changes charging.
+
+### Changed
+- Version is now 1.0.42 (build 46).
+
 ## [1.0.41] - 2026-05-31
 
 ### Changed
@@ -71,6 +79,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.42]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.42
 [1.0.41]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.41
 [1.0.40]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.40
 [1.0.39]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.39

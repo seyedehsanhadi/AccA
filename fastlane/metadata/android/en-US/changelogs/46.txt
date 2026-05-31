@@ -1,0 +1,1 @@
+- Add a charge-activity capture in Diagnostics: samples the battery for 20s to catch a charge flicker a snapshot would miss, and flags a switch fight
