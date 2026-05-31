@@ -2,6 +2,20 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.56] - 2026-05-31
+
+Choose and lock your charging method — hold at the limit, or discharge-cycle.
+
+### Added
+- Two one-tap options in the Scripts tab:
+  - **"Scan & lock: hold at limit (default)"** — parks the battery at your limit (pcap). Longevity-friendly; this is the default.
+  - **"Scan & lock: discharge-cycle"** — discharges to your resume level, recharges to the limit, and repeats. Use when you've turned battery-idle off.
+  Both *lock* the chosen method (ACC won't auto-switch it), and the recharge always stops exactly at your limit.
+
+### Changed
+- Bundled ACC daemon updated to v2025.5.18-dev-fix12 (versionCode 202505186).
+- Version is now 1.0.56 (build 60).
+
 ## [1.0.55] - 2026-05-31
 
 The cap now stops exactly at your limit (no overshoot), and you choose hold vs cycle.

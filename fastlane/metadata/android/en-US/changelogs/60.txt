@@ -1,0 +1,3 @@
+1.0.56
+
+You can now choose and lock your charging method from the Scripts tab: "Scan & lock: hold at limit" (default — parks the battery at your limit) or "Scan & lock: discharge-cycle" (drains to your resume level then recharges to the limit, repeating). Both stop exactly at your limit, and lock so ACC won't auto-switch. Bundles ACC v2025.5.18-dev-fix12.
