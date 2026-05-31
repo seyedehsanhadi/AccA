@@ -230,13 +230,22 @@ open class AccHandler(override val version: Int) : AccInterface {
     override suspend fun getBatteryInfo(): BatteryInfo = withContext(Dispatchers.IO) {
         val info =  Shell.su("/dev/.vr25/acc/acca -i").exec().out.joinToString(separator = "\n")
 
+        // Battery health is absent from ACC 2025.x's `acca -i`, so read the kernel's
+        // generic power_supply node directly. Crash-safe: any failure (no root yet,
+        // node missing on this device/kernel, empty value) yields null -> Unknown.
+        val kernelHealth: String? = try {
+            Shell.su("cat /sys/class/power_supply/battery/health").exec().let {
+                if (it.isSuccess) it.out.firstOrNull()?.trim()?.ifBlank { null } else null
+            }
+        } catch (e: Exception) { null }
+
         BatteryInfo(
             NAME_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
             INPUT_SUSPEND_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let { // If r == true (input is suspended)
                 it == 0
             },
             STATUS_REGEXP.find(info)?.destructured?.component1() ?: lowerStatus(info) ?: STRING_DISCHARGING,
-            HEALTH_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
+            HEALTH_REGEXP.find(info)?.destructured?.component1() ?: kernelHealth ?: STRING_UNKNOWN,
             PRESENT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CHARGE_TYPE_REGEXP.find(info)?.destructured?.component1() ?: CHARGE_TYPE_LOWER_REGEXP.find(info)?.destructured?.component1()?.trim() ?: STRING_UNKNOWN,
             CAPACTIY_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: LEVEL_LOWER_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
