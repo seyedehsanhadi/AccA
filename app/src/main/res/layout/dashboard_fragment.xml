@@ -153,7 +153,7 @@
                         app:progress_stroke_width="5dp"
                         app:progress_text_color="?android:attr/textColorPrimary"
                         app:progress_text_size="@dimen/label_text"
-                        app:style="solid_line" />
+                        app:progress_style="solid_line" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
