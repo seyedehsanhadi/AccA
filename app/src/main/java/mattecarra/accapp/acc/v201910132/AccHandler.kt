@@ -52,15 +52,26 @@ open class AccHandler(override val version: Int) : AccInterface {
     override suspend fun readConfig(): AccConfig = withContext(Dispatchers.IO) {
         val config = readConfigToString()
 
-        val (capacityShutdown, capacityCoolDown, capacityResume, capacityPause) = CAPACITY_CONFIG_REGEXP.find(config)!!.destructured
-        val (temperatureCooldown, temperatureMax, waitSeconds) = TEMP_CONFIG_REGEXP.find(config)!!.destructured
+        // Read robustly: a missing/renamed capacity or temperature line must not crash the
+        // parser. groupValues is 1-indexed (0 is the whole match); fall back to ACC's
+        // documented defaults when the line is absent or a group is empty.
+        val cap = CAPACITY_CONFIG_REGEXP.find(config)?.groupValues
+        val capacityShutdown = cap?.getOrNull(1) ?: "0"
+        val capacityCoolDown = cap?.getOrNull(2) ?: "101"
+        val capacityResume   = cap?.getOrNull(3) ?: "70"
+        val capacityPause    = cap?.getOrNull(4) ?: "80"
+
+        val temp = TEMP_CONFIG_REGEXP.find(config)?.groupValues
+        val temperatureCooldown = temp?.getOrNull(1) ?: "90"
+        val temperatureMax      = temp?.getOrNull(2) ?: "95"
+        val waitSeconds         = temp?.getOrNull(3) ?: "90"
 
         val coolDownMatchResult = COOLDOWN_CONFIG_REGEXP.find(config)?.destructured
 
         val cVolt = VOLT_FILE.find(config)?.destructured
 
         AccConfig(
-            AccConfig.ConfigCapacity(capacityShutdown.toIntOrNull() ?: 0, capacityResume.toInt(), capacityPause.toInt()),
+            AccConfig.ConfigCapacity(capacityShutdown.toIntOrNull() ?: 0, capacityResume.toIntOrNull() ?: 70, capacityPause.toIntOrNull() ?: 80),
             AccConfig.ConfigVoltage(cVolt?.component1()?.ifBlank { null }, cVolt?.component2()?.toIntOrNull()),
             null,
             AccConfig.ConfigTemperature(temperatureCooldown.toIntOrNull() ?: 90,
@@ -69,7 +80,7 @@ open class AccHandler(override val version: Int) : AccInterface {
             getOnBoot(config),
             getOnPlugged(config),
             coolDownMatchResult?.let { (coolDownChargeSeconds, coolDownPauseSeconds) ->
-                AccConfig.ConfigCoolDown(capacityCoolDown.toInt(), coolDownChargeSeconds.toInt(), coolDownPauseSeconds.toInt())
+                AccConfig.ConfigCoolDown(capacityCoolDown.toIntOrNull() ?: 101, coolDownChargeSeconds.toIntOrNull() ?: 50, coolDownPauseSeconds.toIntOrNull() ?: 10)
             },
             getResetUnplugged(config),
             getResetOnPause(config),
