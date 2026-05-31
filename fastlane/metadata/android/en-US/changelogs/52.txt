@@ -1,0 +1,3 @@
+1.0.48
+
+Reverts the 1.0.47 change that restarted the daemon on every settings change — it made the app freeze for several seconds (switch re-detection) each time. The limit and temperature already apply live; only a charging-switch change needs a restart.

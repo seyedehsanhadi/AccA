@@ -2,6 +2,16 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.48] - 2026-05-31
+
+Reverts the 1.0.47 auto-restart, which made the app hang on every settings change.
+
+### Fixed
+- 1.0.47 restarted the ACC daemon after every config change. A restart re-detects every charging switch, which takes several seconds, so AccA froze (and sometimes ANR'd) each time you changed a setting. Reverted. The daemon already re-reads the limit and temperature live within a few seconds, so those still apply on their own; only a charging-switch change needs a restart, which you can do from the dashboard.
+
+### Changed
+- Version is now 1.0.48 (build 52). Bundled ACC daemon stays v2025.5.18-dev-fix5.
+
 ## [1.0.47] - 2026-05-31
 
 Settings take effect immediately now — no more restarting the daemon by hand.
@@ -126,6 +136,7 @@ This fork's first bug-fix release. The main reason it exists: AccA crashed on AC
 - Fixed a layout attribute the vendored widget had renamed (`style` became `progress_style`), which was failing resource compilation.
 - Added GitHub Actions. Every push builds a debug APK; tagging a release (`v*`) builds a signed APK and attaches it to a GitHub Release.
 
+[1.0.48]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.48
 [1.0.47]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.47
 [1.0.46]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.46
 [1.0.44]: https://github.com/seyedehsanhadi/AccA/releases/tag/v1.0.44
