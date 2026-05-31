@@ -185,7 +185,7 @@
     <string name="script_body_text">Shell text:</string>
 
     <string name="title_on_plugged">Apply on Plug</string>
-    <string name="label_on_plugged">applyOnPlug:</string>
+    <string name="label_on_plugged">apply_on_plug:</string>
     <string name="edit_on_plugged">Edit apply_on_plug settings:</string>
 
     <string name="edit_on_plugged_dialog_message">Example: wireless/voltage_max::9000000 forces fast wireless charging on some Pixel devices.</string>
