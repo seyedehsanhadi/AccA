@@ -2,6 +2,19 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.53] - 2026-05-31
+
+Final hardening pass — full software coverage of the charge-control safety paths.
+
+### Fixed
+- Full fail-safe coverage: every capacity limit check (pause, resume, cooldown, shutdown, idle-reassert) now treats an empty or malformed value as the safe outcome, so no bad config can make a check error out and skip a stop. Previously only two of seven were guarded.
+- Flat-hold extended to the `/proc/driver/charger_limit` charge-limit node (in addition to the Google `charge_stop_level` node), so more chipsets hold the cap flat with no overshoot.
+- Breach watchdog: if the battery is at/above your limit and charging still hasn't stopped, you now get a warning notification instead of it failing silently. It clears itself once charging stops.
+
+### Changed
+- Bundled ACC daemon updated to v2025.5.18-dev-fix9 (versionCode 202505183).
+- Version is now 1.0.53 (build 57).
+
 ## [1.0.52] - 2026-05-31
 
 Safety hardening on top of 1.0.51.

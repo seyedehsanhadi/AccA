@@ -1,0 +1,3 @@
+1.0.53
+
+Final hardening pass. Full fail-safe coverage on every charge-limit check (an empty or malformed config can no longer skip a stop), flat-hold extended to more charge-limit chipsets (no overshoot), and a breach watchdog that warns if charging doesn't actually stop at your limit. Bundles ACC v2025.5.18-dev-fix9.
