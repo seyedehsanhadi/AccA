@@ -70,23 +70,26 @@ jobs:
           name: AccA-release
           path: app/build/outputs/apk/release/*.apk
 
+      # Pull the notes for this version out of CHANGELOG.md so the release page
+      # and the repo changelog never drift apart.
+      - name: Extract release notes from CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VER" '
+            $0 ~ "^## \\[" ver "\\]" { grab = 1; next }
+            grab && /^## \[/ { exit }
+            grab { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "AccA $GITHUB_REF_NAME" > release_notes.md
+          fi
+          printf '\n---\nAPK below is built by GitHub Actions and signed with a debug key. It installs on its own, but will not update over a copy of AccA signed with a different key.\n' >> release_notes.md
+          cat release_notes.md
+
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: app/build/outputs/apk/release/*.apk
-          generate_release_notes: true
-          body: |
-            AccA ${{ github.ref_name }} — community bug-fix build.
-
-            **APK is signed with a debug key** (no dedicated release keystore),
-            so it installs standalone but will not update over a differently
-            signed copy of AccA.
-
-            ### Fixes in this build
-            - Crash-proof ACC config parsing — survives ACC 2025.x renaming
-              `max_temp_pause` → `resume_temp`, missing keys, and empty values.
-            - Quick-settings profile tile no longer crashes with no profiles saved.
-            - Boot receiver runs root init off the main thread (no boot-time ANR).
-            - Vendored CircleProgressBar (dead jcenter dependency) so the project
-              builds again; fixed the `style` → `progress_style` attribute.
+          body_path: release_notes.md
