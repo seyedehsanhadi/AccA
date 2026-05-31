@@ -92,10 +92,18 @@ class BatteryInfo(val name: String,
      */
     fun getVoltageNow(unit: VoltageUnit): Float
     {
-        return if (voltageNow <= 0f) voltageNow
-        else if (unit == VoltageUnit.uV) String.format("%.3f", voltageNow / 1000000f).toFloat()
-        else if (unit == VoltageUnit.V) String.format("%.3f", voltageNow / 1000f).toFloat()
-        else voltageNow // mV without '.'
+        // ACC reports VOLTAGE_NOW in different scales depending on version/device:
+        // volts (~4.0), millivolts (~4000), or microvolts (~4000000). ACC 2025.x emits
+        // volts as a decimal, which the old fixed VoltageUnit.V branch divided by 1000 and
+        // displayed as 0.004 V. Normalise by magnitude instead of trusting the stored unit,
+        // so the reading is correct on any ACC. A battery is physically ~2.5-4.5 V, so the
+        // three scales never overlap. Display only — never feeds an ACC control command.
+        if (voltageNow <= 0f) return voltageNow
+        return when {
+            voltageNow >= 100000f -> String.format("%.3f", voltageNow / 1000000f).toFloat() // microvolts
+            voltageNow >= 100f    -> String.format("%.3f", voltageNow / 1000f).toFloat()     // millivolts
+            else                  -> String.format("%.3f", voltageNow).toFloat()             // already volts
+        }
     }
 
     fun getVoltageNow(input: VoltageUnit, output: VoltageUnit, withMeaUnit: Boolean): String
