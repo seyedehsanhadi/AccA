@@ -1,0 +1,5 @@
+- Remove the photos/videos/music permission prompt (the app never used it)
+- Fix the accd quick-settings tile not refreshing
+- Show charging switch as Automatic instead of a literal "" (ACC quotes values)
+- Apply on Boot/Plug toggles now match the saved config; fix the plug label
+- Reading the ACC config can no longer crash on any ACC version
