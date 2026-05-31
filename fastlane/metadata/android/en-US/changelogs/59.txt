@@ -1,0 +1,3 @@
+1.0.55
+
+Charging now stops exactly at your limit, never above — the limit is driven to your target level on both sides instead of "charge to 100% then interrupt" (which overshot). Default holds the battery at the upper limit (battery-idle); turn idle off for a discharge-cycle between your lower and upper limits (the recharge still stops exactly at the upper limit). Bundles ACC v2025.5.18-dev-fix11.

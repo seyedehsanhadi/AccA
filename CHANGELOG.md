@@ -2,6 +2,20 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.55] - 2026-05-31
+
+The cap now stops exactly at your limit (no overshoot), and you choose hold vs cycle.
+
+### Fixed
+- **No more overshoot.** The charge limit is driven to your *target* level on both the charge and the pause side, so charging stops exactly at your limit (e.g. 75%), never above. The old behaviour told the firmware to "charge to 100%" then interrupt, which sailed past the limit (the 75→77 you saw).
+
+### Changed
+- **Default = hold at the upper limit (battery-idle).** With "prioritize battery idle mode" on (the default), the battery is parked at your upper limit.
+- **Idle off = discharge-cycle.** Turn "prioritize battery idle mode" off and the battery discharges to your lower limit (resume_capacity), then recharges to the upper limit, and repeats — the recharge still stops exactly at the upper limit.
+- Removed the old `charge_stop_level 100 5` / `100 battery/capacity` variants (they recharged toward 100% and overshot).
+- Bundled ACC daemon updated to v2025.5.18-dev-fix11 (versionCode 202505185).
+- Version is now 1.0.55 (build 59).
+
 ## [1.0.54] - 2026-05-31
 
 Settings apply instantly, and a scan can no longer leave charging uncapped.
