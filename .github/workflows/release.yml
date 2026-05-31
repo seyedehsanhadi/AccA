@@ -1,0 +1,92 @@
+name: release
+
+# Build a signed release APK and publish it as a GitHub Release.
+# Triggered by pushing a version tag (v*), or manually.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 17 first — only so the SDK manager (which now requires 17) can run
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK 31 + build-tools
+        run: |
+          SDKM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses >/dev/null 2>&1 || true
+          "$SDKM" "platforms;android-31" "build-tools;31.0.0" >/dev/null
+
+      # JDK 11 for the actual build (Gradle 7.1.1 + AGP 7.0.3 need 11, not 17)
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      # No dedicated release keystore is committed, so sign with a debug key.
+      # This feeds the existing ACCA_KEYSTORE_* hooks in app/build.gradle; to ship
+      # a Play-Store build later, set those four as repo secrets instead.
+      - name: Generate debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair \
+            -dname "CN=AccA, O=AccA, C=US" \
+            -alias androiddebugkey \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000
+
+      - name: Build release APK
+        env:
+          ACCA_KEYSTORE_LOCATION: ${{ env.HOME }}/.android/debug.keystore
+          ACCA_KEYSTORE_PASSWORD: android
+          ACCA_KEY_ALIAS: androiddebugkey
+          ACCA_KEY_PASSWORD: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --stacktrace
+
+      - name: Locate built APK
+        id: apk
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -n1)
+          echo "Found APK: $APK"
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AccA-release
+          path: app/build/outputs/apk/release/*.apk
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
+          body: |
+            AccA ${{ github.ref_name }} — community bug-fix build.
+
+            **APK is signed with a debug key** (no dedicated release keystore),
+            so it installs standalone but will not update over a differently
+            signed copy of AccA.
+
+            ### Fixes in this build
+            - Crash-proof ACC config parsing — survives ACC 2025.x renaming
+              `max_temp_pause` → `resume_temp`, missing keys, and empty values.
+            - Quick-settings profile tile no longer crashes with no profiles saved.
+            - Boot receiver runs root init off the main thread (no boot-time ANR).
+            - Vendored CircleProgressBar (dead jcenter dependency) so the project
+              builds again; fixed the `style` → `progress_style` attribute.
