@@ -1,0 +1,3 @@
+1.0.54
+
+Settings now apply within ~1 second (no daemon restart, no freeze). A switch scan can no longer leave the daemon stopped / charging uncapped — it launches the daemon detached and verifies it came back. The scanner also re-arms between tests so every switch (including the precise pcap flat-hold) is evaluated. Bundles ACC v2025.5.18-dev-fix10.

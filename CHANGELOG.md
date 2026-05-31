@@ -2,6 +2,19 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.0.54] - 2026-05-31
+
+Settings apply instantly, and a scan can no longer leave charging uncapped.
+
+### Fixed
+- **Settings apply immediately.** Changing a limit, temperature, or switch now takes effect within ~1 second — the daemon wakes the moment the config changes and re-reads it live, instead of waiting out the full loop delay. No daemon restart, no app freeze.
+- **A scan no longer kills the daemon.** "Scan & fix charging switch" restarts the daemon when it finishes; that restart ran the daemon *inside* the one-shot scan script, so it died when the script exited — leaving charging uncapped (the daemon showing "stopped" after a scan). The daemon now launches detached and stays running, and the scan verifies it came back, warning if it didn't.
+- **Scanner evaluates every switch.** It re-arms charging between tests, so a switch tested right after a stopping one (like the precise `pcap` flat-hold variant) is no longer skipped as "not charging".
+
+### Changed
+- Bundled ACC daemon updated to v2025.5.18-dev-fix10 (versionCode 202505184).
+- Version is now 1.0.54 (build 58).
+
 ## [1.0.53] - 2026-05-31
 
 Final hardening pass — full software coverage of the charge-control safety paths.
