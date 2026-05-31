@@ -50,7 +50,7 @@ jobs:
 
       - name: Build release APK
         env:
-          ACCA_KEYSTORE_LOCATION: ${{ env.HOME }}/.android/debug.keystore
+          ACCA_KEYSTORE_LOCATION: /home/runner/.android/debug.keystore
           ACCA_KEYSTORE_PASSWORD: android
           ACCA_KEY_ALIAS: androiddebugkey
           ACCA_KEY_PASSWORD: android
