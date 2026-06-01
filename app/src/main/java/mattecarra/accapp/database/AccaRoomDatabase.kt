@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mattecarra.accapp.models.*
 
-@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 14)
+@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 15)
 @TypeConverters(ConfigConverter::class)
 abstract class AccaRoomDatabase : RoomDatabase()
 {
@@ -141,6 +141,24 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
+        // 1.1.5: (a) expose ACC's allow_idle_above_pcap as two one-tap scripts (ACC has no
+        // dedicated AccA control for it) -- ON is ACC's own default (battery may rest above the
+        // limit), OFF suits forever-plugged setups that cycle down instead. (b) Modernize two
+        // stale sample scripts for 2025.x ACC: the temperature sample wrote the legacy
+        // max_temp_pause key (renamed to resume_temp; silently dropped now), and the capacity
+        // sample labelled the 5th field capacity_freeze2 (now capacity_mask). Data-only
+        // INSERT/UPDATE (no schema change), same pattern as MIGRATION_11_12.
+        private val MIGRATION_14_15: Migration = object : Migration(14, 15)
+        {
+            override fun migrate(database: SupportSQLiteDatabase)
+            {
+                database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Idle above limit: ON (default)\", \"allow_idle_above_pcap=true: battery may rest (idle/bypass) above your charge limit. ACC default.\", \"acca -s allow_idle_above_pcap=true\", \"\", 0);")
+                database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Idle above limit: OFF\", \"allow_idle_above_pcap=false: never sit above the limit; cycle down to the resume level. Best for forever-plugged 40-60% setups.\", \"acca -s allow_idle_above_pcap=false\", \"\", 0);")
+                database.execSQL("UPDATE scripts_table SET scDescription = \"temperature=(cooldown_temp max_temp resume_temp shutdown_temp)\", scBody = \"acca -s cooldown_temp=40 max_temp=45 resume_temp=40\" WHERE scName = \"CoolDown Temp after 40%\";")
+                database.execSQL("UPDATE scripts_table SET scDescription = \"capacity=(shutdown_capacity cooldown_capacity resume_capacity pause_capacity capacity_mask)\" WHERE scName = \"Charge to 90%\";")
+            }
+        }
+
         fun getDatabase(context: Context): AccaRoomDatabase
         {
             val tempInstance = INSTANCE
@@ -150,7 +168,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 // Create database instance here
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                         .addCallback(object : Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
@@ -196,13 +214,13 @@ abstract class AccaRoomDatabase : RoomDatabase()
             )
 
             db.scriptsDao().insert(AccaScript(0, "CoolDown Temp after 40%",
-                "temperature=(cooldown_temp max_temp max_temp_pause shutdown_temp)",
-                "acca -s cooldown_temp=40 max_temp=45 max_temp_pause=90 ",
+                "temperature=(cooldown_temp max_temp resume_temp shutdown_temp)",
+                "acca -s cooldown_temp=40 max_temp=45 resume_temp=40",
                 "", 0)
             )
 
             db.scriptsDao().insert(AccaScript(0, "Charge to 90%",
-                "capacity=(shutdown_capacity cooldown_capacity resume_capacity pause_capacity capacity_freeze2)",
+                "capacity=(shutdown_capacity cooldown_capacity resume_capacity pause_capacity capacity_mask)",
                 "acca -s shutdown_capacity=10 resume_capacity=85 pause_capacity=90",
                 "", 0)
             )
@@ -258,6 +276,18 @@ abstract class AccaRoomDatabase : RoomDatabase()
             db.scriptsDao().insert(AccaScript(0, "ACC Version",
                 "-v|--version  Print acc version and version code",
                 "acca -v",
+                "", 0)
+            )
+
+            db.scriptsDao().insert(AccaScript(0, "Idle above limit: ON (default)",
+                "allow_idle_above_pcap=true: battery may rest (idle/bypass) above your charge limit. ACC default.",
+                "acca -s allow_idle_above_pcap=true",
+                "", 0)
+            )
+
+            db.scriptsDao().insert(AccaScript(0, "Idle above limit: OFF",
+                "allow_idle_above_pcap=false: never sit above the limit; cycle down to the resume level. Best for forever-plugged 40-60% setups.",
+                "acca -s allow_idle_above_pcap=false",
                 "", 0)
             )
         }

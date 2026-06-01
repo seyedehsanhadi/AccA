@@ -61,11 +61,15 @@ open class AccHandler(override val version: Int) : AccInterface {
         val capacityShutdown = matchInt(SHUTDOWN_CAPACITY_REGEXP) ?: 0
         val capacityCoolDown = matchInt(COOLDOWN_CAPACITY_REGEXP) ?: 101
         val capacityResume   = matchInt(RESUME_CAPACITY_REGEXP) ?: 70
-        val capacityPause    = matchInt(PAUSE_CAPACITY_REGEXP) ?: 80
+        val capacityPause    = matchInt(PAUSE_CAPACITY_REGEXP) ?: 75
 
-        val temperatureCooldown = matchInt(COOLDOWN_TEMP_REGEXP) ?: 90
-        val temperatureMax      = matchInt(MAX_TEMP_REGEXP) ?: 95
-        val waitSeconds         = matchInt(MAX_TEMP_PAUSE_REGEXP) ?: 90
+        // Fallbacks are ACC's documented defaults (cooldown_temp 45, max_temp 50, resume_temp 40)
+        // -- NOT the legacy 90/95 placeholders. A missing max_temp must never load as 95 C, which
+        // would mean no thermal pause at all; and the third field is resume_temp in 2025.x, not a
+        // 90-second wait, so it defaults to 40 C.
+        val temperatureCooldown = matchInt(COOLDOWN_TEMP_REGEXP) ?: 45
+        val temperatureMax      = matchInt(MAX_TEMP_REGEXP) ?: 50
+        val waitSeconds         = matchInt(MAX_TEMP_PAUSE_REGEXP) ?: 40
 
         val coolDownChargeSeconds = COOLDOWN_CHARGE_REGEXP.find(config)?.destructured?.component1()?.toIntOrNull()
         val coolDownPauseSeconds = COOLDOWN_PAUSE_REGEXP.find(config)?.destructured?.component1()?.toIntOrNull()

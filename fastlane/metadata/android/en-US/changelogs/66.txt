@@ -1,0 +1,4 @@
+- Fix default temperature band: cooldown 45 C must sit below max 50 C. 1.1.4 collapsed both to 45, which disabled the cooldown cycle. Existing configs auto-repair.
+- New: "Idle above limit" ON/OFF scripts to toggle allow_idle_above_pcap (default ON).
+- Parser falls back to ACC's real temperature defaults, not a 95 C "no pause" value.
+- Bundled ACC daemon: v2025.5.18-stable.5.

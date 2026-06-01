@@ -2,6 +2,21 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.5] - 2026-06-01
+
+Temperature band fix and an idle-above-limit toggle.
+
+### Fixed
+- **Default temperature band corrected to cooldown 45 °C < max 50 °C.** The 1.1.4 "lower max to 45 °C" change set max_temp equal to cooldown_temp (the config read `45 45 40 55`). cooldown_temp is where the gentle cooldown cycle starts and max_temp is the hard pause — with both at 45 the cooldown cycle is dead (it breaks the instant it would start). Restored ACC's proven 50 °C max with a 5 °C cooldown gap. The bundled daemon repairs an already-collapsed `45 45` config once, automatically.
+- **Config parser fallbacks now use ACC's real defaults** (cooldown 45 / max 50 / resume 40), not the legacy 90/95 placeholders. A config missing `max_temp` no longer loads as 95 °C — which would have meant no thermal pause at all.
+
+### Added
+- **Idle above limit toggle.** Two one-tap scripts under Scripts — "Idle above limit: ON (default)" and "OFF" — flip ACC's `allow_idle_above_pcap`. ON (the default) lets the battery rest at your charge limit; OFF cycles down to the resume level instead, for forever-plugged 40–60 % setups.
+
+### Changed
+- Bundled ACC daemon: v2025.5.18-stable.5 (versionCode 202505192).
+- Version 1.1.5 (build 66).
+
 ## [1.1.4] - 2026-05-31
 
 Standalone ACC, a cooler default, and boot/profile housekeeping.
