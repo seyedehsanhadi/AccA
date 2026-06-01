@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.3] - 2026-05-31
+
+Fixes charging getting stuck below your range (e.g. frozen at 64 %).
+
+### Fixed
+- If the battery dropped below your range it could **freeze — not charging, not draining**. The charge-stop chip latches "stopped" at your limit, and the previous build's resume re-sent the limit value, which doesn't re-arm it. Resume now works the way 2022/2023 did: charge up to your limit, stop, drift down, charge again at your resume level — a normal cycle inside your range. A locked switch from an older build is upgraded automatically on update (no command).
+
+### Changed
+- Bundled ACC daemon: v2025.5.18-stable.3 (versionCode 202505190).
+- Version 1.1.3 (build 64).
+
 ## [1.1.2] - 2026-05-31
 
 Fixes the battery draining to ~70 % instead of holding at your limit.

@@ -1,0 +1,3 @@
+1.1.3
+
+Fixes charging getting stuck below your range (e.g. frozen at 64% on a 70-75 range, not charging or draining). Resume now works like 2022/2023: charge up to your limit, stop, drift down, charge again — a normal cycle in your range. A locked switch from an older build upgrades automatically. Bundles ACC v2025.5.18-stable.3.
