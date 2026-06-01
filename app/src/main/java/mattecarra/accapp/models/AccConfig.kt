@@ -77,12 +77,13 @@ import java.io.Serializable
 
     /**
      * Temperature Configuration.
-     * Default set as 40/60/90.
-     * @param coolDownTemperature percentage when the cool down phase should start.
-     * @param maxTemperature maximum temperature of the battery while charging. When met, charging will pause for <pause> seconds.
-     * @param pause time in seconds to wait for the temperature to drop below <max>, to resume charging.
+     * Default 40 / 45 / 40 (cool-down / max / resume, all °C).
+     * @param coolDownTemperature temperature at which the cool-down phase starts.
+     * @param maxTemperature pause charging when the battery reaches this temperature.
+     * @param pause resume temperature: resume charging once the battery cools to this
+     *        (this maps to ACC's resume_temp in °C; the field name is legacy).
      */
-    data class ConfigTemperature(var coolDownTemperature: Int = 40, var maxTemperature: Int = 60, var pause: Int = 90) : Serializable
+    data class ConfigTemperature(var coolDownTemperature: Int = 40, var maxTemperature: Int = 45, var pause: Int = 40) : Serializable
     {
         fun toString(context: Context): String
         {

@@ -168,7 +168,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 AccaProfile(0, "Default Custom",
                     AccConfig(
                         configCapacity = AccConfig.ConfigCapacity(5, 70, 80),
-                        configTemperature = AccConfig.ConfigTemperature(40, 45, 90)
+                        configTemperature = AccConfig.ConfigTemperature(40, 45, 40)
                     ),
                     ProfileEnables(),
                 )
@@ -178,7 +178,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 AccaProfile(0, "Charge to 90%",
                     AccConfig(
                         configCapacity = AccConfig.ConfigCapacity(5, 85, 90),
-                        configTemperature = AccConfig.ConfigTemperature(40, 45, 90)
+                        configTemperature = AccConfig.ConfigTemperature(40, 45, 40)
                     ),
                     ProfileEnables()
                 )
@@ -188,7 +188,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 AccaProfile(0, "Cool down after 60%",
                     AccConfig(
                         configCapacity = AccConfig.ConfigCapacity(5, 70, 80),
-                        configTemperature = AccConfig.ConfigTemperature(40, 45, 90),
+                        configTemperature = AccConfig.ConfigTemperature(40, 45, 40),
                         configCoolDown = AccConfig.ConfigCoolDown(60, 50, 10)
                     ),
                     ProfileEnables(eCoolDown = true)

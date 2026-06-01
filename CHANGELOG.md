@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.4] - 2026-05-31
+
+Standalone ACC, a cooler default, and boot/profile housekeeping.
+
+### Changed
+- **Uninstalling AccA no longer removes ACC.** ACC is a standalone module with its own persistent config; the app is just a front-end (a remote control). Previously an uninstall could delete the daemon on next boot — fixed, and cleaned up automatically on update.
+- **Default max temperature lowered 50 → 45 °C** (heat above ~45 °C ages the cell faster). A limit you set yourself is left untouched.
+- The boot receiver is now registered (justifies the boot permission; redundant with the module's own boot hook, so harmless), and a stale profile temperature default (legacy "90") is corrected.
+- Bundled ACC daemon: v2025.5.18-stable.4 (versionCode 202505191).
+- Version 1.1.4 (build 65).
+
 ## [1.1.3] - 2026-05-31
 
 Fixes charging getting stuck below your range (e.g. frozen at 64 %).
