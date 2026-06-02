@@ -85,6 +85,10 @@
 
     <!-- ACC installation -->
     <string name="installing_acc">Installing ACC</string>
+    <string name="acc_not_installed_title">ACC module not found</string>
+    <string name="acc_not_installed_message">AccA controls the ACC module but does not install it. Install ACC separately (flash the module in Magisk/KernelSU), then return and tap Retry.</string>
+    <string name="get_acc">Get ACC</string>
+    <string name="exit">Exit</string>
     <string name="reboot">Reboot</string>
     <string name="acc_installation_failed">Please archive and send logcat and /data/adb/acc-data/logs/ to the developers
         at t.me/acc_group/ or github.com/MatteCarra/AccA/issues/.

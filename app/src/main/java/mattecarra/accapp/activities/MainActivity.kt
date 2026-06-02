@@ -3,6 +3,7 @@ package mattecarra.accapp.activities
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -266,130 +267,32 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     }
 
     private fun checkAccInstalled(): Boolean {
-        val version = _preferences.accVersion
-
-        if (!Acc.isAccInstalled(filesDir) || (version == "bundled" && Acc.isInstalledAccOutdated()))
+        // AccA controls the ACC module but no longer installs or upgrades it.
+        // The user installs/flashes ACC separately. If it is missing, point them
+        // at the flashable zip and let them retry; never install it automatically.
+        if (!Acc.isAccInstalled(filesDir))
         {
-            val dialog = MaterialDialog(this).show {
-                title(R.string.installing_acc)
-                progress(R.string.wait)
+            MaterialDialog(this).show {
+                title(R.string.acc_not_installed_title)
+                message(R.string.acc_not_installed_message)
+                positiveButton(R.string.get_acc) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
+                    } catch (_: Exception) { }
+                }
+                negativeButton(R.string.retry) {
+                    if (checkAccInstalled()) initUi()
+                }
+                neutralButton(R.string.exit) {
+                    finish()
+                }
                 cancelOnTouchOutside(false)
-                onKeyCodeBackPressed { false }
-            }
-
-            launch {
-                val res = when (version)
-                {
-                    "bundled" -> Acc.installBundledAccModule(this@MainActivity)
-                    else -> Acc.installAccModuleVersion(this@MainActivity, version)
-                }
-
-                dialog.cancel()
-
-                if (res?.isSuccess != true)
-                {
-                    when {
-                        version != "bundled" -> //custom version installation had an error -> ask the user to select a different version
-                            MaterialDialog(this@MainActivity) //Dialog to tell the user that installation failed
-                                .show {
-                                    title(R.string.acc_installation_failed_title)
-                                    message(R.string.installation_failed_non_bundled)
-                                    positiveButton(R.string.install_bundled_version) {
-                                        _preferences.accVersion = "bundled"
-                                        if (checkAccInstalled()) {
-                                            initUi()
-                                        }
-                                    }
-                                    negativeButton(R.string.select_different_version) {
-                                        MaterialDialog(this@MainActivity) //select a different acc version dailog
-                                            .show {
-                                                title(R.string.acc_version_picker_title)
-                                                message(R.string.acc_version_picker_message)
-                                                cancelOnTouchOutside(false)
-                                                this@MainActivity.launch {
-                                                    accVersionSingleChoice(_preferences.accVersion) { version ->
-                                                        _preferences.accVersion = version
-
-                                                        if (checkAccInstalled()) {
-                                                            initUi()
-                                                        }
-                                                    }
-                                                }
-                                                onKeyCodeBackPressed {
-                                                    dismiss()
-                                                    finish()
-                                                    false
-                                                }
-                                            }
-                                    }
-                                    if (res != null)
-                                        shareLogsNeutralButton(
-                                            File(
-                                                filesDir,
-                                                "logs/acc-install.log"
-                                            ), R.string.acc_installation_failed_log
-                                        )
-                                    cancelOnTouchOutside(false)
-                                }
-
-                        res?.code == 3 -> //Buysbox is not installed
-                            MaterialDialog(this@MainActivity)
-                                .show {
-                                    title(R.string.installation_failed_busybox_title)
-                                    message(R.string.installation_failed_busybox)
-                                    positiveButton(R.string.retry) {
-                                        if (checkAccInstalled()) {
-                                            initUi()
-                                        }
-                                    }
-                                    negativeButton {
-                                        finish()
-                                    }
-                                    cancelOnTouchOutside(false)
-                                }
-
-                        else -> //Other installation errors can not be handled automatically -> show a dialog with the logs
-                            MaterialDialog(this@MainActivity)
-                                .show {
-                                    title(R.string.acc_installation_failed_title)
-                                    message(R.string.acc_installation_failed)
-                                    positiveButton(R.string.retry) {
-                                        if (checkAccInstalled())
-                                            initUi()
-                                    }
-                                    negativeButton {
-                                        finish()
-                                    }
-                                    if (res != null)
-                                        shareLogsNeutralButton(
-                                            File(
-                                                filesDir,
-                                                "logs/acc-install.log"
-                                            ), R.string.acc_installation_failed_log
-                                        )
-                                    cancelOnTouchOutside(false)
-                                }
-                    }.onKeyCodeBackPressed {
-                        dialog.dismiss()
-                        finish()
-                        false
-                    }
-                } else {
-                    initUi()
-                }
-
-                res?.let {
-                    Log.d(LOG_TAG, it.out.joinToString("\n"))
+                onKeyCodeBackPressed {
+                    finish()
+                    false
                 }
             }
-
             return false
-        }
-
-        val time = System.currentTimeMillis() / 1000
-        if ((version == "master" || version == "dev") && time - _preferences.lastUpdateCheck > 86400) {
-            _preferences.lastUpdateCheck = time
-            checkUpdates(version)
         }
 
         return true
