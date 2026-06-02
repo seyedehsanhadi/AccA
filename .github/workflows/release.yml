@@ -93,3 +93,6 @@ jobs:
         with:
           files: app/build/outputs/apk/release/*.apk
           body_path: release_notes.md
+          # tags containing -rc / -pre / -beta publish as a GitHub pre-release;
+          # plain version tags (e.g. v1.1.5) publish as a full release.
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-pre') || contains(github.ref_name, '-beta') }}

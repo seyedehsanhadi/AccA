@@ -1,0 +1,1 @@
+- Pre-release (RC1). Bundles ACC v2025.5.18-stable.6-rc1 with the new `acca --state` machine-readable state export — the keystone for the upcoming control-bus + diagnostics rebuild. Additive: no charging-behavior change.

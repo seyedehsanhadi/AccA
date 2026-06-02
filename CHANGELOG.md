@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc1] - 2026-06-02
+
+**Pre-release.** Bundles ACC RC1 (the state-export keystone) so it can be tested through the app installer. No AccA app-behavior change yet.
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc1 (versionCode 202505193)** — adds `acca --state` (alias `acc -j`), a machine-readable JSON snapshot of ACC's actual state that the upcoming control-bus + diagnostics rebuild reads back. Additive — charging behavior unchanged.
+- Version 1.1.6-rc1 (build 67).
+
 ## [1.1.5] - 2026-06-01
 
 Temperature band fix and an idle-above-limit toggle.
