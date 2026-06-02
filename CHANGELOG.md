@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc4] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc4 — smart sensing for every SoC.
+
+### Added (bundled daemon)
+- `acca --state` (the "Show ACC state" script) now reports **live measured sensing on any SoC**: `plugged`, `currentUnits` (µA/mA auto-detected), `polarity`, and `switch.measuredClass` (bypass / idle / charging / discharging from plug + current). Not Tensor-only.
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc4 (202505195)**.
+- Version 1.1.6-rc4 (build 70).
+
 ## [1.1.6-rc3] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc2 — fixes the `acca --state` export bugs found on a Pixel 9a.

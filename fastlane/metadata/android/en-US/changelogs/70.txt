@@ -1,0 +1,1 @@
+- Pre-release (RC4). Bundles ACC rc4: "Show ACC state" now reports smart live sensing on any SoC — plugged, current units (µA/mA), polarity, and measured switch class (bypass/idle/charging/discharging).
