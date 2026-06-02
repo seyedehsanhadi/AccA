@@ -61,6 +61,11 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     private lateinit var _schedulesViewModel: SchedulesViewModel
     private lateinit var _profilesViewModel: ProfilesViewModel
 
+    // initUi() now runs after an async ACC detect, so the toolbar/bottom-nav can exist before
+    // the (lateinit) ViewModels do. Guards below ignore nav/menu taps until init completes,
+    // preventing UninitializedPropertyAccessException during that window.
+    @Volatile private var isUiInitialized = false
+
     val mainFragment = DashboardFragment.newInstance()
     val profilesFragment = ProfilesFragment.newInstance()
     val scriptsFragment = ScriptesFragment.newInstance()
@@ -74,6 +79,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         _sharedViewModel = ViewModelProvider(this).get(SharedViewModel::class.java)
         _profilesViewModel = ViewModelProvider(this).get(ProfilesViewModel::class.java)
         _schedulesViewModel = ViewModelProvider(this).get(SchedulesViewModel::class.java)
+        isUiInitialized = true   // ViewModels exist -> nav/menu handlers are safe now
 
         // Subscribe to viewmodel config and action if config is null
         _sharedViewModel.observeConfig(this, Observer { r ->
@@ -115,6 +121,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
      * Function for handing navigation bar clicks
      */
     override fun onNavigationItemSelected(m: MenuItem): Boolean {
+        if (!isUiInitialized) return false   // ignore taps until ViewModels/UI are ready
         // Record currently selected navigation item
         selectedNavBarItem = m.itemId
 
@@ -223,15 +230,17 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
 
         R.id.menu_appbar_export ->
         {
-            // Generate list of ExportEntries TODO: maybe move this to the actual activity to make new ProfileEntries from AccaProfiles
-            var profileList: ArrayList<ProfileEntry> = ArrayList()
-            launch {
-                for (profile: AccaProfile in _profilesViewModel.getProfiles()) {
-                    profileList.add(ProfileEntry(profile))
+            if (isUiInitialized) {   // _profilesViewModel may not exist yet during async init
+                // Generate list of ExportEntries TODO: maybe move this to the actual activity to make new ProfileEntries from AccaProfiles
+                var profileList: ArrayList<ProfileEntry> = ArrayList()
+                launch {
+                    for (profile: AccaProfile in _profilesViewModel.getProfiles()) {
+                        profileList.add(ProfileEntry(profile))
+                    }
+                }.invokeOnCompletion {
+                    var intent = Intent(this, ExportProfilesActivity::class.java).putExtra("list", profileList)
+                    startActivity(intent)
                 }
-            }.invokeOnCompletion {
-                var intent = Intent(this, ExportProfilesActivity::class.java).putExtra("list", profileList)
-                startActivity(intent)
             }
             true
         }
@@ -240,6 +249,13 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
 
     private fun loadFragment(fragment: Fragment)
     {
+        // Never commit after onSaveInstanceState (e.g. tapping nav as the app backgrounds)
+        // -> that throws IllegalStateException. commitAllowingStateLoss is safe here because
+        // the selected tab is restored from selectedNavBarItem on recreate.
+        if (supportFragmentManager.isStateSaved) {
+            supportFragmentManager.beginTransaction().replace(R.id.main_framelayout, fragment).commitAllowingStateLoss()
+            return
+        }
         val transaction = supportFragmentManager.beginTransaction()
         transaction.replace(R.id.main_framelayout, fragment)
         transaction.commit()
@@ -278,31 +294,54 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
      */
     private fun detectAccAndInit() {
         launch {
-            val installed = withContext(Dispatchers.IO) {
+            // ALL blocking root work runs off the main thread: Shell.rootAccess() (the first
+            // call spawns the su daemon / shows the root prompt) AND Acc/Djs detection +
+            // instance warm-up (their getters do blocking Shell.su). Doing any of these on
+            // the main thread froze the UI to a blank/white screen (ANR) -- the reported bug.
+            val state = withContext(Dispatchers.IO) {
                 try {
+                    if (!Shell.rootAccess()) return@withContext "noroot"
                     val ok = Acc.isAccInstalled(filesDir)
-                    if (ok) Acc.instance   // warm the instance off-main (it does blocking shell)
-                    ok
+                    if (ok) {
+                        Acc.instance   // warm ACC off-main
+                        // DJS has the SAME blocking-shell getter; warm it too so the
+                        // Schedules tab (SchedulesViewModel -> Djs.instance) never blocks main.
+                        try { if (Djs.isDjsInstalled(filesDir)) Djs.instance } catch (_: Exception) {}
+                    }
+                    if (ok) "ok" else "noacc"
                 } catch (e: Exception) {
-                    LogExt().e(javaClass.simpleName, "ACC detection failed: ${e.message}"); false
+                    LogExt().e(javaClass.simpleName, "ACC detection failed: ${e.message}"); "noacc"
                 }
             }
             if (isFinishing) return@launch
-            if (installed) {
-                try { initUi() }
-                catch (e: Exception) {
-                    LogExt().e(javaClass.simpleName, "initUi failed: ${e.message}")
-                    if (!isFinishing) MaterialDialog(this@MainActivity).show {
-                        title(R.string.acc_installation_failed_title)
-                        message(R.string.acc_installation_failed)
-                        positiveButton(R.string.retry) { detectAccAndInit() }
-                        neutralButton(R.string.exit) { finish() }
-                        cancelOnTouchOutside(false)
+            when (state) {
+                "noroot" -> showNoRoot()
+                "ok" -> {
+                    try { initUi() }
+                    catch (e: Exception) {
+                        LogExt().e(javaClass.simpleName, "initUi failed: ${e.message}")
+                        if (!isFinishing) MaterialDialog(this@MainActivity).show {
+                            title(R.string.acc_installation_failed_title)
+                            message(R.string.acc_installation_failed)
+                            positiveButton(R.string.retry) { detectAccAndInit() }
+                            neutralButton(R.string.exit) { finish() }
+                            cancelOnTouchOutside(false)
+                        }
                     }
                 }
-            } else {
-                showAccNotFound()
+                else -> showAccNotFound()
             }
+        }
+    }
+
+    private fun showNoRoot() {
+        if (isFinishing) return
+        MaterialDialog(this).show {
+            title(R.string.tile_acc_no_root)
+            message(R.string.no_root_message)
+            positiveButton(android.R.string.ok) { finish() }
+            cancelOnTouchOutside(false)
+            onKeyCodeBackPressed { dismiss(); finish(); false }
         }
     }
 
@@ -430,24 +469,10 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         // Set theme
         setTheme()
 
-        if (!Shell.rootAccess())
-        {
-            MaterialDialog(this).show {
-                title(R.string.tile_acc_no_root)
-                message(R.string.no_root_message)
-                positiveButton(android.R.string.ok) { finish() }
-                cancelOnTouchOutside(false)
-                onKeyCodeBackPressed {
-                    dismiss()
-                    finish()
-                    false
-                }
-            }
-        }
-        else
-        {
-            detectAccAndInit()
-        }
+        // Root check + ACC/DJS detection all happen OFF the main thread in detectAccAndInit()
+        // (the first Shell.rootAccess() spawns the su daemon / root prompt and blocked the UI
+        // to a blank screen when done here synchronously).
+        detectAccAndInit()
     }
 
     /**

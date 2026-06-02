@@ -140,11 +140,19 @@ class Preferences(private val context: Context)
             editor.apply()
         }
 
+    // Djs.isDjsInstalled() does a blocking root Shell.su; this getter ran on the main thread
+    // (SettingsFragment, AccBootReceiver) on EVERY read -> ANR. Cache the install status (it
+    // can't change without a reinstall) so only the first read can ever block.
     var djsEnabled: Boolean
-        get() = sharedPrefs.getBoolean(DJS_ENABLED, false) && Djs.isDjsInstalled(context.filesDir)
+        get() = sharedPrefs.getBoolean(DJS_ENABLED, false) && run {
+            djsInstalledCache ?: (try { Djs.isDjsInstalled(context.filesDir) } catch (e: Exception) { false })
+                .also { djsInstalledCache = it }
+        }
         set(value) {
             val editor = sharedPrefs.edit()
             editor.putBoolean(DJS_ENABLED, value)
             editor.apply()
         }
+
+    companion object { @Volatile private var djsInstalledCache: Boolean? = null }
 }
