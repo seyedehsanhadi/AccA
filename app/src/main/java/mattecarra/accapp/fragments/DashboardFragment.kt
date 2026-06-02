@@ -104,7 +104,7 @@ class DashboardFragment : ScopedFragment()
             configViewModel = ViewModelProvider(it).get(SharedViewModel::class.java)
 
             binding.dashResetBatteryStatsButton.setOnClickListener {
-                launch { Acc.instance.resetBatteryStats() }
+                launch { try { Acc.instance.resetBatteryStats() } catch (e: Exception) { } }
             }
 
             binding.dashEditCargingLimitOnceButton.setOnClickListener {
@@ -116,9 +116,11 @@ class DashboardFragment : ScopedFragment()
                     customView(view=dialog.root)
                     positiveButton(R.string.apply) {
                         launch {
-                            val limit = getCustomView().findViewById<NumberPicker>(R.id.charging_limit).value
-                            Acc.instance.setChargingLimitForOneCharge(limit)
-                            Toast.makeText(context, getString(R.string.done_applied_charge_limit, limit), Toast.LENGTH_LONG).show()
+                            try {
+                                val limit = getCustomView().findViewById<NumberPicker>(R.id.charging_limit).value
+                                Acc.instance.setChargingLimitForOneCharge(limit)
+                                Toast.makeText(context, getString(R.string.done_applied_charge_limit, limit), Toast.LENGTH_LONG).show()
+                            } catch (e: Exception) { }
                         }
                     }
                     negativeButton(android.R.string.cancel) {

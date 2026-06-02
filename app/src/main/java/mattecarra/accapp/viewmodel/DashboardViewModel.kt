@@ -21,13 +21,23 @@ class DashboardViewModel : ViewModel() {
     }
 
     init {
-        viewModelScope.launch() {
+        // Dispatchers.IO: the first Acc.instance access does blocking root-shell work, so
+        // it must never run on the Main dispatcher (ANR). postValue() because we are off
+        // the main thread. try/catch so a transient shell/ACC failure (root slow, daemon
+        // restarting, ACC absent) skips one tick instead of killing the poller forever.
+        viewModelScope.launch(Dispatchers.IO) {
             while (true) {
                 if (dashboard.hasActiveObservers()) {
-                    dashboard.value = DashboardValues(
-                        Acc.instance.getBatteryInfo(),
-                        Acc.instance.isAccdRunning()
-                    )
+                    try {
+                        dashboard.postValue(
+                            DashboardValues(
+                                Acc.instance.getBatteryInfo(),
+                                Acc.instance.isAccdRunning()
+                            )
+                        )
+                    } catch (e: Exception) {
+                        // ignore this tick; keep polling
+                    }
                 }
                 delay(2000)
             }

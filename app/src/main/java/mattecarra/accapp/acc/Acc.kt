@@ -193,11 +193,27 @@ object Acc {
         // Crash-safe: this runs at startup (Acc.instance) before root may be granted, so a
         // thrown libsu exception (no shell, I/O error) must never propagate. split() never
         // returns an empty list, so last()/first() are safe; toIntOrNull() guards the parse.
-        return try {
+        return (try {
             Shell.su("/dev/.vr25/acc/acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull()
         } catch (e: Exception) {
             null
-        } ?: getAccVersionLegacy()
+        }) ?: getAccVersionLegacy() ?: getAccVersionFromModuleProp()
+    }
+
+    // File-based fallback so AccA handles ANY ACC version. The running tool
+    // (/dev/.vr25/acc/acc) may be absent even when ACC is installed (e.g. flashed
+    // but the daemon has not started yet), which would make getAccVersion() return
+    // null -> AccA would use bundledVersion's handler and mis-parse an OLDER installed
+    // ACC. Reading versionCode from the module prop at the canonical home (a symlink
+    // to the module dir for Magisk/KSU) yields the REAL installed version regardless.
+    private fun getAccVersionFromModuleProp(): Int? {
+        return try {
+            Shell.su("grep -m1 '^versionCode=' /data/adb/vr25/acc/module.prop")
+                .exec().out.joinToString(separator = "\n")
+                .substringAfter("versionCode=", "").trim().toIntOrNull()
+        } catch (e: Exception) {
+            null
+        }
     }
 
     fun getAccVersionToStr(): String {

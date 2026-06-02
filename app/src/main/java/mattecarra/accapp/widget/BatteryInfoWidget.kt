@@ -180,7 +180,12 @@ class BatteryInfoWidget : AppWidgetProvider()
 
         GlobalScope.launch {
 
-            with(DashboardValues(Acc.instance.getBatteryInfo(), Acc.instance.isAccdRunning())) {
+            val dashboardValues = try {
+                DashboardValues(Acc.instance.getBatteryInfo(), Acc.instance.isAccdRunning())
+            } catch (e: Exception) {
+                return@launch  // shell/ACC failure -> skip this widget update, never crash
+            }
+            with(dashboardValues) {
 
                 val swidgetId = widgetId.toString()
                 val showLabel = sp.getBoolean(swidgetId + WIDGET_SLABELS, true)
