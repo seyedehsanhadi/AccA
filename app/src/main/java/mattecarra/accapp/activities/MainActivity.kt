@@ -660,6 +660,17 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     }
 
     fun accScheduleFabOnClick(view: View) {
+        // Scheduler runs on DJS. If it's not enabled, say so and route to Settings instead of
+        // silently doing nothing. djsEnabled is cached, so this never blocks the UI thread.
+        if (!_preferences.djsEnabled) {
+            MaterialDialog(this).show {
+                title(text = "DJS required")
+                message(text = "The Scheduler needs DJS (Daily Job Scheduler). Enable it in Settings → DJS, then try again.")
+                positiveButton(text = "Open Settings") { SettingsActivity.launch(this@MainActivity) }
+                negativeButton(android.R.string.cancel)
+            }
+            return
+        }
         MaterialDialog(this).show {
             title(R.string.create_schedule)
             addScheduleDialog(_profilesViewModel.getLiveData()) { profileId, scheduleName, time, executeOnce, executeOnBoot ->
@@ -681,7 +692,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                             intent.putExtra(Constants.DATA_KEY, dataBundle)
                             intent.putExtra(
                                 Constants.ACC_CONFIG_KEY,
-                                Acc.instance.readDefaultConfig()
+                                withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() }
                             )
                             intent.putExtra(
                                 Constants.TITLE_KEY,
@@ -793,7 +804,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                 )
                                 intent.putExtra(
                                     Constants.ACC_CONFIG_KEY,
-                                    Acc.instance.readDefaultConfig()
+                                    withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() }
                                 )
                                 startActivityForResult(
                                     intent,

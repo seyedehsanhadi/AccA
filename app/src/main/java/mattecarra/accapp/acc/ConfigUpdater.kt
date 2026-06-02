@@ -147,15 +147,21 @@ data class ConfigUpdateResult(
     val prioritizeBatteryIdleModeSuccessful: ConfigUpdateStatus = ConfigUpdateStatus.STATUS_OFF
 ) {
 
-    fun isSuccessful(): Boolean // check only 8/11 parameters -(?.?)=
+    fun isSuccessful(): Boolean
     {
+        // Check ALL 11 results. Previously 3 were omitted (currentMax, resetBSOnPause,
+        // prioritizeBatteryIdleMode), so a failed current-cap / reset-on-pause / battery-idle
+        // write was silently reported to the user as "saved".
         return capacityUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
-         && voltControlUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && voltControlUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && currentMaxUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
                 && tempUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
-            && coolDownUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
-      && resetUnpluggedUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
-              && onBootUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
-           && onPluggedUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
-      && chargingSwitchUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && coolDownUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && resetUnpluggedUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && resetBSOnPauseSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && onBootUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && onPluggedUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && chargingSwitchUpdateSuccessful != ConfigUpdateStatus.STATUS_FAIL
+                && prioritizeBatteryIdleModeSuccessful != ConfigUpdateStatus.STATUS_FAIL
     }
 }

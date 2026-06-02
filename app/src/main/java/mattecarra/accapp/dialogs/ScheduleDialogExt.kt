@@ -83,11 +83,15 @@ fun MaterialDialog.addScheduleDialog(
     val timePicker = binding.timePicker
     val timePickerContainer = binding.timePickerContainer
     val scheduleTypeSpinner = binding.scheduleTypeSelector
-    val scheduleType = binding.scheduleTypeSelector.selectedItemId
     val scheduleName = binding.scheduleNameEditText
     val executeOnBootCheckBox = binding.executeOnBootCheckbox
 
     positiveButton(R.string.save) { dialog ->
+
+            // Read the schedule type LIVE at save time. It used to be captured at dialog BUILD
+            // time, so changing boot/once/repeat in the spinner had NO effect -- every schedule
+            // saved as the initial type. That is the core "scheduler doesn't work" bug.
+            val scheduleType = scheduleTypeSpinner.selectedItemId
 
             val time = if(scheduleType == 2L) "boot" else
             {
