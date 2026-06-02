@@ -15,7 +15,7 @@ class AccHandler(override val version: Int) : mattecarra.accapp.acc.legacy.AccHa
     }
 
     override fun getCurrentChargingSwitch(config: String): String? {
-        val switch = """^\s*chargingSwitch=((?:(?!#).)*)""".toRegex(RegexOption.MULTILINE).find(readConfigToString())?.destructured?.component1()?.trim()
+        val switch = """^\s*chargingSwitch=((?:(?!#).)*)""".toRegex(RegexOption.MULTILINE).find(config)?.destructured?.component1()?.trim()
         return if(switch?.isNotEmpty() == true) switch else null
     }
 

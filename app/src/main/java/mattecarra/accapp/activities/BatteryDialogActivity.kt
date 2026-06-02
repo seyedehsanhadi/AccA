@@ -107,8 +107,20 @@ class BatteryDialogActivity : ScopedAppActivity()
         }
 
         launch {
-            isAccdRunning = Acc.instance.isAccdRunning()
-            isAccdInstalled = Acc.instance.getAccVersion() != null
+            try
+            {
+                isAccdRunning = Acc.instance.isAccdRunning()
+                isAccdInstalled = Acc.instance.getAccVersion() != null
+            }
+            catch (ex: Exception)
+            {
+                ex.printStackTrace()
+                LogExt().e(javaClass.simpleName, "reading accd status failed: $ex")
+                // Leave defaults (not running / not installed) so the UI still
+                // renders something meaningful instead of crashing.
+                isAccdRunning = false
+                isAccdInstalled = false
+            }
             updateTextStatusACC()
         }
 
@@ -161,9 +173,18 @@ class BatteryDialogActivity : ScopedAppActivity()
             LogExt().d(javaClass.simpleName, "onClick_ReverseDaemonAcc")
 
             launch {
-                //isAccdRunning = Acc.instance.isAccdRunning()
-                if (isAccdRunning) Acc.instance.abcStopDaemon() else Acc.instance.abcStartDaemon()
-                //runOnUiThread( Runnable { updateTextStatusACC() })  // there is no synchronization
+                try
+                {
+                    //isAccdRunning = Acc.instance.isAccdRunning()
+                    if (isAccdRunning) Acc.instance.abcStopDaemon() else Acc.instance.abcStartDaemon()
+                    //runOnUiThread( Runnable { updateTextStatusACC() })  // there is no synchronization
+                }
+                catch (ex: Exception)
+                {
+                    ex.printStackTrace()
+                    LogExt().e(javaClass.simpleName, "toggling accd daemon failed: $ex")
+                    Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                }
                 finish()
             }
         }
@@ -190,7 +211,17 @@ class BatteryDialogActivity : ScopedAppActivity()
                 title(R.string.title_profiles)
 
                 launch {
-                    val temp = profilesViewModel.getProfiles()
+                    val temp = try
+                    {
+                        profilesViewModel.getProfiles()
+                    }
+                    catch (ex: Exception)
+                    {
+                        ex.printStackTrace()
+                        LogExt().e(javaClass.simpleName, "getProfiles() failed: $ex")
+                        if (isShowing) dismiss()
+                        return@launch
+                    }
 
                     if (temp.isEmpty())
                         message(R.string.no_profiles)
@@ -199,10 +230,19 @@ class BatteryDialogActivity : ScopedAppActivity()
                             items = temp.map { b -> b.profileName },
                             selection = { _, index, _ ->
                                 launch {
-                                    mSharedViewModel.updateAccConfig(temp[index].accConfig)
-                                    mSharedViewModel.setCurrentSelectedProfile(temp[index].uid)
-                                    Toast.makeText(this@BatteryDialogActivity, getString(R.string.selecting_profile_toast, temp[index].profileName), Toast.LENGTH_SHORT).show()
-                                    sendBroadcast(Intent(this@BatteryDialogActivity, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
+                                    try
+                                    {
+                                        mSharedViewModel.updateAccConfig(temp[index].accConfig)
+                                        mSharedViewModel.setCurrentSelectedProfile(temp[index].uid)
+                                        Toast.makeText(this@BatteryDialogActivity, getString(R.string.selecting_profile_toast, temp[index].profileName), Toast.LENGTH_SHORT).show()
+                                        sendBroadcast(Intent(this@BatteryDialogActivity, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
+                                    }
+                                    catch (ex: Exception)
+                                    {
+                                        ex.printStackTrace()
+                                        LogExt().e(javaClass.simpleName, "applying selected profile failed: $ex")
+                                        Toast.makeText(this@BatteryDialogActivity, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                                    }
                                     finish()
                                 }
                             }
@@ -228,9 +268,18 @@ class BatteryDialogActivity : ScopedAppActivity()
 
                 positiveButton(R.string.apply) {
                     launch {
-                        val limit = getCustomView().findViewById<NumberPicker>(R.id.charging_limit).value
-                        Toast.makeText(context, getString(R.string.done_applied_charge_limit, limit), Toast.LENGTH_LONG).show()
-                        Acc.instance.setChargingLimitForOneCharge(limit)
+                        try
+                        {
+                            val limit = getCustomView().findViewById<NumberPicker>(R.id.charging_limit).value
+                            Toast.makeText(context, getString(R.string.done_applied_charge_limit, limit), Toast.LENGTH_LONG).show()
+                            Acc.instance.setChargingLimitForOneCharge(limit)
+                        }
+                        catch (ex: Exception)
+                        {
+                            ex.printStackTrace()
+                            LogExt().e(javaClass.simpleName, "setChargingLimitForOneCharge() failed: $ex")
+                            Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                        }
                         finish()
                     }
                 }

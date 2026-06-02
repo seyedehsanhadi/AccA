@@ -315,7 +315,7 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     override fun getUpdateResetUnpluggedCommand(resetUnplugged: Boolean) = "acc -s resetBsOnUnplug $resetUnplugged"
 
-    override fun getUpdateResetOnPauseCommand(resetOnPause: Boolean) = "acc-en -s resetBsOnPause $resetOnPause"
+    override fun getUpdateResetOnPauseCommand(resetOnPause: Boolean) = "acc -s resetBsOnPause $resetOnPause"
 
     override fun getUpdateAccCoolDownCommand(charge: Int?, pause: Int?): String {
         return if(charge != null && pause != null)

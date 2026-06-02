@@ -12,7 +12,10 @@ object GithubUtils {
             JsonParser
                 .parseString(URL("https://api.github.com/repos/VR-25/commits/$branch").readText())
                 .asJsonObject.get("sha").asString
-        } catch (ignored: Exception) {
+        } catch (e: Exception) {
+            // Log so a failed update check (no network, API error, rate-limit) is
+            // distinguishable from "already up to date".
+            LogExt().e("GithubUtils", "getLatestAccCommit failed: $e")
             null
         })
     }
@@ -25,7 +28,8 @@ object GithubUtils {
                 // Each element may lack "name" or be malformed; map null-safely and
                 // drop bad entries instead of throwing on .asString.
                 .mapNotNull { runCatching { it.asJsonObject["name"].asString }.getOrNull() }
-        } catch (ignored: Exception) {
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "listAccVersions failed: $e")
             emptyList()
         }
     }

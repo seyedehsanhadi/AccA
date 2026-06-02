@@ -139,19 +139,34 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 return true
             }
             R.id.botNav_schedules -> {
-                return if (!Djs.isDjsInstalled(filesDir)) {
-                    djsInstallationDialog()
-                    false
-                } else {
-                    if (!Djs.initDjs(filesDir) || Djs.isInstalledDjsOutdated())
-                    {
-                        installDjs()
-                        false
-                    } else {
-                        loadFragment(schedulesFragment)
-                        true
+                // Djs.isDjsInstalled / initDjs / isInstalledDjsOutdated do blocking root shell
+                // work -> doing them inline on this nav callback froze the UI (ANR). Run them
+                // off the main thread, then navigate / show the dialog back on Main. We don't
+                // commit the nav selection synchronously here (return false) -- the async branch
+                // either loads the Schedules fragment or pops the install dialog.
+                launch {
+                    // state: 0 = ready (load schedules), 1 = not installed (ask first),
+                    // 2 = installed but missing/outdated (install directly), like the old branches.
+                    val state = try {
+                        withContext(Dispatchers.IO) {
+                            when {
+                                !Djs.isDjsInstalled(filesDir) -> 1
+                                !Djs.initDjs(filesDir) || Djs.isInstalledDjsOutdated() -> 2
+                                else -> 0
+                            }
+                        }
+                    } catch (e: Exception) {
+                        LogExt().e(javaClass.simpleName, "DJS check failed: ${e.message}")
+                        1   // fall through to the install dialog on any failure
+                    }
+                    if (isFinishing || isDestroyed) return@launch
+                    when (state) {
+                        0 -> loadFragment(schedulesFragment)
+                        2 -> installDjs()
+                        else -> djsInstallationDialog()
                     }
                 }
+                return false
             }
         }
 
@@ -276,10 +291,17 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     fun accProfilesFabOnClick(view: View)
     {
         launch {
-            Intent(this@MainActivity, AccConfigEditorActivity::class.java).also { intent ->
-                intent.putExtra(Constants.TITLE_KEY, this@MainActivity.getString(R.string.profile_creator))
-                intent.putExtra(Constants.ACC_CONFIG_KEY, Acc.instance.readDefaultConfig())
-                startActivityForResult(intent, ACC_PROFILE_CREATOR_REQUEST)
+            try {
+                // readDefaultConfig() does blocking root work -> off the main thread.
+                val defaultConfig = withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() }
+                if (isFinishing || isDestroyed) return@launch
+                Intent(this@MainActivity, AccConfigEditorActivity::class.java).also { intent ->
+                    intent.putExtra(Constants.TITLE_KEY, this@MainActivity.getString(R.string.profile_creator))
+                    intent.putExtra(Constants.ACC_CONFIG_KEY, defaultConfig)
+                    startActivityForResult(intent, ACC_PROFILE_CREATOR_REQUEST)
+                }
+            } catch (e: Exception) {
+                LogExt().e(javaClass.simpleName, "Profile creator launch failed: ${e.message}")
             }
         }
     }
@@ -373,60 +395,76 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     * */
     private fun checkUpdates(version: String) {
         launch {
-            val lastCommit = GithubUtils.getLatestAccCommit(version)
+            try {
+                val lastCommit = GithubUtils.getLatestAccCommit(version)
 
-            if (lastCommit != _preferences.lastCommit) {
-                _preferences.lastCommit = lastCommit
+                if (lastCommit != _preferences.lastCommit) {
+                    _preferences.lastCommit = lastCommit
 
-                MaterialDialog(this@MainActivity).show {
-                    title(R.string.install_update_dialog)
-                    message(text = getString(R.string.check_update_dialog_message, version))
-                    positiveButton(android.R.string.yes) {
-                        val dialog = MaterialDialog(this@MainActivity).show {
-                            title(R.string.checking_updates)
-                            progress(R.string.wait)
-                            cancelOnTouchOutside(false)
-                        }
+                    // Guard against showing a dialog on a finishing/destroyed activity after the
+                    // network suspend -> android.view.WindowManager$BadTokenException.
+                    if (isFinishing || isDestroyed) return@launch
 
-                        launch {
-                            val res = Acc.instance.upgrade(version)
-                            dialog.cancel()
+                    MaterialDialog(this@MainActivity).show {
+                        title(R.string.install_update_dialog)
+                        message(text = getString(R.string.check_update_dialog_message, version))
+                        positiveButton(android.R.string.yes) {
+                            val dialog = MaterialDialog(this@MainActivity).show {
+                                title(R.string.checking_updates)
+                                progress(R.string.wait)
+                                cancelOnTouchOutside(false)
+                            }
 
-                            when (res?.code) {
-                                6 ->
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        R.string.no_update_available,
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                            launch {
+                                try {
+                                    val res = Acc.instance.upgrade(version)
+                                    dialog.cancel()
 
-                                0 ->
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        R.string.update_completed,
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    // The upgrade suspends; the activity may be gone by now.
+                                    if (isFinishing || isDestroyed) return@launch
 
-                                else -> {
-                                    MaterialDialog(this@MainActivity) //Other installation errors can not be handled automatically -> show a dialog with the logs
-                                        .show {
-                                            title(R.string.acc_installation_failed_title)
-                                            message(R.string.acc_installation_failed)
-                                            positiveButton(android.R.string.ok) {
-                                                initUi()
-                                            }
-                                            //TODO add logs
-                                            //shareLogsNeutralButton(File(filesDir, "logs/acc-install.log"), R.string.acc_installation_failed_log)
+                                    when (res?.code) {
+                                        6 ->
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                R.string.no_update_available,
+                                                Toast.LENGTH_LONG
+                                            ).show()
 
-                                            cancelOnTouchOutside(false)
+                                        0 ->
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                R.string.update_completed,
+                                                Toast.LENGTH_LONG
+                                            ).show()
+
+                                        else -> {
+                                            MaterialDialog(this@MainActivity) //Other installation errors can not be handled automatically -> show a dialog with the logs
+                                                .show {
+                                                    title(R.string.acc_installation_failed_title)
+                                                    message(R.string.acc_installation_failed)
+                                                    positiveButton(android.R.string.ok) {
+                                                        initUi()
+                                                    }
+                                                    //TODO add logs
+                                                    //shareLogsNeutralButton(File(filesDir, "logs/acc-install.log"), R.string.acc_installation_failed_log)
+
+                                                    cancelOnTouchOutside(false)
+                                                }
                                         }
+                                    }
+                                } catch (e: Exception) {
+                                    LogExt().e(javaClass.simpleName, "ACC upgrade failed: ${e.message}")
+                                    try { dialog.cancel() } catch (_: Exception) {}
                                 }
                             }
-                        }
 
+                        }
+                        negativeButton(android.R.string.no)
                     }
-                    negativeButton(android.R.string.no)
                 }
+            } catch (e: Exception) {
+                LogExt().e(javaClass.simpleName, "checkUpdates failed: ${e.message}")
             }
         }
     }
@@ -510,10 +548,14 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                         val accConfig = data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig
                         if (accConfig != null) {
                             launch {
-                                _sharedViewModel.updateAccConfig(accConfig)
+                                try {
+                                    _sharedViewModel.updateAccConfig(accConfig)
 
-                                // Remove the current selected profile
-                                _sharedViewModel.clearCurrentSelectedProfile()
+                                    // Remove the current selected profile
+                                    _sharedViewModel.clearCurrentSelectedProfile()
+                                } catch (e: Exception) {
+                                    LogExt().e(javaClass.simpleName, "updateAccConfig failed: ${e.message}")
+                                }
                             }
                         }
                     }
@@ -676,44 +718,56 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             addScheduleDialog(_profilesViewModel.getLiveData()) { profileId, scheduleName, time, executeOnce, executeOnBoot ->
                 if (profileId == -1L) {
                     launch {
-                        Intent(
-                            this@MainActivity,
-                            AccConfigEditorActivity::class.java
-                        ).also { intent ->
-                            val dataBundle = Bundle()
-                            dataBundle.putString(Constants.SCHEDULE_NAME_KEY, scheduleName)
-                            dataBundle.putString(Constants.SCHEDULE_TIME_KEY, time)
-                            dataBundle.putBoolean(Constants.SCHEDULE_EXEC_ONCE_KEY, executeOnce)
-                            dataBundle.putBoolean(
-                                Constants.SCHEDULE_EXEC_ONBOOT_KEY,
-                                executeOnBoot
-                            )
+                        try {
+                            // readDefaultConfig() blocks on root -> resolve it before building the
+                            // intent and guard the activity before navigating.
+                            val defaultConfig = withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() }
+                            if (isFinishing || isDestroyed) return@launch
+                            Intent(
+                                this@MainActivity,
+                                AccConfigEditorActivity::class.java
+                            ).also { intent ->
+                                val dataBundle = Bundle()
+                                dataBundle.putString(Constants.SCHEDULE_NAME_KEY, scheduleName)
+                                dataBundle.putString(Constants.SCHEDULE_TIME_KEY, time)
+                                dataBundle.putBoolean(Constants.SCHEDULE_EXEC_ONCE_KEY, executeOnce)
+                                dataBundle.putBoolean(
+                                    Constants.SCHEDULE_EXEC_ONBOOT_KEY,
+                                    executeOnBoot
+                                )
 
-                            intent.putExtra(Constants.DATA_KEY, dataBundle)
-                            intent.putExtra(
-                                Constants.ACC_CONFIG_KEY,
-                                withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() }
-                            )
-                            intent.putExtra(
-                                Constants.TITLE_KEY,
-                                getString(R.string.schedule_creator)
-                            )
-                            startActivityForResult(intent, ACC_ADD_PROFILE_SCHEDULER_REQUEST)
+                                intent.putExtra(Constants.DATA_KEY, dataBundle)
+                                intent.putExtra(
+                                    Constants.ACC_CONFIG_KEY,
+                                    defaultConfig
+                                )
+                                intent.putExtra(
+                                    Constants.TITLE_KEY,
+                                    getString(R.string.schedule_creator)
+                                )
+                                startActivityForResult(intent, ACC_ADD_PROFILE_SCHEDULER_REQUEST)
+                            }
+                        } catch (e: Exception) {
+                            LogExt().e(javaClass.simpleName, "Schedule creator launch failed: ${e.message}")
                         }
                     }
                 } else {
                     launch {
-                        _profilesViewModel.getProfileById(profileId.toInt())
-                            ?.let { configProfile ->
-                                _schedulesViewModel
-                                    .addSchedule(
-                                        scheduleName,
-                                        time,
-                                        executeOnce,
-                                        executeOnBoot,
-                                        configProfile.accConfig
-                                    )
-                            }
+                        try {
+                            _profilesViewModel.getProfileById(profileId.toInt())
+                                ?.let { configProfile ->
+                                    _schedulesViewModel
+                                        .addSchedule(
+                                            scheduleName,
+                                            time,
+                                            executeOnce,
+                                            executeOnBoot,
+                                            configProfile.accConfig
+                                        )
+                                }
+                        } catch (e: Exception) {
+                            LogExt().e(javaClass.simpleName, "addSchedule failed: ${e.message}")
+                        }
                     }
                 }
             }

@@ -6,10 +6,12 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.utils.LogExt
@@ -20,9 +22,15 @@ class AccdTileService: TileService(), CoroutineScope
 {
     private val LOG_TAG = "AccdTileService"
 
+    // Serializes start/stop so rapid taps don't interleave.
+    private val tileLock = Any()
+
     protected lateinit var job: Job
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        LogExt().e(LOG_TAG, "Coroutine error: ${throwable.message}")
+    }
     override val coroutineContext: CoroutineContext
-        get() = job + Dispatchers.Main
+        get() = job + Dispatchers.Main + exceptionHandler
 
     override fun onCreate()
     {
@@ -42,13 +50,20 @@ class AccdTileService: TileService(), CoroutineScope
 
         launch {
 
-            val accdRunning = Acc.instance.isAccdRunning()
+            val accdRunning = try {
+                Acc.instance.isAccdRunning()
+            } catch (e: Exception) {
+                LogExt().e(LOG_TAG, "isAccdRunning failed: ${e.message}")
+                return@launch
+            }
             _updateTile(!accdRunning)
 
             //This will give the user the feeling that his actions are handled immediately. I hope no one will spam on the button.
             //otherwise this enable/disable cycle will take forever
             //I've considered to disable the tile while it's updating but it doesn't look great and google is not doing either with wifi.
-            synchronized(this)
+            // Synchronize on a real service-owned lock (not the lambda receiver) so
+            // rapid taps actually serialize start/stop.
+            synchronized(tileLock)
             {
                 if (accdRunning)
                 {
@@ -59,12 +74,22 @@ class AccdTileService: TileService(), CoroutineScope
 
                     //TODO add a mutex instead of relaunching the coroutine
                     launch {
-                        Acc.instance.abcStopDaemon()
+                        try {
+                            Acc.instance.abcStopDaemon()
+                        } catch (e: Exception) {
+                            LogExt().e(LOG_TAG, "abcStopDaemon failed: ${e.message}")
+                        }
                         tile?.label = getString(R.string.tile_acc_disabled)
                         tile?.updateTile()
                     }
 
-                } else launch { Acc.instance.abcStartDaemon() }
+                } else launch {
+                    try {
+                        Acc.instance.abcStartDaemon()
+                    } catch (e: Exception) {
+                        LogExt().e(LOG_TAG, "abcStartDaemon failed: ${e.message}")
+                    }
+                }
             }
         }
     }
@@ -97,14 +122,27 @@ class AccdTileService: TileService(), CoroutineScope
 
     private fun updateTile()
     {
-        if(Shell.rootAccess()) _updateTile() else
-        {
-            // qsTile is null when the tile isn't currently bound; bail instead of NPE.
-            val tile = qsTile ?: return
-            tile.label = getString(R.string.tile_acc_no_root)
-            tile.state = Tile.STATE_UNAVAILABLE
-            tile.icon = Icon.createWithResource(this, R.drawable.ic_battery_charging_full)
-            tile.updateTile() // you need to call this method to apply changes
+        // Shell.rootAccess() may block on the root shell; never run it on the main
+        // thread. Probe on IO, then apply the tile state back on Main.
+        launch {
+            val hasRoot = withContext(Dispatchers.IO) {
+                try {
+                    Shell.rootAccess()
+                } catch (e: Exception) {
+                    LogExt().e(LOG_TAG, "rootAccess failed: ${e.message}")
+                    false
+                }
+            }
+
+            if (hasRoot) _updateTile() else
+            {
+                // qsTile is null when the tile isn't currently bound; bail instead of NPE.
+                val tile = qsTile ?: return@launch
+                tile.label = getString(R.string.tile_acc_no_root)
+                tile.state = Tile.STATE_UNAVAILABLE
+                tile.icon = Icon.createWithResource(this@AccdTileService, R.drawable.ic_battery_charging_full)
+                tile.updateTile() // you need to call this method to apply changes
+            }
         }
     }
 

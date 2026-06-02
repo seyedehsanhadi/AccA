@@ -1,6 +1,7 @@
 package mattecarra.accapp.acc
 
 import android.content.Context
+import android.util.Log
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -11,6 +12,7 @@ import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.VoltageUnit
 import mattecarra.accapp.acc._interface.AccInterface
+import mattecarra.accapp.utils.LogExt
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -19,6 +21,7 @@ import kotlin.math.abs
 
 object Acc {
     const val bundledVersion = 202505211
+    private const val TAG = "Acc"
     private val FILES_DIR = "/data/data/mattecarra.accapp/files"
 
     /*
@@ -71,9 +74,17 @@ object Acc {
         // SEPARATELY-FLASHED ACC module read as "not installed" and AccA showed
         // "ACC module not found" even though acca was installed and running.
         val appService = File(installationDir, "acc/service.sh").absolutePath
-        return Shell.su(
-            "test -e /dev/.vr25/acc/acca || test -f /data/adb/vr25/acc/service.sh || test -f $appService"
-        ).exec().isSuccess
+        // Crash-safe: this can run at startup (Acc.instance) before root is granted, so a
+        // thrown libsu exception (no shell, I/O error) must never propagate. Treat any
+        // failure as "not installed" (safe default).
+        return try {
+            Shell.su(
+                "test -e /dev/.vr25/acc/acca || test -f /data/adb/vr25/acc/service.sh || test -f $appService"
+            ).exec().isSuccess
+        } catch (e: Exception) {
+            LogExt().e(TAG, "isAccInstalled failed: ${Log.getStackTraceString(e)}")
+            false
+        }
     }
 
     fun isInstalledAccOutdated(): Boolean = runBlocking {
@@ -86,10 +97,17 @@ object Acc {
         // preferring the canonical exec home (flashed/standalone module) over the
         // legacy app-managed copy. Fixes a flashed module never being started by AccA.
         val appService = File(installationDir, "acc/service.sh").absolutePath
-        return Shell.su(
-            "[ -e /dev/.vr25/acc/acca ] || " +
-            "if [ -f /data/adb/vr25/acc/service.sh ]; then sh /data/adb/vr25/acc/service.sh; else sh $appService; fi"
-        ).exec().isSuccess
+        // Crash-safe: runs at startup via the instance getter before root may be granted, so a
+        // thrown libsu exception must never propagate. Treat a failed start as "not started".
+        return try {
+            Shell.su(
+                "[ -e /dev/.vr25/acc/acca ] || " +
+                "if [ -f /data/adb/vr25/acc/service.sh ]; then sh /data/adb/vr25/acc/service.sh; else sh $appService; fi"
+            ).exec().isSuccess
+        } catch (e: Exception) {
+            LogExt().e(TAG, "initAcc failed: ${Log.getStackTraceString(e)}")
+            false
+        }
     }
 
     suspend fun installBundledAccModule(context: Context): Shell.Result?  = withContext(Dispatchers.IO) {
@@ -104,7 +122,7 @@ object Acc {
 
             installLocalAccModule(context)
         } catch (ex: java.lang.Exception) {
-            ex.printStackTrace()
+            LogExt().e(TAG, "installBundledAccModule failed: ${Log.getStackTraceString(ex)}")
             null
         }
     }
@@ -117,19 +135,13 @@ object Acc {
                 .use { inStream ->
                     FileOutputStream(bundleFile)
                         .use {
-                            val buf = ByteArray(1024)
-                            var bytesRead = inStream.read(buf, 0, 1024)
-
-                            while (bytesRead != -1) {
-                                it.write(buf, 0, bytesRead)
-                                bytesRead = inStream.read(buf, 0, 1024)
-                            }
+                            inStream.copyTo(it)
                         }
                 }
 
             installLocalAccModule(context)
         } catch (ex: java.lang.Exception) {
-            ex.printStackTrace()
+            LogExt().e(TAG, "installAccModuleVersion failed: ${Log.getStackTraceString(ex)}")
             null
         }
     }
@@ -167,7 +179,7 @@ object Acc {
 
             res
         } catch (ex: java.lang.Exception) {
-            ex.printStackTrace()
+            LogExt().e(TAG, "installLocalAccModule failed: ${Log.getStackTraceString(ex)}")
             null
         }
     }

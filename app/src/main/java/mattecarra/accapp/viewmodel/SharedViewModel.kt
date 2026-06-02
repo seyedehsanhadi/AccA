@@ -16,6 +16,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
     private val mSharedPrefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(application)
     private val config: MutableLiveData<Pair<AccConfig?, String?>> = MutableLiveData()
 
+    // Signals that an ACC config apply failed. Exposed read-only via observeApplyFailed()/applyFailed
+    // so a UI layer can surface it (e.g. a toast) instead of the failure being silently swallowed.
+    private val mApplyFailed: MutableLiveData<Boolean> = MutableLiveData()
+    val applyFailed: LiveData<Boolean> get() = mApplyFailed
+
     init {
         viewModelScope.launch {
             try {
@@ -45,6 +50,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
      */
     fun observeConfig(owner: LifecycleOwner, observer: Observer<Pair<AccConfig?, String?>>) {
         config.observe(owner, observer)
+    }
+
+    /**
+     * Sets an observer for ACC config apply failures (true when an apply did not succeed).
+     */
+    fun observeApplyFailed(owner: LifecycleOwner, observer: Observer<Boolean>) {
+        mApplyFailed.observe(owner, observer)
     }
 
     /*
@@ -94,10 +106,14 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
 
             if (!it.isSuccessful())
             {
-                // TODO show a toast that tells users there was an error
-                // if (!result.voltControlUpdateSuccessful)
-                // Toast.makeText(this@MainActivity, R.string.wrong_volt_file, Toast.LENGTH_LONG).show()
+                // Signal the apply failure: at minimum log it at error level so it is not
+                // silently swallowed, and expose it via applyFailed for any in-file observer.
+                LogExt().e("saveAccConfig()","ACC apply failed (updateAccConfig returned not successful)")
+                mApplyFailed.postValue(true)
 
+                // Re-read the on-disk config so the UI reflects the actual (un-applied) state.
+                // Both readConfig() and readDefaultConfig() are root shell calls that can throw;
+                // guard the whole chain so a re-throw can't kill this coroutine.
                 val currentConfigVal = try
                 {
                     LogExt().w("saveAccConfig()","Error in updateAccConfig() -> readConfig()")
@@ -105,8 +121,16 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
                 }
                 catch (ex: Exception)
                 {
-                    LogExt().e("saveAccConfig()","Error in readConfig() -> readDefaultConfig()")
-                    Acc.instance.readDefaultConfig()
+                    try
+                    {
+                        LogExt().e("saveAccConfig()","Error in readConfig() -> readDefaultConfig()")
+                        Acc.instance.readDefaultConfig()
+                    }
+                    catch (ex2: Exception)
+                    {
+                        LogExt().e("saveAccConfig()","readDefaultConfig() also failed: ${ex2.message}")
+                        null
+                    }
                 }
 
                 config.postValue(Pair(currentConfigVal, null))

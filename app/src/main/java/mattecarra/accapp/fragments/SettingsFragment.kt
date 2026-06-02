@@ -90,6 +90,9 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                             accVersionSingleChoice(preferences.accVersion) { version ->
                                 val installVersion: () -> Job = {
                                     this@SettingsFragment.launch {
+                                        // Don't show the progress dialog if the fragment/activity is already gone.
+                                        if (!isAdded || activity?.isFinishing != false) return@launch
+
                                         val dialog = MaterialDialog(context).show {
                                             title(R.string.installing_acc)
                                             progress(R.string.wait)
@@ -101,6 +104,14 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                                             Acc.installBundledAccModule(context)
                                         } else {
                                             Acc.installAccModuleVersion(context, version)
+                                        }
+
+                                        // The install can take a long time; the fragment may have been
+                                        // detached or the activity finished while it ran. Showing a
+                                        // dialog now would throw BadTokenException and leak the activity.
+                                        if (!isAdded || activity?.isFinishing != false) {
+                                            try { dialog.dismiss() } catch (_: Exception) {}
+                                            return@launch
                                         }
 
                                         dialog.dismiss()
@@ -151,18 +162,37 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
         djsEnable?.setOnPreferenceChangeListener { _, isEnabled ->
             context?.let { context ->
                 when {
-                    isEnabled as Boolean && Djs.isDjsInstalled(context.filesDir) -> {
-                        Djs.initDjs(context.filesDir)
-                        true
-                    }
+                    // Enabling: isDjsInstalled/initDjs are blocking root-shell calls -> never run
+                    // them on the main thread. Defer the checkbox state (return false), do the
+                    // check/init off-main, then apply the result on Main.
+                    isEnabled as Boolean -> {
+                        launch {
+                            val installed = try {
+                                withContext(Dispatchers.IO) { Djs.isDjsInstalled(context.filesDir) }
+                            } catch (e: Exception) {
+                                LogExt().e(javaClass.simpleName, "isDjsInstalled failed: ${e.message}")
+                                false
+                            }
 
-                    isEnabled -> {
-                        MaterialDialog(context).show {
-                            title(R.string.installing_djs)
-                            cancelOnTouchOutside(false)
-                            onKeyCodeBackPressed { false }
-                            djsInstallation(this@SettingsFragment, object: DjsInstallationListener {
-                                override fun onInstallationFailed(result: Shell.Result?) {
+                            if (installed) {
+                                try {
+                                    withContext(Dispatchers.IO) { Djs.initDjs(context.filesDir) }
+                                } catch (e: Exception) {
+                                    LogExt().e(javaClass.simpleName, "initDjs failed: ${e.message}")
+                                }
+                                if (isAdded) djsEnable.isChecked = true
+                                return@launch
+                            }
+
+                            // Not installed yet: show the install dialog (Main thread).
+                            if (!isAdded || activity?.isFinishing != false) return@launch
+
+                            MaterialDialog(context).show {
+                                title(R.string.installing_djs)
+                                cancelOnTouchOutside(false)
+                                onKeyCodeBackPressed { false }
+                                djsInstallation(this@SettingsFragment, object: DjsInstallationListener {
+                                    override fun onInstallationFailed(result: Shell.Result?) {
                                     MaterialDialog(context) //Other installation errors can not be handled automatically -> show a dialog with the logs
                                         .show {
                                             title(R.string.djs_installation_failed_title)
@@ -187,9 +217,12 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                                     djsEnable.isChecked = true
                                 }
 
-                            })
+                                })
+                            }
                         }
 
+                        // Checkbox state is applied asynchronously (onSuccess / installed path);
+                        // don't flip it now.
                         false
                     }
 

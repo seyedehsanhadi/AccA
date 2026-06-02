@@ -19,7 +19,9 @@ import mattecarra.accapp.viewmodel.SchedulesViewModel
 class SchedulesFragment : ScopedFragment(), OnScheduleClickListener {
     private lateinit var viewModel: SchedulesViewModel
     private lateinit var adapter: ScheduleProfileListAdapter
-    private lateinit var binding : SchedulesFragmentBinding
+    // Nullable backing field released in onDestroyView to avoid leaking the view hierarchy.
+    private var _binding : SchedulesFragmentBinding? = null
+    private val binding get() = _binding!!
 
     companion object {
         fun newInstance() = SchedulesFragment()
@@ -29,8 +31,15 @@ class SchedulesFragment : ScopedFragment(), OnScheduleClickListener {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        binding = SchedulesFragmentBinding.inflate(inflater, container, false)
+        _binding = SchedulesFragmentBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onDestroyView()
+    {
+        // Release the binding to avoid leaking the view hierarchy after the view is gone.
+        _binding = null
+        super.onDestroyView()
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?)

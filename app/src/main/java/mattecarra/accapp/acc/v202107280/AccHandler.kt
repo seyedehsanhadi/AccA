@@ -10,6 +10,7 @@ import mattecarra.accapp.acc.ConfigUpdaterEnable
 import mattecarra.accapp.acc._interface.AccInterface
 import mattecarra.accapp.models.AccConfig
 import mattecarra.accapp.models.BatteryInfo
+import mattecarra.accapp.utils.LogExt
 import java.io.IOException
 import java.util.regex.Pattern
 
@@ -182,7 +183,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     private val SW_JEITA_ENABLED_REGEXP = """^\s*SW_JEITA_ENABLED=([01])""".toRegex(RegexOption.MULTILINE)
     private val TAPER_CONTROL_ENABLED_REGEXP = """^\s*TAPER_CONTROL_ENABLED=([01])""".toRegex(RegexOption.MULTILINE)
     // CHARGE_DISABLE is true when ACC disables charging due to conditions
-    private val CHARGE_DISABLE_REGEXP = """^\s*TAPER_CONTROL_ENABLED=([01])""".toRegex(RegexOption.MULTILINE)
+    private val CHARGE_DISABLE_REGEXP = """^\s*CHARGE_DISABLE=([01])""".toRegex(RegexOption.MULTILINE)
     // CHARGE_DONE is true when the battery is done charging.
     private val CHARGE_DONE_REGEXP = """^\s*CHARGE_DONE=([01])""".toRegex(RegexOption.MULTILINE)
     private val PARALLEL_DISABLE_REGEXP = """^\s*PARALLEL_DISABLE=([01])""".toRegex(RegexOption.MULTILINE)
@@ -232,7 +233,13 @@ open class AccHandler(override val version: Int) : AccInterface {
         }
 
     override suspend fun getBatteryInfo(): BatteryInfo = withContext(Dispatchers.IO) {
-        val info =  Shell.su("/dev/.vr25/acc/acca -i").exec().out.joinToString(separator = "\n")
+        // Capture the Shell.Result so a failed `acca -i` (no root yet, acc absent,
+        // non-zero exit) is logged. We STILL parse/return below: on failure `info`
+        // is just empty, so every field falls back to its documented default.
+        val infoRes = Shell.su("/dev/.vr25/acc/acca -i").exec()
+        if (!infoRes.isSuccess)
+            LogExt().e("AccHandler", "acca -i failed (code=${infoRes.code}): ${infoRes.err.joinToString("\n")}")
+        val info = infoRes.out.joinToString(separator = "\n")
 
         // Battery health is absent from ACC 2025.x's `acca -i`, so read the kernel's
         // generic power_supply node directly. Crash-safe: any failure (no root yet,
@@ -245,9 +252,8 @@ open class AccHandler(override val version: Int) : AccInterface {
 
         BatteryInfo(
             NAME_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
-            INPUT_SUSPEND_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let { // If r == true (input is suspended)
-                it == 0
-            },
+            // INPUT_SUSPEND=1 means charging input IS suspended (true).
+            INPUT_SUSPEND_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
             STATUS_REGEXP.find(info)?.destructured?.component1() ?: lowerStatus(info) ?: STRING_DISCHARGING,
             HEALTH_REGEXP.find(info)?.destructured?.component1() ?: kernelHealth ?: STRING_UNKNOWN,
             PRESENT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
@@ -255,9 +261,7 @@ open class AccHandler(override val version: Int) : AccInterface {
             CAPACTIY_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: LEVEL_LOWER_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CHARGER_TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: -1,
             CHARGER_TEMP_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: -1,
-            INPUT_CURRENT_LIMITED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
+            INPUT_CURRENT_LIMITED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
             VOLTAGE_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: VOLTAGE_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f,
             VOLTAGE_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             VOLTAGE_QNOVO_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
@@ -266,34 +270,17 @@ open class AccHandler(override val version: Int) : AccInterface {
             CONSTANT_CHARGE_CURRENT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: TEMP_LOWER_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             TECHNOLOGY_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
-            STEP_CHARGING_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
-            SW_JEITA_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
-            TAPER_CONTROL_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
-            CHARGE_DISABLE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
-            CHARGE_DONE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
-            PARALLEL_DISABLE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
-            SET_SHIP_MODE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
+            STEP_CHARGING_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
+            SW_JEITA_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
+            TAPER_CONTROL_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
+            CHARGE_DISABLE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
+            CHARGE_DONE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
+            PARALLEL_DISABLE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
+            SET_SHIP_MODE_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
             DIE_HEALTH_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
-            RERUN_AICL_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
-            DP_DM_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull().let {
-                it == 0
-            },
+            RERUN_AICL_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
+            // DP_DM is a numeric control code; any non-zero value means active.
+            (DP_DM_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: 0) != 0,
             CHARGE_CONTROL_LIMIT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CHARGE_CONTROL_LIMIT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             INPUT_CURRENT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
@@ -303,10 +290,12 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override suspend fun isBatteryCharging(): Boolean = withContext(Dispatchers.IO) {
-        STATUS_REGEXP
-            .find(
-                Shell.su("/dev/.vr25/acc/acca -i").exec().out.joinToString("\n")
-            )?.destructured?.component1() == STRING_CHARGING
+        val info = Shell.su("/dev/.vr25/acc/acca -i").exec().out.joinToString("\n")
+        // ACC 2025.x emits lowercase 'status Charging'; the uppercase STATUS=
+        // regex alone reported not-charging on those builds, so fall back to the
+        // same lowerStatus() helper getBatteryInfo uses.
+        val status = STATUS_REGEXP.find(info)?.destructured?.component1() ?: lowerStatus(info)
+        status == STRING_CHARGING
     }
 
     override suspend fun isAccdRunning(): Boolean = withContext(Dispatchers.IO) {
@@ -363,7 +352,12 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override suspend fun setChargingLimitForOneCharge(limit: Int): Boolean = withContext(Dispatchers.IO) {
-        Shell.su("(acc -f $limit &) &").exec().isSuccess
+        // `acc -f` blocks for the entire charge, so it must stay backgrounded. We drop the
+        // OUTER level of backgrounding (was `(acc -f &) &`) and instead first verify `acc`
+        // is resolvable, then launch it backgrounded. This way isSuccess reflects whether
+        // the command could actually be launched (e.g. catches acc absent) while the long
+        // charge itself still runs non-blocking in the background. "true" = launched, not done.
+        Shell.su("command -v acc >/dev/null 2>&1 && (acc -f $limit &)").exec().isSuccess
     }
 
     // Structural, case-insensitive match so a reworded ACC probe line doesn't
@@ -435,14 +429,24 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     override fun getUpdateAccOnBootExitCommand(enabled: Boolean): String = "" //Not supported
 
-    override fun getUpdateAccOnBootCommand(command: String?): String = "/dev/.vr25/acc/acca -s \"apply_on_boot=${command.orEmpty()}\""
+    // These values are free-text entered by the user and get embedded inside the
+    // double-quoted argument of `acca -s "key=value"`. Escape the four characters
+    // that are special inside double quotes (\ " ` $) so a value containing a quote,
+    // backtick or $(...) can't break the quoting or inject a shell command.
+    private fun shellEscapeForDoubleQuotes(value: String): String =
+        value.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("`", "\\`")
+            .replace("$", "\\$")
+
+    override fun getUpdateAccOnBootCommand(command: String?): String = "/dev/.vr25/acc/acca -s \"apply_on_boot=${shellEscapeForDoubleQuotes(command.orEmpty())}\""
 
 
-    override fun getUpdateAccOnPluggedCommand(command: String?) : String = "/dev/.vr25/acc/acca -s \"apply_on_plug=${command.orEmpty()}\""
+    override fun getUpdateAccOnPluggedCommand(command: String?) : String = "/dev/.vr25/acc/acca -s \"apply_on_plug=${shellEscapeForDoubleQuotes(command.orEmpty())}\""
 
     override fun getUpdateAccChargingSwitchCommand(switch: String?, automaticSwitchingEnabled: Boolean) : String {
         return if(switch != null) {
-            "/dev/.vr25/acc/acca -s \"charging_switch=${switch}${if (automaticSwitchingEnabled) "" else " --"}\""
+            "/dev/.vr25/acc/acca -s \"charging_switch=${shellEscapeForDoubleQuotes(switch)}${if (automaticSwitchingEnabled) "" else " --"}\""
         } else {
             "/dev/.vr25/acc/acca -s \"charging_switch=\""
         }

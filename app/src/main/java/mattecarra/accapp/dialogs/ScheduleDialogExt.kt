@@ -13,13 +13,18 @@ import androidx.lifecycle.Observer
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.callbacks.onDismiss
 import com.afollestad.materialdialogs.customview.customView
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.databinding.ScheduleDialogBinding
+import mattecarra.accapp.models.AccConfig
 import mattecarra.accapp.models.AccaProfile
 import mattecarra.accapp.models.ProfileEnables
 import mattecarra.accapp.models.Schedule
+import mattecarra.accapp.utils.LogExt
 
 class ProfileSpinnerAdapter : BaseAdapter(), SpinnerAdapter
 {
@@ -49,12 +54,18 @@ class ProfileSpinnerAdapter : BaseAdapter(), SpinnerAdapter
 typealias AddScheduleListener = ((profileId: Long, scheduleName: String, time: String,
                                   executeOnce: Boolean, executeOnBoot: Boolean) -> Unit)
 
-// readDefaultConfig() is a blocking root call used to seed the placeholder
-// profile; if it throws, fall back to in-memory defaults so building the
-// dialog never crashes.
-private fun safeDefaultConfig(): mattecarra.accapp.models.AccConfig =
-    try { runBlocking { Acc.instance.readDefaultConfig() } }
-    catch (e: Exception) { e.printStackTrace(); mattecarra.accapp.models.AccConfig() }
+// readDefaultConfig() is a blocking root call. It used to be invoked via
+// runBlocking{} on the MAIN thread while building the schedule dialog, which
+// blocks the UI thread on a root shell -> ANR. Instead we seed the dialog with
+// an in-memory AccConfig() immediately (no I/O) and load the real default
+// asynchronously, then refresh the spinner adapter on the main thread.
+private fun seedDefaultConfig(): AccConfig = AccConfig()
+
+// Reads the real default config off the main thread; falls back to in-memory
+// defaults if the root call throws so the dialog never crashes.
+private suspend fun safeDefaultConfig(): AccConfig =
+    try { withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() } }
+    catch (e: Exception) { LogExt().d("ScheduleDialogExt", "readDefaultConfig failed: " + e.message); AccConfig() }
 
 fun MaterialDialog.addScheduleDialog(
     profilesLiveData: LiveData<List<AccaProfile>>,
@@ -62,7 +73,7 @@ fun MaterialDialog.addScheduleDialog(
         AccaProfile(
             -1,
             context.getString(R.string.new_config),
-            safeDefaultConfig(),
+            seedDefaultConfig(),
             ProfileEnables()
         )
     ),
@@ -107,6 +118,14 @@ fun MaterialDialog.addScheduleDialog(
     profilesLiveData.observeForever(observer)
     spinner.adapter = adapter
 
+    // Load the real default config off the main thread (avoids the old runBlocking ANR)
+    // and patch the seeded in-memory placeholder profiles, then refresh the adapter.
+    GlobalScope.launch(Dispatchers.Main) {
+        val realDefault = safeDefaultConfig()
+        profiles.filter { it.uid < 0 }.forEach { it.accConfig = realDefault }
+        adapter.setItems(profiles)
+    }
+
     scheduleTypeSpinner.onItemSelectedListener = object: AdapterView.OnItemSelectedListener
     {
         override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -149,7 +168,10 @@ fun MaterialDialog.editScheduleDialog(
 ): MaterialDialog {
     return addScheduleDialog(
         profilesLiveData,
-        safeDefaultConfig().let { defaultConfig ->
+        // Seed with in-memory defaults (no blocking root call on the main thread);
+        // addScheduleDialog() loads the real default config asynchronously and
+        // patches every placeholder profile (uid < 0).
+        seedDefaultConfig().let { defaultConfig ->
             mutableListOf(
                 AccaProfile(-1, context.getString(R.string.schedule_profile_keep_current), defaultConfig, ProfileEnables()),
                 AccaProfile(-2, context.getString(R.string.schedule_profile_edit_current), defaultConfig, ProfileEnables()),

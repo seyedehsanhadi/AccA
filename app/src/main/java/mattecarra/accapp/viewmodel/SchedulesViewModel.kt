@@ -15,6 +15,7 @@ import mattecarra.accapp.djs.Djs
 import mattecarra.accapp.models.AccConfig
 import mattecarra.accapp.models.ScheduleProfile
 import mattecarra.accapp.models.Schedule
+import mattecarra.accapp.utils.LogExt
 
 class SchedulesViewModel(application: Application) : AndroidViewModel(application) {
     val schedules = MutableLiveData<List<Schedule>>()
@@ -74,6 +75,7 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
                 Schedule(isEnabled, time, executeOnce, executeOnBoot, scheduleProfile).toDjsSchedule()
             )
             if (ok) mSchedulesDao.update(scheduleProfile)   // keep DB in step with DJS only on success
+            else LogExt().e(TAG, "editSchedule: DJS edit returned false for id=$id; DB left unchanged")
             refreshSchedules()
         } catch (e: Exception) { Log.e(TAG, "editSchedule failed: ${e.message}") }
     }
@@ -82,6 +84,7 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
         try {
             val ok = Djs.instance.delete(schedule.toDjsSchedule())
             if (ok) mSchedulesDao.deleteById(schedule.profile.uid)   // delete DB only once the DJS entry is gone
+            else LogExt().e(TAG, "removeSchedule: DJS delete returned false for uid=${schedule.profile.uid}; DB left unchanged")
             refreshSchedules()
         } catch (e: Exception) { Log.e(TAG, "removeSchedule failed: ${e.message}") }
     }

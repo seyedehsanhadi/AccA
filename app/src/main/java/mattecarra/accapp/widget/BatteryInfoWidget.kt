@@ -180,11 +180,10 @@ class BatteryInfoWidget : AppWidgetProvider()
 
         GlobalScope.launch {
 
-            val dashboardValues = try {
+            try {
+
+            val dashboardValues =
                 DashboardValues(Acc.instance.getBatteryInfo(), Acc.instance.isAccdRunning())
-            } catch (e: Exception) {
-                return@launch  // shell/ACC failure -> skip this widget update, never crash
-            }
             with(dashboardValues) {
 
                 val swidgetId = widgetId.toString()
@@ -281,6 +280,12 @@ class BatteryInfoWidget : AppWidgetProvider()
                     val intent = Intent().setAction(WIDGET_ONE_UPDATE).putExtra(WIDGET_ID_NAME, widgetId).putExtra("isCharging", true)
                     WidgetService().runSelfIntent(context, intent)
                 }
+            }
+
+            } catch (e: Exception) {
+                // Acc.instance getter / getBatteryInfo / version / Room getCurrentProfile can
+                // throw on a routine widget update -> never let it crash the process.
+                LogExt().d(javaClass.simpleName, "updateOneWidget failed: " + e.message)
             }
         }
     }

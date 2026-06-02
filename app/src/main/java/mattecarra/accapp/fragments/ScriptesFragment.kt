@@ -47,6 +47,9 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
     lateinit var mContext: Context
     private lateinit var mScriptsViewModel: ScriptsViewModel
     private lateinit var mScriptesAdapter: ScriptListAdapter
+    // Held so the long-running run-script dialog can be dismissed on view teardown
+    // (the script coroutine can run up to 180s; without this the dialog leaks).
+    private var mRunDialog: MaterialDialog? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View?
     {
@@ -221,6 +224,14 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
         itemTouchHelper.attachToRecyclerView(binding.scriptsRecyclerView)
     }
 
+    override fun onDestroyView()
+    {
+        // Dismiss the run-script dialog (if any) so it does not leak the gone view.
+        try { mRunDialog?.dismiss() } catch (_: Exception) {}
+        mRunDialog = null
+        super.onDestroyView()
+    }
+
     //-----------------------------------------------------------------------------------
 
     suspend fun runScript(script: AccaScript): AccaScript = withContext(Dispatchers.IO)
@@ -264,7 +275,7 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
 
     override fun onScriptClick(script: AccaScript)
     {
-        MaterialDialog(mContext).show {
+        mRunDialog = MaterialDialog(mContext).show {
             noAutoDismiss()
             title(text = script.scName)
             negativeButton { dismiss() }
@@ -276,6 +287,11 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
 
             launch {
                 val sr = runScript(script)
+
+                // The fragment view may have been destroyed during the (up to 180s) run;
+                // guard the DB + UI writes so we don't touch a gone view.
+                if (!isAdded) return@launch
+
                 mScriptsViewModel.updateScript(script)
 
                 if (isShowing) {

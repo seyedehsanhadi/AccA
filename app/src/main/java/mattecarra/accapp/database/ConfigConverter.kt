@@ -5,6 +5,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import mattecarra.accapp.models.AccConfig
 import mattecarra.accapp.models.ProfileEnables
+import mattecarra.accapp.utils.LogExt
 
 // Every to*() converter parses JSON stored in the DB. A corrupted/legacy/empty
 // value (Gson can return null or throw JsonSyntaxException) must NOT crash the
@@ -25,7 +26,7 @@ object ConfigConverter
     fun toEnables(enables: String): ProfileEnables
     {
         return try { Gson().fromJson(enables, ProfileEnables::class.java) ?: ProfileEnables() }
-        catch (e: Exception) { e.printStackTrace(); ProfileEnables() }
+        catch (e: Exception) { LogExt().e("ConfigConverter", "toEnables parse failed: $e"); ProfileEnables() }
     }
 
     @TypeConverter
@@ -40,7 +41,7 @@ object ConfigConverter
     fun toScripts(scripts: String?): List<Int>?
     {
         return try { Gson().fromJson(scripts, object : TypeToken<List<Int>>() {}.type) }
-        catch (e: Exception) { e.printStackTrace(); null }
+        catch (e: Exception) { LogExt().e("ConfigConverter", "toScripts parse failed: $e"); null }
     }
 
     @TypeConverter
@@ -55,7 +56,7 @@ object ConfigConverter
     fun toConfigCapacity(configCapacity: String): AccConfig.ConfigCapacity
     {
         return try { Gson().fromJson(configCapacity, AccConfig.ConfigCapacity::class.java) ?: AccConfig.ConfigCapacity() }
-        catch (e: Exception) { e.printStackTrace(); AccConfig.ConfigCapacity() }
+        catch (e: Exception) { LogExt().e("ConfigConverter", "toConfigCapacity parse failed: $e"); AccConfig.ConfigCapacity() }
     }
 
     @TypeConverter
@@ -70,7 +71,7 @@ object ConfigConverter
     fun toConfigVoltage(configVoltage: String) : AccConfig.ConfigVoltage
     {
         return try { Gson().fromJson(configVoltage, AccConfig.ConfigVoltage::class.java) ?: AccConfig.ConfigVoltage() }
-        catch (e: Exception) { e.printStackTrace(); AccConfig.ConfigVoltage() }
+        catch (e: Exception) { LogExt().e("ConfigConverter", "toConfigVoltage parse failed: $e"); AccConfig.ConfigVoltage() }
     }
 
     @TypeConverter
@@ -85,7 +86,7 @@ object ConfigConverter
     fun toConfigTemperature(configTemperature: String) : AccConfig.ConfigTemperature
     {
         return try { Gson().fromJson(configTemperature, AccConfig.ConfigTemperature::class.java) ?: AccConfig.ConfigTemperature() }
-        catch (e: Exception) { e.printStackTrace(); AccConfig.ConfigTemperature() }
+        catch (e: Exception) { LogExt().e("ConfigConverter", "toConfigTemperature parse failed: $e"); AccConfig.ConfigTemperature() }
     }
 
     @TypeConverter
@@ -100,6 +101,6 @@ object ConfigConverter
     fun toConfigCoolDown(configCoolDown: String) : AccConfig.ConfigCoolDown?
     {
         return try { Gson().fromJson(configCoolDown, AccConfig.ConfigCoolDown::class.java) }
-        catch (e: Exception) { e.printStackTrace(); null }
+        catch (e: Exception) { LogExt().e("ConfigConverter", "toConfigCoolDown parse failed: $e"); null }
     }
 }

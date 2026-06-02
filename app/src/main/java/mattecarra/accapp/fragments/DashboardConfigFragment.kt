@@ -83,7 +83,10 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
 
         mContext = requireContext()
         mViewModel = ViewModelProvider(this).get(ProfilesViewModel::class.java)
-        mSharedViewModel = ViewModelProvider(this).get(SharedViewModel::class.java)
+        // Use the activity scope so this shares the same SharedViewModel instance
+        // that DashboardFragment uses (it also scopes to the activity); a
+        // fragment-scoped provider would create a divergent second instance.
+        mSharedViewModel = ViewModelProvider(requireActivity()).get(SharedViewModel::class.java)
 
         mPrefs = PreferenceManager.getDefaultSharedPreferences(context)
         mPrefs.registerOnSharedPreferenceChangeListener(this)
@@ -181,6 +184,15 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
 
         binding.itemProfileLoadImage.visibility = View.GONE;
         binding.itemProfileInfo.visibility = View.VISIBLE;
+    }
+
+    override fun onDestroyView()
+    {
+        super.onDestroyView()
+        // Unregister the pref listener and null the binding so post-teardown
+        // callbacks/coroutines see a destroyed view and bail.
+        if (::mPrefs.isInitialized) mPrefs.unregisterOnSharedPreferenceChangeListener(this)
+        _binding = null
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?)

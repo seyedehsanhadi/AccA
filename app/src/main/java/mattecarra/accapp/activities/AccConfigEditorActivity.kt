@@ -21,8 +21,9 @@ import com.afollestad.materialdialogs.list.toggleItemChecked
 import com.afollestad.materialdialogs.list.updateListItemsSingleChoice
 import it.sephiroth.android.library.xtooltip.ClosePolicy
 import it.sephiroth.android.library.xtooltip.Tooltip
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -111,20 +112,53 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 intent.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig
 
             else -> null
-        } ?: try
-        {
-            runBlocking { Acc.instance.readConfig() }
-        }
-        catch (ex: Exception)
-        {
-            ex.printStackTrace()
-            showConfigReadError()
-            // readDefaultConfig() is also a root call and can throw; if even that
-            // fails, fall back to in-memory defaults so onCreate cannot crash.
-            try { runBlocking { Acc.instance.readDefaultConfig() } } //if mAccConfig is null I use default mAccConfig values.
-            catch (ex2: Exception) { ex2.printStackTrace(); AccConfig() }
         }
 
+        if (config != null)
+        {
+            // Config came from intent / saved state -> no root call needed,
+            // safe to finish setup synchronously on the main thread.
+            finishSetup(profile, config)
+            LogExt().d(javaClass.simpleName, "onCreate(): accConfigOnly=$accConfigOnly, profile=$profile")
+        }
+        else
+        {
+            // No config supplied: must read it via root, which is a blocking shell
+            // call -> NEVER run it on the main thread (ANR). Read on IO, then
+            // populate the UI back on Main. Keep the activity responsive meanwhile.
+            launch {
+                val readConfig = withContext(Dispatchers.IO)
+                {
+                    try
+                    {
+                        Acc.instance.readConfig()
+                    }
+                    catch (ex: Exception)
+                    {
+                        ex.printStackTrace()
+                        // readDefaultConfig() is also a root call and can throw; if even
+                        // that fails, fall back to in-memory defaults so we cannot crash.
+                        try { Acc.instance.readDefaultConfig() } //if mAccConfig is null I use default mAccConfig values.
+                        catch (ex2: Exception) { ex2.printStackTrace(); null }
+                    }
+                }
+
+                if (isFinishing || isDestroyed) return@launch
+
+                if (readConfig == null) showConfigReadError()
+
+                finishSetup(profile, readConfig ?: AccConfig())
+                LogExt().d(javaClass.simpleName, "onCreate(): accConfigOnly=$accConfigOnly, profile=$profile")
+            }
+        }
+    }
+
+    /**
+     * Finishes editor setup once an [AccConfig] is available. Must run on the
+     * main thread (touches UI / ViewModel / binding).
+     */
+    private fun finishSetup(profile: AccaProfile, config: AccConfig)
+    {
         if (accConfigOnly) profile.accConfig = config
         initConfig = profile.accConfig.copy()
 
@@ -134,8 +168,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         initUi()
 
         viewModel.clearHistory()
-
-        LogExt().d(javaClass.simpleName, "onCreate(): accConfigOnly=$accConfigOnly, profile=$profile")
     }
 
     private fun initUi()
@@ -305,12 +337,22 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     {
         menuInflater.inflate(R.menu.acc_config_editor_menu, menu)
         mUndoMenuItem = menu.findItem(R.id.action_undo)
-        viewModel.undoOperationAvailableLiveData.observe(this, Observer { mUndoMenuItem.isEnabled = it })
+        // viewModel is initialized asynchronously (config read off the main thread);
+        // the menu may be created before that completes. Guard against the lateinit
+        // not yet being set.
+        if (::viewModel.isInitialized)
+            viewModel.undoOperationAvailableLiveData.observe(this, Observer { mUndoMenuItem.isEnabled = it })
+        else
+            mUndoMenuItem.isEnabled = false
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean
     {
+        // Ignore action items until the async config load has populated viewModel.
+        if (!::viewModel.isInitialized && item.itemId != android.R.id.home)
+            return super.onOptionsItemSelected(item)
+
         when (item.itemId)
         {
             R.id.action_save -> returnResults()
@@ -324,7 +366,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
     override fun onBackPressed()
     {
-        if (viewModel.unsavedChanges)
+        if (::viewModel.isInitialized && viewModel.unsavedChanges)
         {
             MaterialDialog(this).show {
                     title(R.string.unsaved_changes)
@@ -376,7 +418,22 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 progress(R.string.wait)
             }
 
-            val (exitCode, supported) = Acc.instance.isBatteryIdleSupported()
+            val exitCode: Int
+            val supported: Boolean
+            try
+            {
+                val result = Acc.instance.isBatteryIdleSupported()
+                exitCode = result.first
+                supported = result.second
+            }
+            catch (ex: Exception)
+            {
+                ex.printStackTrace()
+                LogExt().e(javaClass.simpleName, "isBatteryIdleSupported() failed: $ex")
+                if (dialog.isShowing) dialog.cancel()
+                return@launch
+            }
+
             if (dialog.isShowing)
             {
                 dialog.cancel()
@@ -566,10 +623,22 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             noAutoDismiss()
 
             launch {
+                val existingSwitches = try
+                {
+                    Acc.instance.listChargingSwitches().toTypedArray()
+                }
+                catch (ex: Exception)
+                {
+                    ex.printStackTrace()
+                    LogExt().e(javaClass.simpleName, "listChargingSwitches() failed: $ex")
+                    if (isShowing) dismiss()
+                    return@launch
+                }
+
                 var chargingSwitches = listOf(
                     automaticString,
                     addNewChargingSwitchString,
-                    *Acc.instance.listChargingSwitches().toTypedArray()
+                    *existingSwitches
                 )
 
                 var currentIndex = chargingSwitches.indexOf(initialSwitch ?: automaticString)
@@ -603,35 +672,46 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 //                                val switch = "${view.charging_switch_edit_text.text} ${view.charging_switch_on_value_edit_text.text} ${view.charging_switch_off_value_edit_text.text}"
                                 val switch = "${binding.chargingSwitchEditText.text} ${binding.chargingSwitchOnValueEditText.text} ${binding.chargingSwitchOffValueEditText.text}"
                                 this@AccConfigEditorActivity.launch {
-                                    var success = true
-
-                                    if (Acc.instance.isBatteryCharging())
-                                    { //If battery is charging the switch is tested
-                                        if (Acc.instance.testChargingSwitch(switch) != 0)
-                                        {
-                                            success = false
-                                            Toast.makeText(
-                                                this@AccConfigEditorActivity,
-                                                R.string.charging_switch_does_not_work,
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }
-
-                                    if (success)
+                                    try
                                     {
-                                        chargingSwitches = listOf(*chargingSwitches.toTypedArray(), switch) //update the list of switches with the new switch
+                                        var success = true
 
-                                        if (Acc.instance.addChargingSwitch(switch))
-                                        {
-                                            previousDialog.updateListItemsSingleChoice(items = chargingSwitches)
-                                            currentIndex = chargingSwitches.size - 1
+                                        if (Acc.instance.isBatteryCharging())
+                                        { //If battery is charging the switch is tested
+                                            if (Acc.instance.testChargingSwitch(switch) != 0)
+                                            {
+                                                success = false
+                                                Toast.makeText(
+                                                    this@AccConfigEditorActivity,
+                                                    R.string.charging_switch_does_not_work,
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
                                         }
-                                        else Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_SHORT).show()
-                                    }
 
-                                    progressDialog.dismiss()
-                                    dismiss()
+                                        if (success)
+                                        {
+                                            chargingSwitches = listOf(*chargingSwitches.toTypedArray(), switch) //update the list of switches with the new switch
+
+                                            if (Acc.instance.addChargingSwitch(switch))
+                                            {
+                                                previousDialog.updateListItemsSingleChoice(items = chargingSwitches)
+                                                currentIndex = chargingSwitches.size - 1
+                                            }
+                                            else Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                    catch (ex: Exception)
+                                    {
+                                        ex.printStackTrace()
+                                        LogExt().e(javaClass.simpleName, "add/test charging switch failed: $ex")
+                                        Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                                    }
+                                    finally
+                                    {
+                                        progressDialog.dismiss()
+                                        dismiss()
+                                    }
                                 }
                             }
                             negativeButton { dismiss() }
@@ -664,15 +744,24 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     }
 
                     this@AccConfigEditorActivity.launch {
-                        val description = when (Acc.instance.testChargingSwitch(switch))
+                        val description = try
                         {
-                            0 -> R.string.charging_switch_works
-                            1 -> R.string.charging_switch_does_not_work
-                            2 -> R.string.plug_battery_to_test
-                            else -> R.string.error_occurred
+                            when (Acc.instance.testChargingSwitch(switch))
+                            {
+                                0 -> R.string.charging_switch_works
+                                1 -> R.string.charging_switch_does_not_work
+                                2 -> R.string.plug_battery_to_test
+                                else -> R.string.error_occurred
+                            }
+                        }
+                        catch (ex: Exception)
+                        {
+                            ex.printStackTrace()
+                            LogExt().e(javaClass.simpleName, "testChargingSwitch() failed: $ex")
+                            R.string.error_occurred
                         }
 
-                        dialog.cancel()
+                        if (dialog.isShowing) dialog.cancel()
 
                         MaterialDialog(this@AccConfigEditorActivity).show {
                             title(R.string.test_switch)

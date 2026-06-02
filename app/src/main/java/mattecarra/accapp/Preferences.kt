@@ -143,10 +143,17 @@ class Preferences(private val context: Context)
     // Djs.isDjsInstalled() does a blocking root Shell.su; this getter ran on the main thread
     // (SettingsFragment, AccBootReceiver) on EVERY read -> ANR. Cache the install status (it
     // can't change without a reinstall) so only the first read can ever block.
+    // IMPORTANT: only cache a CONFIRMED true. If the probe throws (e.g. root not yet granted
+    // right after enabling DJS) we must NOT cache false, otherwise the whole process is stuck
+    // reporting "not installed" until restart. A failed probe leaves the cache null so a later
+    // successful probe can populate it.
     var djsEnabled: Boolean
         get() = sharedPrefs.getBoolean(DJS_ENABLED, false) && run {
-            djsInstalledCache ?: (try { Djs.isDjsInstalled(context.filesDir) } catch (e: Exception) { false })
-                .also { djsInstalledCache = it }
+            djsInstalledCache ?: run {
+                val installed = try { Djs.isDjsInstalled(context.filesDir) } catch (e: Exception) { null }
+                if (installed == true) djsInstalledCache = true
+                installed ?: false
+            }
         }
         set(value) {
             val editor = sharedPrefs.edit()

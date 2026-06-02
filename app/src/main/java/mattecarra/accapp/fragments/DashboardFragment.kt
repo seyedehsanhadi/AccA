@@ -33,7 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class DashboardFragment : ScopedFragment()
 {
 
-    private lateinit var binding :DashboardFragmentBinding
+    private var _binding: DashboardFragmentBinding? = null
+    private val binding get() = _binding!!
 
     private val LOG_TAG = "DashboardFragment"
 
@@ -56,8 +57,14 @@ class DashboardFragment : ScopedFragment()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View?
     {
-        binding = DashboardFragmentBinding.inflate(inflater, container, false)
+        _binding = DashboardFragmentBinding.inflate(inflater, container, false)
         return binding.root
+    }
+
+    override fun onDestroyView()
+    {
+        super.onDestroyView()
+        _binding = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?)
@@ -152,8 +159,11 @@ class DashboardFragment : ScopedFragment()
                     { //if accDeamon status is the opposite of the status it had before the action -> change had effect
                         finished.set(true)
 
-                        binding.dashDaemonToggleButton.isEnabled = true
-                        binding.dashDaemonRestartButton.isEnabled = true
+                        // The view may be gone by the time this observer fires; guard.
+                        _binding?.let { b ->
+                            b.dashDaemonToggleButton.isEnabled = true
+                            b.dashDaemonRestartButton.isEnabled = true
+                        }
                     }
                 }
 
@@ -170,8 +180,11 @@ class DashboardFragment : ScopedFragment()
 
                 if (!finished.getAndSet(true))
                 {
-                    binding.dashDaemonToggleButton.isEnabled = true
-                    binding.dashDaemonRestartButton.isEnabled = true
+                    // View may have been torn down during the delay; guard binding access.
+                    _binding?.let { b ->
+                        b.dashDaemonToggleButton.isEnabled = true
+                        b.dashDaemonRestartButton.isEnabled = true
+                    }
                 }
             }
         }
@@ -192,8 +205,11 @@ class DashboardFragment : ScopedFragment()
 
                 delay(3000)
 
-                binding.dashDaemonToggleButton.isEnabled = true
-                binding.dashDaemonRestartButton.isEnabled = true
+                // View may have been torn down during the delay; guard binding access.
+                _binding?.let { b ->
+                    b.dashDaemonToggleButton.isEnabled = true
+                    b.dashDaemonRestartButton.isEnabled = true
+                }
             }
         }
 
@@ -225,6 +241,10 @@ class DashboardFragment : ScopedFragment()
     private fun setAccdStatusUi(running: Boolean?)
     {
         if (running == null) return
+
+        // Bail if the view/activity is gone: binding access and requireActivity()
+        // below would otherwise throw after detach.
+        if (_binding == null || !isAdded) return
 
         if (running)
         {

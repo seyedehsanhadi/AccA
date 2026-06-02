@@ -61,6 +61,9 @@ class ProfilesFragment : ScopedFragment(),
     private lateinit var mSharedViewModel: SharedViewModel
     private lateinit var mProfilesAdapter: ProfileListAdapter
     private lateinit var mContext: Context
+    // Held so the OnSharedPreferenceChangeListener can be unregistered in onDestroyView
+    // (registering without unregistering leaks the fragment).
+    private var mPrefs: SharedPreferences? = null
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?)
     {
@@ -93,6 +96,7 @@ class ProfilesFragment : ScopedFragment(),
         mContext = requireContext()
 
         val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        mPrefs = prefs
 
         mSharedViewModel = ViewModelProvider(this).get(SharedViewModel::class.java)
         mProfilesAdapter = ProfileListAdapter(mContext, ProfileUtils.getCurrentProfile(prefs))
@@ -237,6 +241,14 @@ class ProfilesFragment : ScopedFragment(),
 
         val itemTouchHelper = ItemTouchHelper(itemTouchCallback)
         itemTouchHelper.attachToRecyclerView(profilesRecycler)
+    }
+
+    override fun onDestroyView()
+    {
+        // Unregister the prefs listener tied to this view to avoid leaking the fragment.
+        mPrefs?.unregisterOnSharedPreferenceChangeListener(this)
+        mPrefs = null
+        super.onDestroyView()
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?)

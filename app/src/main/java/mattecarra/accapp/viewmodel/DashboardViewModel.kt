@@ -11,6 +11,7 @@ import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.models.BatteryInfo
 import mattecarra.accapp.R
 import mattecarra.accapp.models.DashboardValues
+import mattecarra.accapp.utils.LogExt
 
 class DashboardViewModel : ViewModel() {
 
@@ -36,7 +37,8 @@ class DashboardViewModel : ViewModel() {
                             )
                         )
                     } catch (e: Exception) {
-                        // ignore this tick; keep polling
+                        // ignore this tick; keep polling. Log so the failure is visible.
+                        LogExt().e(javaClass.simpleName, "dashboard poll tick failed: ${e.message}")
                     }
                 }
                 delay(2000)

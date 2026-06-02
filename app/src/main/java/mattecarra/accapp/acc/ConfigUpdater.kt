@@ -50,7 +50,11 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
 
         val capacityUpdate = cue.sendCapacity && acc.updateAccCapacity(accConfig.configCapacity.shutdown, accConfig.configCoolDown?.atPercent ?: 101, accConfig.configCapacity.resume, accConfig.configCapacity.pause)
         val voltControl = cue.sendVoltage && acc.updateAccVoltControl(accConfig.configVoltage.controlFile, accConfig.configVoltage.max)
-        val currentMax = cue.sendCurrMax && acc.updateAccCurrentMaxCommand(accConfig.configCurrMax)
+        // Some handlers (legacy, v201910132) return "" for the current-max command (NOT SUPPORTED).
+        // An empty su command exits 0 -> would falsely report success. Treat an unsupported/empty
+        // command as "not applicable" (do not run it, do not mark it STATUS_OK).
+        val currentMaxSupported = acc.getUpdateAccCurrentMaxCommand(accConfig.configCurrMax).isNotBlank()
+        val currentMax = cue.sendCurrMax && currentMaxSupported && acc.updateAccCurrentMaxCommand(accConfig.configCurrMax)
         val temper = cue.sendTemperature && acc.updateAccTemperature(accConfig.configTemperature.coolDownTemperature, accConfig.configTemperature.maxTemperature, accConfig.configTemperature.pause)
         val coolDown = cue.sendCoolDown && acc.updateAccCoolDown(accConfig.configCoolDown?.charge, accConfig.configCoolDown?.pause )
         val resetUnplugged = cue.sendResetUnplugged && acc.updateResetUnplugged(accConfig.configResetUnplugged)
@@ -72,10 +76,25 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
         LogExt().d(TAG, (if(!cue.sendChargeSwitch) "[off]" else if (chargingSwitch) "[ok]" else "[fail]")+" chargingSwitch: ${accConfig.configChargeSwitch}")
         LogExt().d(TAG, (if(!cue.sendBatteryIdleMode) "[off]" else if (prioritizeBatteryIdleMode) "[ok]" else "[fail]")+" batteryIdleMode: ${accConfig.prioritizeBatteryIdleMode}")
 
+        // Per-key failures are otherwise only at debug level (.d), suppressed unless debug is on
+        // (mDEBUG defaults to NONE). Log any failure at the always-on 'S' level so a partial apply
+        // always leaves a trace in logcat regardless of the debug setting.
+        if (cue.sendCapacity && !capacityUpdate) LogExt().s(TAG, "[fail] capacity: ${accConfig.configCapacity}")
+        if (cue.sendVoltage && !voltControl) LogExt().s(TAG, "[fail] voltage: ${accConfig.configVoltage}")
+        if (cue.sendCurrMax && currentMaxSupported && !currentMax) LogExt().s(TAG, "[fail] currentMax: ${accConfig.configCurrMax}")
+        if (cue.sendTemperature && !temper) LogExt().s(TAG, "[fail] temperature: ${accConfig.configTemperature}")
+        if (cue.sendCoolDown && !coolDown) LogExt().s(TAG, "[fail] coolDown: ${accConfig.configCoolDown}")
+        if (cue.sendResetUnplugged && !resetUnplugged) LogExt().s(TAG, "[fail] resetUnplugged: ${accConfig.configResetUnplugged}")
+        if (cue.sendResetBsOnPause && !resetBSOnPause) LogExt().s(TAG, "[fail] resetBSOnPause: ${accConfig.configResetBsOnPause}")
+        if (cue.sendOnBoot && !onBootUpdateSuccessful) LogExt().s(TAG, "[fail] onBoot: ${accConfig.configOnBoot}")
+        if (cue.sendOnPlug && !onPlugged) LogExt().s(TAG, "[fail] onPlugged: ${accConfig.configOnPlug}")
+        if (cue.sendChargeSwitch && !chargingSwitch) LogExt().s(TAG, "[fail] chargingSwitch: ${accConfig.configChargeSwitch}")
+        if (cue.sendBatteryIdleMode && !prioritizeBatteryIdleMode) LogExt().s(TAG, "[fail] batteryIdleMode: ${accConfig.prioritizeBatteryIdleMode}")
+
         val temp = ConfigUpdateResult(
             capacityUpdateSuccessful = if (cue.sendCapacity) (if (capacityUpdate) ConfigUpdateStatus.STATUS_OK else ConfigUpdateStatus.STATUS_FAIL ) else ConfigUpdateStatus.STATUS_OFF,
             voltControlUpdateSuccessful = if (cue.sendVoltage) (if (voltControl) ConfigUpdateStatus.STATUS_OK else ConfigUpdateStatus.STATUS_FAIL ) else ConfigUpdateStatus.STATUS_OFF,
-            currentMaxUpdateSuccessful = if (cue.sendCurrMax) (if (currentMax) ConfigUpdateStatus.STATUS_OK else ConfigUpdateStatus.STATUS_FAIL ) else ConfigUpdateStatus.STATUS_OFF,
+            currentMaxUpdateSuccessful = if (cue.sendCurrMax && currentMaxSupported) (if (currentMax) ConfigUpdateStatus.STATUS_OK else ConfigUpdateStatus.STATUS_FAIL ) else ConfigUpdateStatus.STATUS_OFF,
             tempUpdateSuccessful = if (cue.sendTemperature) (if (temper) ConfigUpdateStatus.STATUS_OK else ConfigUpdateStatus.STATUS_FAIL ) else ConfigUpdateStatus.STATUS_OFF,
             coolDownUpdateSuccessful = if (cue.sendCoolDown) (if (coolDown) ConfigUpdateStatus.STATUS_OK else ConfigUpdateStatus.STATUS_FAIL ) else ConfigUpdateStatus.STATUS_OFF,
             resetUnpluggedUpdateSuccessful = if (cue.sendResetUnplugged) (if (resetUnplugged) ConfigUpdateStatus.STATUS_OK else ConfigUpdateStatus.STATUS_FAIL ) else ConfigUpdateStatus.STATUS_OFF,

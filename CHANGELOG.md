@@ -2,6 +2,40 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc27] - 2026-06-03
+
+**Pre-release.** App-wide robustness remediation — 70 fixes from a full read-only audit (13 agents over 32 files), reviewed compile-clean. No daemon change (ACC bundle unchanged from rc24).
+
+### Fixed — crashes
+- Coroutine scopes (`ScopedAppActivity`, `ScopedFragment`, both QS tile services) now carry a `CoroutineExceptionHandler` that logs and swallows — an exception escaping any `launch{}` can no longer kill the process (this alone neutralised ~15 crash sites).
+- Wrapped the unguarded `Acc.instance`/`Shell.su` calls in the QS tiles, the widget battery dialog, the config editor's switch/idle dialogs, `MainActivity` result/FAB handlers, and `BatteryInfoWidget` so a root-shell throw can't crash the app; `Acc.instance`'s `initAcc`/`isAccInstalled` are now exception-guarded.
+
+### Fixed — silent failures
+- A failed ACC config apply now logs and is surfaced via a new `applyFailed` signal instead of a bare `// TODO`.
+- Every ACC `update*` partial-apply failure is logged at always-on level (was debug-only, invisible by default).
+- Unsupported/empty current-max command no longer reports false success.
+- DJS `list()` logs dropped/unparsable lines; ACC install failures and GitHub/JSON/Room-converter errors are logged (were `printStackTrace`-only or `catch(ignored)`).
+
+### Fixed — parsing / handlers
+- **`isBatteryCharging()` now reads ACC 2025.x lowercase status** (was always false while charging → wrong tile icon, skipped charging-switch test).
+- Shell-quote-safe builders for on-boot/on-plug/charging-switch free text (injection-safe).
+- Legacy reset-on-pause used the wrong binary (`acc-en`→`acc`); `v201903071` charging-switch no longer does a redundant root re-read; `CHARGE_DISABLE` regex corrected; boolean info fields parsed null-safe.
+
+### Fixed — ANR / main thread
+- Moved blocking root shell off the main thread: Schedules-tab nav, the DJS settings toggle, the config-editor `onCreate` (`runBlocking`→async), and the schedule dialog's default-config read.
+
+### Fixed — lifecycle / leaks
+- `onDestroyView` now nulls bindings and the dashboard/config/schedules/scriptes fragments guard post-async UI writes; `SharedPreferences` listeners and an `observeForever` are unregistered; dialogs guarded with `isAdded`/`isFinishing`; `DashboardConfigFragment` shares the activity-scoped `SharedViewModel`.
+
+### Fixed — security / boot / misc
+- DJS `djsc` args are POSIX single-quote escaped (**command-injection fix**); `BatteryDialogActivity` is no longer `exported`; `WidgetService` promotes to foreground correctly + `FOREGROUND_SERVICE` permission; `AccBootReceiver` handles `QUICKBOOT_POWERON`; `djsInstalledCache` no longer pins a failed probe; `ConfigTemperature` default aligned to the parser.
+
+### Deferred (2, need a device)
+- ACC version range `[202007220,202107280)` handler-binary-path routing; `WidgetService` `foregroundServiceType` (moot at targetSdk 31).
+
+### Changed
+- Version 1.1.6-rc27 (build 93).
+
 ## [1.1.6-rc26] - 2026-06-02
 
 **Pre-release.** Two P0 data-loss fixes in the DJS scheduler delete/edit path (found by a full read-only audit of the DJS pipeline).
