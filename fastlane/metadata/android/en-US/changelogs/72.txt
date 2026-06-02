@@ -1,0 +1,1 @@
+- Pre-release (RC6). Bundles ACC rc6: Pixel/Tensor limit holds now — the daemon tries charge_stop_level first (before the charging_state trap) with both 100 pcap and 100 5 drivings, keeping whichever truly stops charging. Reboot after install.

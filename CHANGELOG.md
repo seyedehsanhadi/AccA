@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc6] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc6 — Pixel/Tensor limit now holds.
+
+### Fixed (bundled daemon)
+- On Pixel/Tensor the limit was passed because auto-mode hit the `charging_state` trap first (reports stopped while still charging) and locked nothing. The daemon now tries `charge_stop_level` **first**, offering both the stable (`100 pcap`) and the 2022/2023 (`100 5`) drivings, and keeps whichever actually drops the current. **Reboot after install** so the new daemon runs.
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc6 (202505197)**.
+- Version 1.1.6-rc6 (build 72).
+
 ## [1.1.6-rc5] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc5 — fixes charging overshooting the limit.
