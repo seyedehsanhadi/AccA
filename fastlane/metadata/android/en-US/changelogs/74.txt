@@ -1,0 +1,1 @@
+- Pre-release (RC8). Bundles ACC rc8 — THE fix: the daemon's switch check looked at absolute current, so a switch that stops charging by discharging was wrongly rejected and never locked (stop-then-reset). Now it locks the working switch and holds at your limit. Tap the ACC-update prompt, then reboot.

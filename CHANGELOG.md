@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc8] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc8 — THE fix for stop-then-reset.
+
+### Fixed (bundled daemon)
+- The limit stopped charging but kept restarting. Root cause: the switch-verification checked the *absolute* current, so a switch that works by **discharging** (negative current) was rejected as "still flowing" → the daemon never locked it → re-probed and restarted. Now it rejects a switch only if it's still *charging* (positive current); discharging/idle = stopped = locked + held. **Tap the ACC-update prompt, then reboot.**
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc8 (202505199)**.
+- Version 1.1.6-rc8 (build 74).
+
 ## [1.1.6-rc7] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc7 — limit now HOLDS (no more stop-then-reset).
