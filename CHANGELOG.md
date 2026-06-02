@@ -2,6 +2,13 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc2] - 2026-06-02
+
+**Pre-release.** AccA can now ask ACC for its state export.
+
+### Added
+- **"Show ACC state (--state)"** one-tap script (Scripts tab) — runs `acca --state` and shows ACC's live machine-readable JSON snapshot (level, signed current, status, config-as-ACC-holds-it, locked switch). First consumer of the rc1 state export; the in-app diagnostics view that parses it (closed-loop confirm + warnings) is the next increment.
+
 ## [1.1.6-rc1] - 2026-06-02
 
 **Pre-release.** Bundles ACC RC1 (the state-export keystone) so it can be tested through the app installer. No AccA app-behavior change yet.

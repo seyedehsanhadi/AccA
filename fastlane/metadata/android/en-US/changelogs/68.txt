@@ -1,0 +1,1 @@
+- Pre-release (RC2). New "Show ACC state (--state)" script: AccA can now ask ACC for its machine-readable state snapshot via `acca --state`. First consumer of the rc1 state export; the full in-app diagnostics view is next.

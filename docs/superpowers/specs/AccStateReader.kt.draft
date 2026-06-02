@@ -1,0 +1,98 @@
+// DRAFT for rc3 — the real subsystem-A AccA reader. Kept as .draft (out of app/src)
+// so it does NOT enter the build until it is wired + CI-compiled together with the
+// diagnostics view. Mirrors the fuzz-proven fetch contract (state-fetch-fuzz-model.py,
+// 0/11 crashes) and the parser contract (state-parser-fuzz-model.py, 0/19 crashes).
+//
+// Uses only APIs already proven in this codebase: Shell.su(cmd).exec() (.out/.code),
+// kotlinx coroutines, and org.json.JSONObject (Android built-in). Uncrashable by
+// construction: the whole parse is in try/catch; every field is read null-safely; a
+// value that can't be read is null (never 0); a torn/garbage body -> Unreachable.
+
+package mattecarra.accapp.acc
+
+import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+
+/** Parsed state — every field nullable; "unknown" means we genuinely could not read it. */
+data class AccState(
+    val schemaVersion: Int? = null,
+    val ts: Long? = null,
+    val capacityPct: Int? = null,
+    val currentRaw: Long? = null,
+    val voltageRaw: Long? = null,
+    val tempDeciC: Int? = null,
+    val status: String? = null,
+    val lockedSwitch: String? = null,
+    val userLocked: Boolean? = null,
+    val rawJson: String = ""
+)
+
+/** Sealed outcome — the UI maps each to a distinct, actionable state; never a crash. */
+sealed class StateFetch {
+    data class Ok(val state: AccState) : StateFetch()
+    data class Stale(val state: AccState, val ageSec: Long) : StateFetch()
+    data class Unreachable(val reason: String) : StateFetch()
+    object Unsupported : StateFetch()   // old ACC without --state -> caller falls back to -s --print
+    object NoRoot : StateFetch()
+}
+
+object AccStateReader {
+
+    private const val CMD = "acca --state"
+    private const val TIMEOUT_MS = 3000L
+    private const val MAX_AGE_SEC = 27L     // 3x max loopDelay; older => Stale
+
+    /** Fetch + parse ACC state. Never throws. */
+    suspend fun fetch(nowSec: Long): StateFetch = withContext(Dispatchers.IO) {
+        val res = try {
+            withTimeoutOrNull(TIMEOUT_MS) { Shell.su(CMD).exec() }
+        } catch (e: Throwable) {
+            return@withContext StateFetch.Unreachable("Cannot reach ACC (${e.javaClass.simpleName}) - is root granted?")
+        } ?: return@withContext StateFetch.Unreachable("ACC not responding (timed out) - is the daemon running?")
+
+        val out = res.out.joinToString("\n").trim()
+        val low = out.lowercase()
+        when {
+            low.contains("permission denied") || low.contains("not allowed") ->
+                return@withContext StateFetch.NoRoot
+            low.contains("not found") || low.contains("unknown option") || low.contains("inaccessible") ->
+                return@withContext StateFetch.Unsupported
+            out.isEmpty() ->
+                return@withContext StateFetch.Unreachable("ACC returned no data - daemon not running?")
+        }
+
+        val state = parse(out) ?: return@withContext StateFetch.Unreachable("ACC sent unreadable data - diagnostics unavailable")
+        val ts = state.ts
+        if (ts != null && nowSec - ts > MAX_AGE_SEC) StateFetch.Stale(state, nowSec - ts) else StateFetch.Ok(state)
+    }
+
+    /** Uncrashable parse: any failure -> null (caller shows "diagnostics unavailable"). */
+    private fun parse(raw: String): AccState? = try {
+        val o = JSONObject(raw)
+        val b = o.optJSONObject("battery")
+        val s = o.optJSONObject("switch")
+        AccState(
+            schemaVersion = o.optIntOrNull("schemaVersion"),
+            ts = o.optLongOrNull("ts"),
+            capacityPct = b?.optIntOrNull("capacityPct"),
+            currentRaw = b?.optLongOrNull("current_raw"),
+            voltageRaw = b?.optLongOrNull("voltage_raw"),
+            tempDeciC = b?.optIntOrNull("temp_deci_c"),
+            status = b?.optStringOrNull("status"),
+            lockedSwitch = s?.optStringOrNull("locked"),
+            userLocked = if (s != null && s.has("userLocked") && !s.isNull("userLocked")) s.optBoolean("userLocked") else null,
+            rawJson = raw
+        )
+    } catch (e: Throwable) { null }
+
+    // Null-returning helpers: a missing/JSON-null/wrong-type field is UNKNOWN, never 0/"".
+    private fun JSONObject.optIntOrNull(k: String): Int? =
+        if (has(k) && !isNull(k)) optInt(k, Int.MIN_VALUE).let { if (it == Int.MIN_VALUE && optString(k) != "${Int.MIN_VALUE}") null else it } else null
+    private fun JSONObject.optLongOrNull(k: String): Long? =
+        if (has(k) && !isNull(k)) { val s = optString(k, ""); s.toLongOrNull() } else null
+    private fun JSONObject.optStringOrNull(k: String): String? =
+        if (has(k) && !isNull(k)) optString(k, "").ifEmpty { null } else null
+}

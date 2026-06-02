@@ -12,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mattecarra.accapp.models.*
 
-@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 15)
+@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 16)
 @TypeConverters(ConfigConverter::class)
 abstract class AccaRoomDatabase : RoomDatabase()
 {
@@ -159,6 +159,17 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
+        // 1.1.6-rc2: expose ACC's new state export (`acca --state`) as a one-tap script so it can
+        // be run and inspected from the app immediately, ahead of the in-app diagnostics view.
+        // Data-only INSERT (no schema change), same pattern as MIGRATION_14_15.
+        private val MIGRATION_15_16: Migration = object : Migration(15, 16)
+        {
+            override fun migrate(database: SupportSQLiteDatabase)
+            {
+                database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Show ACC state (--state)\", \"Prints ACC's machine-readable state snapshot as JSON: level, signed current, status, config as ACC holds it, and the locked switch. Data source for the upcoming diagnostics view.\", \"acca --state\", \"\", 0);")
+            }
+        }
+
         fun getDatabase(context: Context): AccaRoomDatabase
         {
             val tempInstance = INSTANCE
@@ -168,7 +179,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 // Create database instance here
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                         .addCallback(object : Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
@@ -288,6 +299,12 @@ abstract class AccaRoomDatabase : RoomDatabase()
             db.scriptsDao().insert(AccaScript(0, "Idle above limit: OFF",
                 "allow_idle_above_pcap=false: never sit above the limit; cycle down to the resume level. Best for forever-plugged 40-60% setups.",
                 "acca -s allow_idle_above_pcap=false",
+                "", 0)
+            )
+
+            db.scriptsDao().insert(AccaScript(0, "Show ACC state (--state)",
+                "Prints ACC's machine-readable state snapshot as JSON: level, signed current, status, config as ACC holds it, and the locked switch. Data source for the upcoming diagnostics view.",
+                "acca --state",
                 "", 0)
             )
         }
