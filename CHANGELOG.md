@@ -2,6 +2,21 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc25] - 2026-06-02
+
+**Pre-release.** DJS (Daily Job Scheduler) installation pipeline made crash-proof and race-free — fixes the false "DJS Installation Failed!" dialog.
+
+### Fixed (DJS install)
+- **False "DJS Installation Failed!" eliminated.** The old code probed the DJS version via `/dev/.vr25/djs/djs-version`, a symlink created **asynchronously** by a fire-and-forget daemon (`service.sh` → `djs.sh`). The probe ran immediately after install and lost the race → null → thrown "DJS installation failed" even when every file installed correctly. Success is now verified by reading `versionCode` from `/data/adb/vr25/djs/module.prop`, which `install.sh` writes **synchronously** — race-free (mirrors how ACC version detection already works).
+- **Version detection fallback chain** for DJS: runtime symlink → `djs-version` on PATH → `module.prop` (canonical). Each probe is independently exception-guarded, so a slow/absent daemon or a denied shell yields a clean null, never a crash.
+- **Busybox-missing is no longer masked.** The installer exits `3` when busybox is absent; that case is now surfaced as its own outcome so the busybox prompt actually appears. `onBusyboxMissing()` was previously unreachable dead code (the version probe nulled the exit code first).
+- **Equal/already-installed version** (installer early-exits `0` without restarting the daemon) now resolves as success via the `module.prop` read, instead of a false failure; the daemon is also nudged so runtime links exist.
+- **No silent failures, no false success:** the install path returns an explicit `DjsInstallOutcome(success/busyboxMissing/result)`; a genuine failure always reaches the log-sharing dialog, a genuine success never reports failure, and vice-versa.
+- **Crash-safe DJS helpers:** `isDjsInstalled`, `initDjs`, `uninstallDjs`, and the `Djs.instance` getter (now correct double-checked locking) wrap all root-shell calls so a libsu exception can never propagate.
+
+### Changed
+- Version 1.1.6-rc25 (build 91). Bundled ACC daemon unchanged from rc24 (rc22 bundle).
+
 ## [1.1.6-rc13] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc13 — Tensor hard-pause finally applies + all-paths stop.

@@ -24,19 +24,18 @@ fun MaterialDialog.djsInstallation(
             .progress(R.string.wait)
 
     coroutineScope.launch {
-        val res = Djs.installBundledAccModule(context)
+        val outcome = Djs.installBundledAccModule(context)
         cancel()
 
-        if(res?.isSuccess != true) {
-            when {
-                res?.code == 3 -> //Buysbox is not installed
-                    listener.onBusyboxMissing()
+        when {
+            outcome.success ->
+                listener.onSuccess()
 
-                else -> //Generic error
-                    listener.onInstallationFailed(res)
-            }
-        } else {
-            listener.onSuccess()
+            outcome.busyboxMissing -> //Busybox is not installed
+                listener.onBusyboxMissing()
+
+            else -> //Generic error: pass the install Shell.Result (if any) so the log can be shared
+                listener.onInstallationFailed(outcome.result)
         }
     }
 

@@ -3,6 +3,7 @@ package mattecarra.accapp.djs
 import android.content.Context
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -46,6 +47,20 @@ interface DjsInterface {
     suspend fun stop(): Boolean
 }
 
+/**
+ * Explicit, exhaustive outcome of a DJS install attempt. Replaces the old `Shell.Result?`
+ * return whose null/exit-code was ambiguous: a null could mean "busybox missing", "shell
+ * threw", OR "installed but version probe lost the daemon race" -- all collapsed to the same
+ * generic failure dialog (and `onBusyboxMissing()` became dead code). Each real case now maps
+ * to exactly one listener call. `result` carries the install Shell.Result (when any) so the UI
+ * can still offer the install log on failure.
+ */
+data class DjsInstallOutcome(
+    val success: Boolean,
+    val busyboxMissing: Boolean,
+    val result: Shell.Result?
+)
+
 object Djs {
     const val bundledVersion = 202108260
 
@@ -72,8 +87,9 @@ object Djs {
             }
 
             synchronized(this) {
-                // Create djs instance here
-                return createDjsInstance()
+                // Double-checked: a second thread that blocked on the lock must reuse the
+                // instance the first one created instead of running getDjsVersion()'s shell again.
+                return INSTANCE ?: createDjsInstance()
             }
         }
 
@@ -83,21 +99,35 @@ object Djs {
     }
 
     fun isDjsInstalled(installationDir: File): Boolean {
-        return Shell.su("test -f ${File(installationDir, "djs/service.sh").absolutePath}").exec().isSuccess
+        // Crash-safe: may be called on the main thread (nav/settings) before root is granted;
+        // a libsu exception must never propagate.
+        return try {
+            Shell.su("test -f ${File(installationDir, "djs/service.sh").absolutePath}").exec().isSuccess
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
     }
 
     fun initDjs(installationDir: File): Boolean {
-        return if(isDjsInstalled(installationDir))
-            Shell.su("[ -f /dev/.vr25/djs/djsc ] || ${File(installationDir, "djs/service.sh").absolutePath}").exec().isSuccess
-        else
+        return try {
+            if (isDjsInstalled(installationDir))
+                Shell.su("[ -f /dev/.vr25/djs/djsc ] || ${File(installationDir, "djs/service.sh").absolutePath}").exec().isSuccess
+            else
+                false
+        } catch (e: Exception) {
+            e.printStackTrace()
             false
+        }
     }
 
     fun isInstalledDjsOutdated(): Boolean {
+        // getDjsVersion() is null only when DJS is genuinely undetectable -> treat as outdated
+        // (forces (re)install) rather than crashing.
         return getDjsVersion()?.let { it < bundledVersion } ?: true
     }
 
-    suspend fun installBundledAccModule(context: Context): Shell.Result?  = withContext(Dispatchers.IO) {
+    suspend fun installBundledAccModule(context: Context): DjsInstallOutcome = withContext(Dispatchers.IO) {
         try {
             val bundleFile = File(context.filesDir, "djs_bundle.tar.gz")
 
@@ -110,14 +140,14 @@ object Djs {
             installLocalDjsModule(context)
         } catch (ex: java.lang.Exception) {
             ex.printStackTrace()
-            null
+            DjsInstallOutcome(success = false, busyboxMissing = false, result = null)
         }
     }
 
     /*
-    * This function assumes that acc tar gz is already in place
+    * This function assumes that djs tar gz is already in place
     */
-    private suspend fun installLocalDjsModule(context: Context): Shell.Result? = withContext(Dispatchers.IO){
+    private suspend fun installLocalDjsModule(context: Context): DjsInstallOutcome = withContext(Dispatchers.IO){
         try {
             val installShFile = File(context.filesDir, "install-tarball.sh")
 
@@ -129,21 +159,91 @@ object Djs {
 
             val res = Shell.su("sh ${installShFile.absolutePath} djs").exec()
 
-            val version = getDjsVersion() ?: throw java.lang.Exception("DJS installation failed")
+            // Busybox missing: the installer (install-tarball.sh / install.sh) exits 3. Surface
+            // this explicitly so the busybox dialog can fire. The OLD code probed the version
+            // first, threw, and returned null -> code==3 was lost and onBusyboxMissing() was
+            // unreachable dead code.
+            if (res.code == 3)
+                return@withContext DjsInstallOutcome(success = false, busyboxMissing = true, result = res)
 
-            createDjsInstance(version)
-            res
+            // service.sh is fire-and-forget (`(djs.sh &) &`); the /dev/.vr25/djs/* runtime
+            // symlinks (incl. djs-version) are created ASYNCHRONOUSLY by the backgrounded daemon.
+            // The installer also early-exits 0 on an equal/newer already-installed version WITHOUT
+            // restarting the daemon. Nudge the daemon so the runtime links exist for later use.
+            try {
+                Shell.su("[ -f /dev/.vr25/djs/djsc ] || sh /data/adb/vr25/djs/service.sh").exec()
+            } catch (_: java.lang.Exception) {}
+
+            // Verify the install with a signal that does NOT depend on the async daemon:
+            // getDjsVersion() falls back to reading versionCode from module.prop, which install.sh
+            // writes synchronously to /data/adb/vr25/djs/. This makes success detection race-free.
+            // The short retry only covers a transient FS/SELinux settle; the common path succeeds
+            // on the first probe.
+            var version = getDjsVersion()
+            var tries = 0
+            while (version == null && tries < 10) {
+                delay(300)
+                version = getDjsVersion()
+                tries++
+            }
+
+            if (version != null) {
+                createDjsInstance(version)
+                DjsInstallOutcome(success = true, busyboxMissing = false, result = res)
+            } else {
+                // Install command returned but DJS is not actually usable. Never claim success,
+                // never swallow it silently: keep `res` so the UI can offer the install log.
+                DjsInstallOutcome(success = false, busyboxMissing = false, result = res)
+            }
         } catch (ex: java.lang.Exception) {
             ex.printStackTrace()
-            null
+            DjsInstallOutcome(success = false, busyboxMissing = false, result = null)
         }
     }
 
     suspend fun uninstallDjs(installationDir: File): Shell.Result? = withContext(Dispatchers.IO) {
-        Shell.su("sh ${File(installationDir, "djs/uninstall.sh").absolutePath}").exec()
+        try {
+            Shell.su("sh ${File(installationDir, "djs/uninstall.sh").absolutePath}").exec()
+        } catch (e: java.lang.Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
+    /**
+     * Detect the installed DJS versionCode. Mirrors Acc.getAccVersion()'s multi-path fallback so
+     * AccA handles a slow/absent daemon and any DJS version without ever throwing or returning a
+     * misleading null:
+     *   1. /dev/.vr25/djs/djs-version  (runtime symlink; absent until the daemon has started)
+     *   2. djs-version                 (on PATH once the system is rebooted)
+     *   3. /data/adb/vr25/djs/module.prop versionCode (CANONICAL, written synchronously by
+     *      install.sh -> not subject to the daemon race; this is what makes install verification
+     *      reliable)
+     * Each probe is independently try/caught; a libsu exception in any of them yields null, not a
+     * crash. The numeric regex tolerates the leading/trailing blank lines djs-version.sh prints.
+     */
     private fun getDjsVersion(): Int? {
-        return Shell.su("/dev/.vr25/djs/djs-version").exec().out.joinToString(separator = "\n").trim().toIntOrNull()
+        return getDjsVersionViaShell("/dev/.vr25/djs/djs-version")
+            ?: getDjsVersionViaShell("djs-version")
+            ?: getDjsVersionFromModuleProp()
+    }
+
+    private fun getDjsVersionViaShell(cmd: String): Int? {
+        return try {
+            val out = Shell.su(cmd).exec().out.joinToString(separator = "\n")
+            Regex("""\d{6,}""").find(out)?.value?.toIntOrNull()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getDjsVersionFromModuleProp(): Int? {
+        return try {
+            Shell.su("grep -m1 '^versionCode=' /data/adb/vr25/djs/module.prop")
+                .exec().out.joinToString(separator = "\n")
+                .substringAfter("versionCode=", "").trim().toIntOrNull()
+        } catch (e: Exception) {
+            null
+        }
     }
 }
