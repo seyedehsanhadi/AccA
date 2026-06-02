@@ -2,6 +2,20 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc13] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc13 — Tensor hard-pause finally applies + all-paths stop.
+
+### Fixed (bundled daemon)
+- The Tensor hard-pause config (`allowIdleAbovePcap=false`/`prioritizeBattIdleMode=no`) now **actually applies** on install (fresh marker — the prior one was stale, leaving it true).
+- **All-paths group switch** cuts every Pixel charge path at once, so a single path can't keep charging.
+- Every config param hardened against empty/garbage values.
+- **Install (recovery/Magisk flash) applies it even if AccA's settings writes are stuck.**
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc13 (202505204)**.
+- Version 1.1.6-rc13 (build 79).
+
 ## [1.1.6-rc12] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc12 — robustness for every phone.

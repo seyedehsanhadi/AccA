@@ -1,0 +1,1 @@
+- Pre-release (RC13). Bundles ACC rc13: the Tensor hard-pause config now actually applies on install (fresh marker), an all-paths group switch cuts every Pixel charge path at once, and config params are hardened. Tap the ACC-update prompt, then reboot — or flash the ACC zip directly.
