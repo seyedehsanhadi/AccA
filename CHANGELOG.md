@@ -2,6 +2,20 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc12] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc12 — robustness for every phone.
+
+### Fixed (bundled daemon)
+- **Brick-safe switch probing** (#305/#308): a node that kernel-panics the device is blacklisted on next boot, never retried.
+- **No 2-second phantom "Charging" on unplug.**
+- **Deep sleep** (#293): no more constant CPU wakeups when unplugged/idle.
+- **Install robustness** (#216/#223/#247): busybox + start-stop-daemon fallbacks, clearer errors — installs on more roots/ROMs/old Android.
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc12 (202505203)**.
+- Version 1.1.6-rc12 (build 78).
+
 ## [1.1.6-rc11] - 2026-06-02
 
 **Pre-release.** App-wide crash hardening + all-SoC stop switches.

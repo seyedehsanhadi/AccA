@@ -1,0 +1,1 @@
+- Pre-release (RC12). Bundles ACC rc12: brick-safe switch probing (won't retry a node that crashed the kernel), no 2-second phantom "Charging" on unplug, deep-sleep when idle, and far more robust install (busybox/daemon fallbacks for more roots and older Android). Tap the ACC-update prompt, then reboot.
