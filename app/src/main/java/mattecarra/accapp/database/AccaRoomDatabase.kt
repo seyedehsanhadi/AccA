@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -197,7 +198,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
-        private fun prepopulateDb(db: AccaRoomDatabase) = CoroutineScope(Dispatchers.Default).launch {
+        private fun prepopulateDb(db: AccaRoomDatabase) = CoroutineScope(Dispatchers.Default + CoroutineExceptionHandler { _, t -> android.util.Log.e("prepopulateDb", "default-profile insert failed: " + t.message) }).launch {
 
             db.profileDao().insert(
                 AccaProfile(0, "Default Custom",

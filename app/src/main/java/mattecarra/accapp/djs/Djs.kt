@@ -26,14 +26,11 @@ interface DjsInterface {
     suspend fun edit(pattern: String, newLine: String): Boolean
 
     suspend fun edit(schedule: DjsSchedule): Boolean {
-        val command = StringBuilder()
-        if(!schedule.isEnabled)
-            command.append("//")
-
-        return edit(
-            ": accaScheduleId${schedule.scheduleProfileId}",
-            command.append("${schedule.time} ${schedule.command}").toString()
-        )
+        // delete-then-append instead of an in-place `sed`: the old sed edit broke (and allowed
+        // shell/regex injection) whenever the schedule command contained #, &, /, or quotes
+        // (e.g. paths or apply_on_* commands). Both ops below go through djsc directly.
+        deleteById(schedule.scheduleProfileId)
+        return append(schedule)
     }
 
     suspend fun delete(pattern: String): Boolean
