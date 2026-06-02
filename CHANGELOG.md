@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc26] - 2026-06-02
+
+**Pre-release.** Two P0 data-loss fixes in the DJS scheduler delete/edit path (found by a full read-only audit of the DJS pipeline).
+
+### Fixed (DJS scheduler)
+- **Deleting/editing one schedule no longer wipes its siblings.** `deleteById` matched `: accaScheduleId<id>` with no delimiter, and `djsc --delete` treats the pattern as a sed substring/regex — so deleting schedule **1** also deleted **10, 11, 100…**. The pattern is now anchored on the trailing `;` that the schedule line actually carries (`: accaScheduleId<id>;`).
+- **A failed schedule edit no longer destroys the schedule.** `edit()` is delete-then-append, which is not atomic; if the re-append failed (busybox gone, DJS stopped, a quoting break) the original line was already deleted and lost. The edit now snapshots the current entry first and rolls it back on append failure, so a failed edit changes nothing (DJS and the local DB stay consistent).
+
+### Changed
+- Version 1.1.6-rc26 (build 92). Builds on rc25's crash-proof, race-free DJS install pipeline.
+
 ## [1.1.6-rc25] - 2026-06-02
 
 **Pre-release.** DJS (Daily Job Scheduler) installation pipeline made crash-proof and race-free — fixes the false "DJS Installation Failed!" dialog.

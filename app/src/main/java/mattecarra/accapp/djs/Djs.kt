@@ -30,14 +30,34 @@ interface DjsInterface {
         // delete-then-append instead of an in-place `sed`: the old sed edit broke (and allowed
         // shell/regex injection) whenever the schedule command contained #, &, /, or quotes
         // (e.g. paths or apply_on_* commands). Both ops below go through djsc directly.
+        //
+        // delete-then-append is NOT atomic: snapshot the current entry first and roll it back if
+        // the re-append fails (busybox gone, DJS stopped, quoting break). Without the rollback a
+        // failed append after a successful delete would permanently destroy the schedule.
+        val backup = try {
+            list(": accaScheduleId${schedule.scheduleProfileId};").firstOrNull()
+        } catch (e: Exception) {
+            null
+        }
+
         deleteById(schedule.scheduleProfileId)
-        return append(schedule)
+
+        val ok = append(schedule)
+        if (!ok && backup != null) {
+            // best-effort restore of the original line so a failed edit is not data loss
+            try { append(backup) } catch (e: Exception) { e.printStackTrace() }
+        }
+        return ok
     }
 
     suspend fun delete(pattern: String): Boolean
 
     suspend fun deleteById(id: Int): Boolean {
-        return delete(": accaScheduleId$id")
+        // Anchor on the trailing ';' that getCommand() writes right after the id
+        // (": accaScheduleId<id>;"). djsc --delete matches the pattern as a sed substring/regex,
+        // so the un-delimited ": accaScheduleId1" also matched ": accaScheduleId10;", "...11;",
+        // "...100;" -> deleting/editing one schedule silently wiped every sibling sharing the prefix.
+        return delete(": accaScheduleId$id;")
     }
 
     suspend fun delete(schedule: DjsSchedule): Boolean {
