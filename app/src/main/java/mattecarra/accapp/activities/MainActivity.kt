@@ -24,7 +24,9 @@ import com.afollestad.materialdialogs.input.input
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -266,36 +268,64 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         }
     }
 
-    private fun checkAccInstalled(): Boolean {
-        // AccA controls the ACC module but no longer installs or upgrades it.
-        // The user installs/flashes ACC separately. If it is missing, point them
-        // at the flashable zip and let them retry; never install it automatically.
-        if (!Acc.isAccInstalled(filesDir))
-        {
-            MaterialDialog(this).show {
-                title(R.string.acc_not_installed_title)
-                message(R.string.acc_not_installed_message)
-                positiveButton(R.string.get_acc) {
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
-                    } catch (_: Exception) { }
-                }
-                negativeButton(R.string.retry) {
-                    if (checkAccInstalled()) initUi()
-                }
-                neutralButton(R.string.exit) {
-                    finish()
-                }
-                cancelOnTouchOutside(false)
-                onKeyCodeBackPressed {
-                    finish()
-                    false
+    /**
+     * Detect ACC OFF the main thread, then init the UI on the main thread (or show the
+     * "ACC not found" dialog). The FIRST Shell.su spawns the root shell / shows the root
+     * prompt; doing that synchronously in onCreate froze the UI to a blank/white screen
+     * (ANR). Here the blocking root work runs on Dispatchers.IO and pre-warms Acc.instance
+     * so initUi() never blocks the main thread. Everything is guarded so a failure shows a
+     * message instead of a permanent blank page.
+     */
+    private fun detectAccAndInit() {
+        launch {
+            val installed = withContext(Dispatchers.IO) {
+                try {
+                    val ok = Acc.isAccInstalled(filesDir)
+                    if (ok) Acc.instance   // warm the instance off-main (it does blocking shell)
+                    ok
+                } catch (e: Exception) {
+                    LogExt().e(javaClass.simpleName, "ACC detection failed: ${e.message}"); false
                 }
             }
-            return false
+            if (isFinishing) return@launch
+            if (installed) {
+                try { initUi() }
+                catch (e: Exception) {
+                    LogExt().e(javaClass.simpleName, "initUi failed: ${e.message}")
+                    if (!isFinishing) MaterialDialog(this@MainActivity).show {
+                        title(R.string.acc_installation_failed_title)
+                        message(R.string.acc_installation_failed)
+                        positiveButton(R.string.retry) { detectAccAndInit() }
+                        neutralButton(R.string.exit) { finish() }
+                        cancelOnTouchOutside(false)
+                    }
+                }
+            } else {
+                showAccNotFound()
+            }
         }
+    }
 
-        return true
+    // AccA controls the ACC module but no longer installs it; the user flashes ACC
+    // separately. If it is missing, point them at the zip and let them retry.
+    private fun showAccNotFound() {
+        if (isFinishing) return
+        MaterialDialog(this).show {
+            title(R.string.acc_not_installed_title)
+            message(R.string.acc_not_installed_message)
+            positiveButton(R.string.get_acc) {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
+                } catch (_: Exception) { }
+            }
+            negativeButton(R.string.retry) { detectAccAndInit() }
+            neutralButton(R.string.exit) { finish() }
+            cancelOnTouchOutside(false)
+            onKeyCodeBackPressed {
+                finish()
+                false
+            }
+        }
     }
 
     /*
@@ -414,9 +444,9 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 }
             }
         }
-        else if (checkAccInstalled())
+        else
         {
-            initUi()
+            detectAccAndInit()
         }
     }
 

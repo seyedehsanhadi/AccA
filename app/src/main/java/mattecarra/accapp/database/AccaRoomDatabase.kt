@@ -180,6 +180,12 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
                         .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                        // If a migration ever throws, or the on-disk DB is a newer/corrupt
+                        // version, REBUILD the DB instead of crashing on every launch -- that
+                        // crash is what forced a manual uninstall/reinstall ("blank page until
+                        // reinstall"). Worst case loses saved profiles/scripts, which repopulate.
+                        .fallbackToDestructiveMigration()
+                        .fallbackToDestructiveMigrationOnDowngrade()
                         .addCallback(object : Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
