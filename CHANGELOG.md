@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc5] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc5 — fixes charging overshooting the limit.
+
+### Fixed (bundled daemon)
+- The limit could be **surpassed** (e.g. set 30%, kept charging past it) because the daemon's switch auto-lock trusted *status* alone, and the Pixel/Tensor `charging_state` node reports "stopped" while current keeps flowing. The daemon now **verifies the current actually drops** before accepting a switch, so it locks one that truly cuts (`charge_stop_level`). Works on any SoC; lenient on mA kernels.
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc5 (202505196)**.
+- Version 1.1.6-rc5 (build 71).
+
 ## [1.1.6-rc4] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc4 — smart sensing for every SoC.

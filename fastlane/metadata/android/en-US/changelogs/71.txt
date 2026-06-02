@@ -1,0 +1,1 @@
+- Pre-release (RC5). Bundles ACC rc5: fixes charging overshooting your limit — the daemon now verifies a switch actually stops the current (not just the status) before locking it, so it picks one that truly cuts on Tensor/Pixel and any SoC.
