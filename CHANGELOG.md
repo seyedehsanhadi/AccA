@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc10] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc10 — Pixel/Tensor limit holds automatically. ✅
+
+### Fixed (bundled daemon)
+- **Confirmed working on Android-16 Pixel 9a.** `charge_stop_level` is dead on A16; the real stop is `usb/current_max …0` (cut input current). The daemon's idle-above-pcap path faked "stopped" while charging continued. On Pixel/Tensor it now defaults to **hard-pause** (`allow_idle_above_pcap=false` + `prioritize_batt_idle_mode=no`), so the current-verified auto-lock grabs the working current-limit switch on its own — no manual commands. **Tap the ACC-update prompt, then reboot.**
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc10 (202505201)**.
+- Version 1.1.6-rc10 (build 76).
+
 ## [1.1.6-rc9] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc9 — auto-lock reworked, finally locks on Pixel.

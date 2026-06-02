@@ -1,0 +1,1 @@
+- Pre-release (RC10). Bundles ACC rc10 — Pixel/Tensor limit now holds automatically (confirmed on Android-16 Pixel 9a). charge_stop_level is dead on A16; the daemon now hard-pauses and auto-locks the working current-limit switch (usb/current_max 0). Tap the ACC-update prompt, then reboot.
