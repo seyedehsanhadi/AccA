@@ -1,0 +1,1 @@
+- Pre-release (RC7). Bundles ACC rc7: fixes "stops at the limit then starts charging again" — the daemon now locks the verified working switch and stops re-probing, so it holds. Tap the ACC-update prompt, then reboot.

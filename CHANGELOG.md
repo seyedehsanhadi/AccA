@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc7] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc7 — limit now HOLDS (no more stop-then-reset).
+
+### Fixed (bundled daemon)
+- It stopped at the limit then started charging again ~1% later. Cause: auto-mode re-probes switches every 35 loops, which toggled charging back on, because the working switch was never locked. The daemon now **locks the switch once it's current-verified** and stops re-probing → it holds. **Tap the ACC-update prompt, then reboot** so the rc7 daemon runs.
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc7 (202505198)**.
+- Version 1.1.6-rc7 (build 73).
+
 ## [1.1.6-rc6] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc6 — Pixel/Tensor limit now holds.
