@@ -35,13 +35,15 @@ class ProfileListAdapter internal constructor(context: Context, activeProfileId:
 
         override fun onClick(v: View?)
         {
-            mListener.onProfileClick(mProfilesList[adapterPosition])
+            // adapterPosition is NO_POSITION (-1) mid-animation/after removal;
+            // getOrNull avoids an IndexOutOfBounds crash on a stale click.
+            mProfilesList.getOrNull(adapterPosition)?.let { mListener.onProfileClick(it) }
         }
 
         override fun onLongClick(v: View?): Boolean
         {
             //  mListener.onProfileLongClick(mProfilesList[adapterPosition])
-            mListener.editProfile(mProfilesList[adapterPosition])
+            mProfilesList.getOrNull(adapterPosition)?.let { mListener.editProfile(it) }
             return true
         }
     }
@@ -114,11 +116,16 @@ class ProfileListAdapter internal constructor(context: Context, activeProfileId:
                 menuInflater.inflate(R.menu.profiles_options_menu, this.menu)
 
                 setOnMenuItemClickListener {
+                    // Resolve the live position; the captured one can be stale after
+                    // a list change. getOrNull guards against an out-of-bounds access.
+                    val profileItem = mProfilesList.getOrNull(holder.adapterPosition)
+                        ?: mProfilesList.getOrNull(position)
+                        ?: return@setOnMenuItemClickListener true
                     when (it.itemId)
                     {
-                        R.id.profile_option_menu_edit -> mListener.editProfile(mProfilesList[position])
-                        R.id.profile_option_menu_rename -> mListener.renameProfile(mProfilesList[position])
-                        R.id.profile_option_menu_delete -> mListener.deleteProfile(mProfilesList[position])
+                        R.id.profile_option_menu_edit -> mListener.editProfile(profileItem)
+                        R.id.profile_option_menu_rename -> mListener.renameProfile(profileItem)
+                        R.id.profile_option_menu_delete -> mListener.deleteProfile(profileItem)
                     }
                     true
                 }
@@ -145,7 +152,7 @@ class ProfileListAdapter internal constructor(context: Context, activeProfileId:
 
     override fun getItemCount(): Int = mProfilesList.size
 
-    fun getProfileAt(pos: Int): AccaProfile = mProfilesList[pos]
+    fun getProfileAt(pos: Int): AccaProfile? = mProfilesList.getOrNull(pos)
 
     /**
      * Set the OnProfileClickListener, the parent must implement the interface.

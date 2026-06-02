@@ -12,7 +12,9 @@ import android.view.ViewGroup
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.lifecycle.ViewModelProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.activities.AccConfigEditorActivity
@@ -44,12 +46,17 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
         {
             LogExt().d(javaClass.simpleName,"onActivityResult(): ACC_HAS_CHANGES=true")
 
+            // Safe-cast the returned config; a missing/garbled extra must not crash.
+            val accConfig = data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig ?: return
+
             launch {
-                mSharedViewModel.updateAccConfig(data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig) //TODO: Check assertion
+                mSharedViewModel.updateAccConfig(accConfig)
                 // Remove the current selected profile
                 mSharedViewModel.clearCurrentSelectedProfile()
 
-                updateInfo(getString(R.string.profile_not_selected), data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig)
+                // updateAccConfig suspends; the view may be gone now. Bail if detached.
+                if (_binding == null || !isAdded) return@launch
+                updateInfo(getString(R.string.profile_not_selected), accConfig)
             }
         }
     }
@@ -102,8 +109,18 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
         launch {
 
             val profileId = ProfileUtils.getCurrentProfile(mPrefs)
-            val currentConfig = Acc.instance.readConfig()
+            // readConfig() is a blocking root call; run it off the main thread and
+            // never let a failure crash the dashboard.
+            val currentConfig = try {
+                withContext(Dispatchers.IO) { Acc.instance.readConfig() }
+            } catch (e: Exception) {
+                LogExt().e(javaClass.simpleName, "checkProfile() readConfig failed: ${e.message}")
+                return@launch
+            }
             val selProfile = mViewModel.getProfileById(profileId)
+
+            // The view may have been torn down while we awaited; bail if detached.
+            if (_binding == null || !isAdded) return@launch
 
             var name = getString(R.string.profile_not_selected)
             if (selProfile != null && currentConfig == selProfile.accConfig) name = selProfile.profileName
@@ -166,8 +183,9 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
         binding.itemProfileInfo.visibility = View.VISIBLE;
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String)
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?)
     {
+        // key can be null when all prefs are cleared (Android 11+); compare safely.
         if (key == Constants.PROFILE_KEY) checkProfile()
     }
 }

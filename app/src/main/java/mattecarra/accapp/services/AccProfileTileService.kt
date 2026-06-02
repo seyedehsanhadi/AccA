@@ -40,7 +40,9 @@ class AccProfileTileService: TileService(), CoroutineScope {
 
     private fun updateTile()
     {
-        val tile = qsTile
+        // qsTile is null when the tile isn't currently bound (observeForever can
+        // fire any time); bail instead of NPE-ing on tile.label below.
+        val tile = qsTile ?: return
         val profiles = profilesViewModel.getLiveData().value
 
         if(profiles?.isNotEmpty() == true)
@@ -102,10 +104,12 @@ class AccProfileTileService: TileService(), CoroutineScope {
             launch {
                 val res = Acc.instance.updateAccConfig(profile.accConfig, ConfigUpdaterEnable(mSharedPrefs))
 
-                //Update tile infos
-                qsTile.state =  Tile.STATE_ACTIVE
-                qsTile.label =  if(res.isSuccessful()) getString(R.string.profile_tile_label, profile.profileName) else getString(R.string.error_occurred)
-                qsTile.updateTile()
+                //Update tile infos (qsTile may be null if the tile unbound meanwhile)
+                qsTile?.let { tile ->
+                    tile.state = Tile.STATE_ACTIVE
+                    tile.label = if (res.isSuccessful()) getString(R.string.profile_tile_label, profile.profileName) else getString(R.string.error_occurred)
+                    tile.updateTile()
+                }
 
                 ProfileUtils.saveCurrentProfile(profile.uid, mSharedPrefs)
             }

@@ -74,7 +74,7 @@ class ImportProfilesActivity : AppCompatActivity() {
         var clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         var pasteData: String = ""
 
-        if (clipboard.hasPrimaryClip() && clipboard.primaryClipDescription!!.hasMimeType(MIMETYPE_TEXT_PLAIN)) {
+        if (clipboard.hasPrimaryClip() && clipboard.primaryClipDescription?.hasMimeType(MIMETYPE_TEXT_PLAIN) == true) {
             pasteData = clipboard.primaryClip?.getItemAt(0)?.text.toString()
 
             val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
@@ -83,7 +83,9 @@ class ImportProfilesActivity : AppCompatActivity() {
             val jsonAdapter: JsonAdapter<List<ProfileEntry>> = moshi.adapter(listType)
 
             try {
-                val result = jsonAdapter.fromJson(pasteData) as List<ProfileEntry>
+                // Malformed clipboard JSON must not crash: fromJson can return null
+                // or throw; the catch below shows a toast instead.
+                val result = jsonAdapter.fromJson(pasteData) ?: emptyList<ProfileEntry>()
 
                 for (entry: ProfileEntry in result) {
                     mAdapter.addEntry(entry)

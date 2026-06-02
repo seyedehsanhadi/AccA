@@ -26,7 +26,12 @@ class SettingsActivity: AppCompatActivity(), FragmentManager.OnBackStackChangedL
             mSettingsFragment = SettingsFragment.newInstance()
             supportFragmentManager.beginTransaction().add(R.id.settings_fl, mSettingsFragment, "Settings").commit()
         } else {
-            mSettingsFragment = supportFragmentManager.findFragmentByTag("Settings") as SettingsFragment
+            // The tagged fragment may be absent after process death; fall back to a
+            // fresh instance instead of crashing on a failed cast.
+            mSettingsFragment = (supportFragmentManager.findFragmentByTag("Settings") as? SettingsFragment)
+                ?: SettingsFragment.newInstance().also {
+                    supportFragmentManager.beginTransaction().add(R.id.settings_fl, it, "Settings").commit()
+                }
         }
 
         supportFragmentManager.addOnBackStackChangedListener(this)
@@ -54,7 +59,9 @@ class SettingsActivity: AppCompatActivity(), FragmentManager.OnBackStackChangedL
     }
 
     override fun onBackStackChanged() {
-        mSettingsFragment = supportFragmentManager.findFragmentByTag("Settings") as SettingsFragment
+        (supportFragmentManager.findFragmentByTag("Settings") as? SettingsFragment)?.let {
+            mSettingsFragment = it
+        }
     }
 
     companion object {

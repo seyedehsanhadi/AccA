@@ -52,8 +52,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
     * Example:
     * val parameter = getAccConfigValue { it.oneParameter }
     * */
-    fun <T> getAccConfigValue(callback: (AccConfig) -> T): T {
-        return callback(config.value!!.first!!)
+    fun <T> getAccConfigValue(callback: (AccConfig) -> T): T? {
+        // config may not be loaded yet, or may have loaded null on a parse failure.
+        // Return null instead of force-unwrapping into a crash.
+        return config.value?.first?.let(callback)
     }
 
     /*
@@ -64,7 +66,8 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
     * }
     * */
     suspend fun updateAccConfigValue(operation: (AccConfig) -> Boolean) {
-        val value = config.value!!.first!!
+        // No-op if config isn't loaded (or loaded null) rather than crashing on !!.
+        val value = config.value?.first ?: return
 
         if(operation(value)) {
             this.config.postValue(Pair(value, null))

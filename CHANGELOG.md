@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc11] - 2026-06-02
+
+**Pre-release.** App-wide crash hardening + all-SoC stop switches.
+
+### Fixed
+- **Crash hardening sweep across the whole app** (26+ files): removed 16 `!!` force-unwraps, made 14 unchecked casts null-safe, guarded 13 RecyclerView index accesses (no more `IndexOutOfBounds` on stale clicks), wrapped 8 Room/JSON parses in try/catch (a corrupt row can't take down profiles/schedules), fixed a **launch crash** in `MainApplication.onCreate` (non-numeric pref), the **#258 `runBlocking` onCreate crash** in the config editor, moved root reads off the main thread (ANR), and guarded the quick-settings tiles + version probes. The app should no longer crash on malformed config, corrupt DB, stale UI, or missing root.
+- **All-SoC stop switches** in the bundled daemon: generic `current→0` switches (the method proven on A16 Pixel) for Qualcomm/MediaTek/etc.
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc11 (202505202)**.
+- Version 1.1.6-rc11 (build 77).
+
 ## [1.1.6-rc10] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc10 — Pixel/Tensor limit holds automatically. ✅

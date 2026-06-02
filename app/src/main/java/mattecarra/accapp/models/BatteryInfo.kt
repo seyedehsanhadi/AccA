@@ -99,10 +99,12 @@ class BatteryInfo(val name: String,
         // so the reading is correct on any ACC. A battery is physically ~2.5-4.5 V, so the
         // three scales never overlap. Display only — never feeds an ACC control command.
         if (voltageNow <= 0f) return voltageNow
+        // Display rounding only; parse defensively so a locale-formatted string
+        // (comma decimal) can never throw NumberFormatException on the UI thread.
         return when {
-            voltageNow >= 100000f -> String.format("%.3f", voltageNow / 1000000f).toFloat() // microvolts
-            voltageNow >= 100f    -> String.format("%.3f", voltageNow / 1000f).toFloat()     // millivolts
-            else                  -> String.format("%.3f", voltageNow).toFloat()             // already volts
+            voltageNow >= 100000f -> String.format("%.3f", voltageNow / 1000000f).replace(",", ".").toFloatOrNull() ?: (voltageNow / 1000000f) // microvolts
+            voltageNow >= 100f    -> String.format("%.3f", voltageNow / 1000f).replace(",", ".").toFloatOrNull() ?: (voltageNow / 1000f)        // millivolts
+            else                  -> String.format("%.3f", voltageNow).replace(",", ".").toFloatOrNull() ?: voltageNow                          // already volts
         }
     }
 
@@ -135,9 +137,12 @@ class BatteryInfo(val name: String,
 
     fun getTemperature(unit: TemperatureUnit): Float
     {
-        val temp = String.format("%.1f", temperature * 1.8 + 32).replace(",",".", true)
-        return if (unit == TemperatureUnit.C) temperature.toFloat() // BAG IN FORMAT() ",." !!
-        else temp.toFloat() // TemperatureUnit.F
+        // Display-only; runs on every dashboard/widget refresh. A locale-formatted
+        // string round-trip could throw NumberFormatException, so parse defensively
+        // and fall back to the raw arithmetic value (never crash the UI).
+        val fahrenheit = (temperature * 1.8f + 32f)
+        return if (unit == TemperatureUnit.C) temperature.toFloat()
+        else String.format("%.1f", fahrenheit).replace(",", ".", true).toFloatOrNull() ?: fahrenheit
     }
 
     fun getTemperature(unit: TemperatureUnit, withMeaUnit: Boolean): String

@@ -29,9 +29,15 @@ class AboutActivity : AppCompatActivity() {
         setSupportActionBar(binding.aboutToolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
-        // Set appropriate version numbers
-        val app = applicationContext.packageManager.getPackageInfo(packageName, 0)
-        binding.aboutAccaVersionTv.text = String.format("%s (%s)", app.versionName, app.versionCode.toString())
+        // Set appropriate version numbers. getPackageInfo can throw
+        // NameNotFoundException (e.g. odd packaging states); guard so the
+        // About screen never crashes on open.
+        try {
+            val app = applicationContext.packageManager.getPackageInfo(packageName, 0)
+            binding.aboutAccaVersionTv.text = String.format("%s (%s)", app.versionName, app.versionCode.toString())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         binding.aboutAccDaemonVersionTv.text = Acc.getAccVersionToStr()
         binding.aboutAccApiVersionTv.text = Acc.instance.version.toString()
     }

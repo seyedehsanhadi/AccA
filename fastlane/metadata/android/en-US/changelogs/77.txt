@@ -1,0 +1,1 @@
+- Pre-release (RC11). App-wide crash hardening (26+ files): removed force-unwraps and unsafe casts, guarded list indices and DB/JSON parsing, fixed a launch crash and the config-editor onCreate crash, moved root reads off the main thread. Plus bundled ACC rc11 with generic "cut current to 0" stop switches for all SoCs. Tap the ACC-update prompt, then reboot.

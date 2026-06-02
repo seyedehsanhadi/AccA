@@ -57,10 +57,10 @@ class BatteryDialogActivity : ScopedAppActivity()
         //--------------------------------------------------
         // select locale and theme day\night
 
-        val spl = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this).getString("language", "def")
+        val spl = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this).getString("language", "def") ?: "def"
 
         val config = resources.configuration
-        val locale = if (spl.equals("def")) Locale.getDefault() else Locale(spl)
+        val locale = if (spl == "def") Locale.getDefault() else Locale(spl)
 
         Locale.setDefault(locale)
 

@@ -43,7 +43,8 @@ fun MaterialDialog.progress(
     if(res != null || text != null) {
         val resources = windowContext.resources
         val textView = getTextView()
-        textView.text = text ?: resources.getString(res!!)
+        // text wins; otherwise res is non-null per the guard above. Resolve without !!.
+        textView.text = text ?: res?.let { resources.getString(it) } ?: ""
     }
 
     return this

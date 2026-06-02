@@ -64,7 +64,9 @@ fun MaterialDialog.powerLimitDialog(
 
     fun checkVolt(value: String?)
     {
-        inputVoltageMaxOk = !value.isNullOrEmpty() && value.toInt() in 3700..4300
+        // toIntOrNull: non-numeric or overflowing EditText input must invalidate
+        // the field, never crash the dialog.
+        inputVoltageMaxOk = (value?.toIntOrNull() ?: -1) in 3700..4300
         hideHintErrVolt(inputVoltageMaxOk)
         setActionButtonEnabled(WhichButton.POSITIVE, inputCurrentMaxOK && inputVoltageMaxOk && inputVoltageControlFileOk)
     }
@@ -103,7 +105,9 @@ fun MaterialDialog.powerLimitDialog(
 
     fun checkCurrent(value: String?)
     {
-        inputCurrentMaxOK = !value.isNullOrEmpty() && value.toInt() > 0
+        // toIntOrNull: non-numeric or overflowing EditText input must invalidate
+        // the field, never crash the dialog.
+        inputCurrentMaxOK = (value?.toIntOrNull() ?: 0) > 0
         hideHintErrCurrent(inputCurrentMaxOK)
         setActionButtonEnabled(WhichButton.POSITIVE, inputCurrentMaxOK && inputVoltageMaxOk && inputVoltageControlFileOk)
     }

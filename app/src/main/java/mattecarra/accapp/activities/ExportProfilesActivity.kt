@@ -36,8 +36,10 @@ class ExportProfilesActivity: AppCompatActivity() {
         var exportRecycler: RecyclerView = findViewById(R.id.export_entries_rv)
         var layoutManager = LinearLayoutManager(this)
 
-        // Read from intent and deserialise
-        mEntries = intent.getSerializableExtra("list") as ArrayList<ProfileEntry>
+        // Read from intent and deserialise. Safe-cast so a missing/garbled extra
+        // yields an empty list instead of crashing the activity on open.
+        @Suppress("UNCHECKED_CAST")
+        mEntries = (intent.getSerializableExtra("list") as? List<ProfileEntry>) ?: emptyList()
 
         exportRecycler.layoutManager = layoutManager
         exportRecycler.adapter = mAdapter

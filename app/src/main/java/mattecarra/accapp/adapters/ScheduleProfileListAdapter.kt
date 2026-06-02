@@ -93,7 +93,8 @@ class ScheduleProfileListAdapter internal constructor(context: Context) :
 
         holder.scheduleToogleSwitch.isChecked = schedule.isEnabled
         holder.scheduleToogleSwitch.setOnCheckedChangeListener { _, isChecked ->
-            mListener.onScheduleToggle(mScheduleList[position], isChecked)
+            // Resolve live position; getOrNull guards a stale/out-of-bounds index.
+            mScheduleList.getOrNull(holder.adapterPosition)?.let { mListener.onScheduleToggle(it, isChecked) }
         }
 
         holder.profileTv.text = schedule.profile.scheduleName
@@ -103,12 +104,15 @@ class ScheduleProfileListAdapter internal constructor(context: Context) :
                 menuInflater.inflate(R.menu.schedules_options_menu, this.menu)
 
                 setOnMenuItemClickListener {
+                    val scheduleItem = mScheduleList.getOrNull(holder.adapterPosition)
+                        ?: mScheduleList.getOrNull(position)
+                        ?: return@setOnMenuItemClickListener true
                     when (it.itemId) {
                         R.id.schedules_option_menu_edit -> {
-                            mListener.onScheduleProfileClick(mScheduleList[position])
+                            mListener.onScheduleProfileClick(scheduleItem)
                         }
                         R.id.schedules_option_menu_delete -> {
-                            mListener.onScheduleDeleteClick(mScheduleList[position])
+                            mListener.onScheduleDeleteClick(scheduleItem)
                         }
                     }
                     true
@@ -128,8 +132,8 @@ class ScheduleProfileListAdapter internal constructor(context: Context) :
         return mScheduleList.size
     }
 
-    fun getScheduleAt(pos: Int): Schedule {
-        return mScheduleList[pos]
+    fun getScheduleAt(pos: Int): Schedule? {
+        return mScheduleList.getOrNull(pos)
     }
 
     /**

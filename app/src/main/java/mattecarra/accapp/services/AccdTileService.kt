@@ -52,15 +52,16 @@ class AccdTileService: TileService(), CoroutineScope
             {
                 if (accdRunning)
                 {
+                    // qsTile can be null if the tile unbound; guard against NPE.
                     val tile = qsTile
-                    tile.label = getString(R.string.wait) //stop deamon a bit, so I moved _updateTile before that
-                    tile.updateTile()
+                    tile?.label = getString(R.string.wait) //stop deamon a bit, so I moved _updateTile before that
+                    tile?.updateTile()
 
                     //TODO add a mutex instead of relaunching the coroutine
                     launch {
                         Acc.instance.abcStopDaemon()
-                        tile.label = getString(R.string.tile_acc_disabled)
-                        tile.updateTile()
+                        tile?.label = getString(R.string.tile_acc_disabled)
+                        tile?.updateTile()
                     }
 
                 } else launch { Acc.instance.abcStartDaemon() }
@@ -98,7 +99,8 @@ class AccdTileService: TileService(), CoroutineScope
     {
         if(Shell.rootAccess()) _updateTile() else
         {
-            val tile = qsTile
+            // qsTile is null when the tile isn't currently bound; bail instead of NPE.
+            val tile = qsTile ?: return
             tile.label = getString(R.string.tile_acc_no_root)
             tile.state = Tile.STATE_UNAVAILABLE
             tile.icon = Icon.createWithResource(this, R.drawable.ic_battery_charging_full)
@@ -114,7 +116,8 @@ class AccdTileService: TileService(), CoroutineScope
 
             LogExt().d(LOG_TAG, "_updateTile $mAccdRunning $mCharging")
 
-            val tile = qsTile
+            // qsTile is null when the tile isn't currently bound; bail instead of NPE.
+            val tile = qsTile ?: return@launch
             tile.label = getString(if(mAccdRunning) R.string.tile_acc_enabled else R.string.tile_acc_disabled)
             tile.state = if(mAccdRunning) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
 

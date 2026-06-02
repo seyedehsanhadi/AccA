@@ -85,39 +85,44 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setDisplayShowHomeEnabled(true)
 
+        // Saved-state / intent extras are deserialized below. A malformed or
+        // mistyped extra (wrong class, null) must NOT crash the editor, so every
+        // cast is null-safe (`as?`) and falls back to a fresh profile/config.
         val profile = when // load profile from intent
         {
             savedInstanceState?.containsKey(Constants.PROFILE_CONFIG_KEY) == true ->
-                savedInstanceState.getSerializable(Constants.PROFILE_CONFIG_KEY) as AccaProfile
+                savedInstanceState.getSerializable(Constants.PROFILE_CONFIG_KEY) as? AccaProfile
 
             intent.hasExtra(Constants.PROFILE_CONFIG_KEY) ->
-                intent.getSerializableExtra(Constants.PROFILE_CONFIG_KEY) as AccaProfile
+                intent.getSerializableExtra(Constants.PROFILE_CONFIG_KEY) as? AccaProfile
 
-            else ->
-            {
-                accConfigOnly = true
-                AccaProfile(-1,"", AccConfig(), ProfileEnables())
-            }
+            else -> null
+        } ?: run {
+            accConfigOnly = true
+            AccaProfile(-1, "", AccConfig(), ProfileEnables())
         }
 
         val config = when // load config from intent or current config
         {
             savedInstanceState?.containsKey(Constants.ACC_CONFIG_KEY) == true ->
-                savedInstanceState.getSerializable(Constants.ACC_CONFIG_KEY) as AccConfig
+                savedInstanceState.getSerializable(Constants.ACC_CONFIG_KEY) as? AccConfig
 
             intent.hasExtra(Constants.ACC_CONFIG_KEY) ->
-                intent.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig
+                intent.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig
 
-            else -> try
-            {
-                runBlocking { Acc.instance.readConfig() }
-            }
-            catch (ex: Exception)
-            {
-                ex.printStackTrace()
-                showConfigReadError()
-                runBlocking { Acc.instance.readDefaultConfig() } //if mAccConfig is null I use default mAccConfig values.
-            }
+            else -> null
+        } ?: try
+        {
+            runBlocking { Acc.instance.readConfig() }
+        }
+        catch (ex: Exception)
+        {
+            ex.printStackTrace()
+            showConfigReadError()
+            // readDefaultConfig() is also a root call and can throw; if even that
+            // fails, fall back to in-memory defaults so onCreate cannot crash.
+            try { runBlocking { Acc.instance.readDefaultConfig() } } //if mAccConfig is null I use default mAccConfig values.
+            catch (ex2: Exception) { ex2.printStackTrace(); AccConfig() }
         }
 
         if (accConfigOnly) profile.accConfig = config
@@ -644,12 +649,14 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 }
 
                 positiveButton(R.string.save) {
-                    viewModel.chargeSwitch = if (currentIndex == 0) null else chargingSwitches[currentIndex]
+                    // currentIndex can be stale relative to the list (added/removed
+                    // switches); getOrNull keeps it from throwing IndexOutOfBounds.
+                    viewModel.chargeSwitch = if (currentIndex <= 0) null else chargingSwitches.getOrNull(currentIndex)
                     dismiss()
                 }
 
                 neutralButton(R.string.test_switch) {
-                    val switch = if (currentIndex == 0) null else chargingSwitches[currentIndex]
+                    val switch = if (currentIndex <= 0) null else chargingSwitches.getOrNull(currentIndex)
 
                     val dialog = MaterialDialog(this@AccConfigEditorActivity).show {
                         title(R.string.test_switch)

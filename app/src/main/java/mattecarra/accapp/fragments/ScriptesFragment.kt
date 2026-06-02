@@ -94,10 +94,12 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
 
             private var swipeBack: Boolean = true
             private val background = ColorDrawable()
-            private val backgroundColour = ContextCompat.getColor(context as Context, R.color.colorSuccessful)
-            private val applyIcon = ContextCompat.getDrawable(context as Context, R.drawable.ic_outline_check_circle_24px)
-            private val intrinsicWidth = applyIcon!!.intrinsicWidth
-            private val intrinsicHeight = applyIcon!!.intrinsicHeight
+            // Use mContext (set from requireContext() in onViewCreated) instead of
+            // the nullable fragment `context` to avoid a null-cast NPE.
+            private val backgroundColour = ContextCompat.getColor(mContext, R.color.colorSuccessful)
+            private val applyIcon = ContextCompat.getDrawable(mContext, R.drawable.ic_outline_check_circle_24px)
+            private val intrinsicWidth = applyIcon?.intrinsicWidth ?: 0
+            private val intrinsicHeight = applyIcon?.intrinsicHeight ?: 0
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int)
             {
@@ -137,12 +139,14 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
                     val iconRight = itemView.right - iconMargin
                     val iconBottom = iconTop + intrinsicWidth
 
-                    // Draw the apply icon
-                    val wrapped = DrawableCompat.wrap(applyIcon!!)
-                    DrawableCompat.setTint(wrapped, Color.WHITE)
-                    wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
+                    // Draw the apply icon (skip if the drawable failed to load)
+                    applyIcon?.let { icon ->
+                        val wrapped = DrawableCompat.wrap(icon)
+                        DrawableCompat.setTint(wrapped, Color.WHITE)
+                        wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
 
-                    wrapped.draw(c)
+                        wrapped.draw(c)
+                    }
                 }
 
                 if (dX > 0)
@@ -158,12 +162,14 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
                     val iconRight = itemView.left + iconMargin + intrinsicWidth
                     val iconBottom = iconTop + intrinsicWidth
 
-                    // Draw the apply icon
-                    val wrapped = DrawableCompat.wrap(applyIcon!!)
-                    DrawableCompat.setTint(wrapped, Color.WHITE)
-                    wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
+                    // Draw the apply icon (skip if the drawable failed to load)
+                    applyIcon?.let { icon ->
+                        val wrapped = DrawableCompat.wrap(icon)
+                        DrawableCompat.setTint(wrapped, Color.WHITE)
+                        wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
 
-                    wrapped.draw(c)
+                        wrapped.draw(c)
+                    }
                 }
 
                 super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
@@ -187,13 +193,15 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
 
                         if (swipeBack)
                         {
+                            // getScriptAt is bounds-checked (null on NO_POSITION);
+                            // only act when a real script resolves.
                             if (dX > 300)
                             { // If slid towards right > 300px?, adjust for sensitivity
-                                onScriptClick(mScriptesAdapter.getScriptAt(viewHolder.adapterPosition))
+                                mScriptesAdapter.getScriptAt(viewHolder.adapterPosition)?.let { onScriptClick(it) }
                             }
                             if (dX < -300)
                             { // Show right side
-                                onScriptRunSilent(mScriptesAdapter.getScriptAt(viewHolder.adapterPosition))
+                                mScriptesAdapter.getScriptAt(viewHolder.adapterPosition)?.let { onScriptRunSilent(it) }
                             }
                         }
 

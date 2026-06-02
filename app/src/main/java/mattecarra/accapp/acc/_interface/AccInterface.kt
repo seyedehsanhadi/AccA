@@ -171,6 +171,18 @@ interface AccInterface {
     }
 
     suspend fun getAccVersion(): Int? = withContext(Dispatchers.IO) {
-        Shell.su("/dev/.vr25/acc/acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull() ?: Shell.su("acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull()
+        // Crash-safe: a thrown libsu exception (no root, I/O error) must never propagate.
+        // split() always yields >=1 element so last()/first() cannot throw; toIntOrNull()
+        // guards the parse; on any failure fall through to null.
+        val primary = try {
+            Shell.su("/dev/.vr25/acc/acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull()
+        } catch (e: Exception) {
+            null
+        }
+        primary ?: try {
+            Shell.su("acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull()
+        } catch (e: Exception) {
+            null
+        }
     }
 }

@@ -45,7 +45,9 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val enablesLiveData = MutableLiveData(_profile.pEnables)
     var enables: ProfileEnables
-        get() = enablesLiveData.value!!
+        // LiveData is seeded non-null; fall back to the seed instead of !! so a
+        // never-expected null can't crash the editor.
+        get() = enablesLiveData.value ?: _profile.pEnables
         set(value) {
             if (enablesLiveData.value != value) {
                 addToHistory(profile)
@@ -56,7 +58,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val capacityLiveData = MutableLiveData(_profile.accConfig.configCapacity)
     var capacity: AccConfig.ConfigCapacity
-        get() = capacityLiveData.value!!
+        get() = capacityLiveData.value ?: _profile.accConfig.configCapacity
         set(value) {
             if (capacityLiveData.value != value) {
                 addToHistory(profile)
@@ -67,7 +69,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val voltageLiveData = MutableLiveData(_profile.accConfig.configVoltage)
     var voltageLimit: AccConfig.ConfigVoltage
-        get() = voltageLiveData.value!!
+        get() = voltageLiveData.value ?: _profile.accConfig.configVoltage
         set(value) {
             if (voltageLiveData.value != value) {
                 addToHistory(profile)
@@ -89,7 +91,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val temperatureLiveData = MutableLiveData(_profile.accConfig.configTemperature)
     var temperature: AccConfig.ConfigTemperature
-        get() = temperatureLiveData.value!!
+        get() = temperatureLiveData.value ?: _profile.accConfig.configTemperature
         set(value) {
             if (temperatureLiveData.value != value) {
                 addToHistory(profile)
@@ -145,7 +147,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val configIsAutomaticSwitchEnabled = MutableLiveData(_profile.accConfig.configIsAutomaticSwitchingEnabled)
     var isAutomaticSwitchEanbled: Boolean
-        get() = configIsAutomaticSwitchEnabled.value!!
+        get() = configIsAutomaticSwitchEnabled.value ?: _profile.accConfig.configIsAutomaticSwitchingEnabled
         set(value) {
             if (configIsAutomaticSwitchEnabled.value != value) {
                 addToHistory(profile)
@@ -156,7 +158,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val prioritizeBatteryIdleModeLiveData = MutableLiveData(_profile.accConfig.prioritizeBatteryIdleMode)
     var prioritizeBatteryIdleMode: Boolean
-        get() = prioritizeBatteryIdleModeLiveData.value!!
+        get() = prioritizeBatteryIdleModeLiveData.value ?: _profile.accConfig.prioritizeBatteryIdleMode
         set(value) {
             if (prioritizeBatteryIdleModeLiveData.value != value) {
                 addToHistory(profile)
@@ -167,7 +169,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val resetBSOnPauseLiveData = MutableLiveData(_profile.accConfig.configResetBsOnPause)
     var resetBSOnPause: Boolean
-        get() = resetBSOnPauseLiveData.value!!
+        get() = resetBSOnPauseLiveData.value ?: _profile.accConfig.configResetBsOnPause
         set(value) {
             if (resetBSOnPauseLiveData.value != value) {
                 addToHistory(profile)
@@ -178,7 +180,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
 
     private val resetBSOnUnplugLiveData = MutableLiveData(_profile.accConfig.configResetUnplugged)
     var resetBSOnUnplug: Boolean
-        get() = resetBSOnUnplugLiveData.value!!
+        get() = resetBSOnUnplugLiveData.value ?: _profile.accConfig.configResetUnplugged
         set(value) {
             if (resetBSOnUnplugLiveData.value != value) {
                 addToHistory(profile)

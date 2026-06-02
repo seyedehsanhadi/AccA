@@ -467,10 +467,10 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
 
         //--------------------------------------------------
 
-        val spl = PreferenceManager.getDefaultSharedPreferences(this).getString("language", "def")
+        val spl = PreferenceManager.getDefaultSharedPreferences(this).getString("language", "def") ?: "def"
 
         val config = resources.configuration
-        val locale = if (spl.equals("def")) Locale.getDefault() else Locale(spl)
+        val locale = if (spl == "def") Locale.getDefault() else Locale(spl)
 
         Locale.setDefault(locale)
 
@@ -548,11 +548,15 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             ACC_CONFIG_EDITOR_REQUEST -> {
                 if (resultCode == Activity.RESULT_OK) {
                     if (data?.getBooleanExtra(Constants.ACC_HAS_CHANGES, false) == true) {
-                        launch {
-                            _sharedViewModel.updateAccConfig(data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig) //TODO: Check assertion
+                        // Safe-cast the returned config; a missing/garbled extra must not crash.
+                        val accConfig = data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig
+                        if (accConfig != null) {
+                            launch {
+                                _sharedViewModel.updateAccConfig(accConfig)
 
-                            // Remove the current selected profile
-                            _sharedViewModel.clearCurrentSelectedProfile()
+                                // Remove the current selected profile
+                                _sharedViewModel.clearCurrentSelectedProfile()
+                            }
                         }
                     }
                 }
@@ -562,7 +566,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 if (resultCode == Activity.RESULT_OK) {
                     if (data != null) {
                         val accConfig: AccConfig =
-                            data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig //TODO: Check assertion
+                            data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig ?: return
                         val profileNameRegex = """^[^\\/:*?"<>|]+${'$'}""".toRegex()
                         MaterialDialog(this)
                             .show {
@@ -599,7 +603,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                     {
 
                         val accConfig: AccConfig =
-                            data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig
+                            data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig ?: return
                         val editorData = data.getBundleExtra(Constants.DATA_KEY) ?: return
                         val profileId = editorData.getInt(Constants.PROFILE_ID_KEY)
 
@@ -631,7 +635,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                     time,
                                     executeOnce,
                                     executeOnBoot,
-                                    data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig
+                                    data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig
                                         ?: return
                                 )
                         }
@@ -660,7 +664,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                     time,
                                     executeOnce,
                                     executeOnBoot,
-                                    data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig
+                                    data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig
                                         ?: return
                                 )
                         }
@@ -670,8 +674,11 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             ACC_IMPORT_PROFILE_REQUEST -> {
                 if (resultCode == Activity.RESULT_OK) {
                     // todo: read seralized profiles here to import via ViewModel
+                    // Safe-cast the serialized list: a missing/garbled extra returns
+                    // null instead of throwing ClassCastException/NPE.
+                    @Suppress("UNCHECKED_CAST")
                     val imports =
-                        data?.getSerializableExtra(Constants.DATA_KEY) as List<ProfileEntry>
+                        data?.getSerializableExtra(Constants.DATA_KEY) as? List<ProfileEntry>
                     if (!imports.isNullOrEmpty()) {
                         for (entry: ProfileEntry in imports) {
                             _profilesViewModel.insertProfile(
@@ -683,12 +690,12 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                 )
                             )
                         }
+                        Toast.makeText(
+                            this,
+                            getString(R.string.import_profile_success, imports.size),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
-                    Toast.makeText(
-                        this,
-                        getString(R.string.import_profile_success, imports.size),
-                        Toast.LENGTH_SHORT
-                    ).show()
                 }
             }
         }

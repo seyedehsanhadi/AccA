@@ -29,7 +29,9 @@ class ScriptListAdapter internal constructor(context: Context) : RecyclerView.Ad
 
         init
         {
-            itemView.setOnClickListener { mListener.onScriptClick(mScriptsList[adapterPosition]) }
+            // adapterPosition can be NO_POSITION (-1) on a stale click; getOrNull
+            // prevents an IndexOutOfBounds crash.
+            itemView.setOnClickListener { mScriptsList.getOrNull(adapterPosition)?.let { s -> mListener.onScriptClick(s) } }
         }
     }
 
@@ -54,14 +56,18 @@ class ScriptListAdapter internal constructor(context: Context) : RecyclerView.Ad
                 menuInflater.inflate(R.menu.scripts_options_menu, this.menu)
 
                 setOnMenuItemClickListener {
+                    // Resolve the live position; the captured one can be stale.
+                    val scriptItem = mScriptsList.getOrNull(holder.adapterPosition)
+                        ?: mScriptsList.getOrNull(position)
+                        ?: return@setOnMenuItemClickListener true
                     when (it.itemId)
                     {
-                        R.id.script_option_menu_run -> mListener.onScriptClick(mScriptsList[position])
-                        R.id.script_option_menu_run_silent -> mListener.onScriptRunSilent(mScriptsList[position])
-                        R.id.script_option_menu_edit -> mListener.onEditScript(mScriptsList[position])
-                        R.id.script_option_menu_copy -> mListener.onCopyScript(mScriptsList[position])
-                        R.id.script_option_menu_rename -> mListener.onRenameScript(mScriptsList[position])
-                        R.id.script_option_menu_delete -> mListener.onDeleteScript(mScriptsList[position])
+                        R.id.script_option_menu_run -> mListener.onScriptClick(scriptItem)
+                        R.id.script_option_menu_run_silent -> mListener.onScriptRunSilent(scriptItem)
+                        R.id.script_option_menu_edit -> mListener.onEditScript(scriptItem)
+                        R.id.script_option_menu_copy -> mListener.onCopyScript(scriptItem)
+                        R.id.script_option_menu_rename -> mListener.onRenameScript(scriptItem)
+                        R.id.script_option_menu_delete -> mListener.onDeleteScript(scriptItem)
                     }
                     true
                 }
@@ -83,9 +89,9 @@ class ScriptListAdapter internal constructor(context: Context) : RecyclerView.Ad
         return mScriptsList.size
     }
 
-    fun getScriptAt(pos: Int): AccaScript
+    fun getScriptAt(pos: Int): AccaScript?
     {
-        return mScriptsList[pos]
+        return mScriptsList.getOrNull(pos)
     }
 
     fun setOnClickListener(scriptClickListener: OnScriptClickListener)

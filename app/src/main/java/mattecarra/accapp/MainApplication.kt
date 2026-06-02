@@ -25,7 +25,9 @@ class MainApplication: MultiDexApplication()
     override fun onCreate()
     {
         super.onCreate()
-        mDEBUG = (getDefaultSharedPreferences(applicationContext).getString("appdebug", "0") ?: "0").toInt()
+        // toIntOrNull: a non-numeric "appdebug" pref (corruption, restored backup,
+        // ListPreference edge) must not crash the whole app on launch.
+        mDEBUG = (getDefaultSharedPreferences(applicationContext).getString("appdebug", "0") ?: "0").toIntOrNull() ?: 0
         LogExt().s(javaClass.simpleName, "DEBUG=$mDEBUG " +when(mDEBUG) {0->"[NONE]" 1->"[CONSOLE]" 2->"[FILE]" else->"[UNKNOWN]"})
     }
 }

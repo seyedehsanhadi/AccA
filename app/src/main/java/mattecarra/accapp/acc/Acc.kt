@@ -18,7 +18,7 @@ import java.net.URL
 import kotlin.math.abs
 
 object Acc {
-    const val bundledVersion = 202505201
+    const val bundledVersion = 202505202
     private val FILES_DIR = "/data/data/mattecarra.accapp/files"
 
     /*
@@ -175,14 +175,29 @@ object Acc {
     }
 
     private fun getAccVersion(): Int? {
-        return Shell.su("/dev/.vr25/acc/acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull() ?: getAccVersionLegacy()
+        // Crash-safe: this runs at startup (Acc.instance) before root may be granted, so a
+        // thrown libsu exception (no shell, I/O error) must never propagate. split() never
+        // returns an empty list, so last()/first() are safe; toIntOrNull() guards the parse.
+        return try {
+            Shell.su("/dev/.vr25/acc/acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull()
+        } catch (e: Exception) {
+            null
+        } ?: getAccVersionLegacy()
     }
 
     fun getAccVersionToStr(): String {
-        return Shell.su("/dev/acca --version").exec().out.joinToString(separator = "\n").toString()
+        return try {
+            Shell.su("/dev/acca --version").exec().out.joinToString(separator = "\n")
+        } catch (e: Exception) {
+            ""
+        }
     }
 
     private fun getAccVersionLegacy(): Int? {
-        return Shell.su("acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull()
+        return try {
+            Shell.su("acc --version").exec().out.joinToString(separator = "\n").split("(").last().split(")").first().trim().toIntOrNull()
+        } catch (e: Exception) {
+            null
+        }
     }
 }

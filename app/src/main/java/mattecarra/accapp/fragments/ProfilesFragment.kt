@@ -26,7 +26,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.input.input
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp._interface.OnProfileClickListener
 import mattecarra.accapp.acc.Acc
@@ -66,12 +68,10 @@ class ProfilesFragment : ScopedFragment(),
 
         if (requestCode == 7 && resultCode == Activity.RESULT_OK && data?.getBooleanExtra(Constants.ACC_HAS_CHANGES, false) == true)
         {
+            // Safe-cast the returned profile; a missing/garbled extra must not crash.
+            val newProfile = data.getSerializableExtra(Constants.PROFILE_CONFIG_KEY) as? AccaProfile ?: return
+
             launch {
-
-                val uid = data.getIntExtra(Constants.PROFILE_ID_KEY, -1) as Int
-                val newConfig = data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as AccConfig
-                val newProfile = data.getSerializableExtra(Constants.PROFILE_CONFIG_KEY) as AccaProfile
-
                 mProfilesViewModel.updateProfile(newProfile)
                 Toast.makeText(mContext, mContext.getString(R.string.profile_tile_label, newProfile.profileName) + '\n' + mContext.getString(R.string.update_completed), Toast.LENGTH_SHORT).show()
             }
@@ -124,8 +124,8 @@ class ProfilesFragment : ScopedFragment(),
             private val backgroundColour = ContextCompat.getColor(mContext, R.color.colorSuccessful)
             private val applyIcon = ContextCompat.getDrawable(mContext, R.drawable.ic_outline_check_circle_24px
             )
-            private val intrinsicWidth = applyIcon!!.intrinsicWidth
-            private val intrinsicHeight = applyIcon!!.intrinsicHeight
+            private val intrinsicWidth = applyIcon?.intrinsicWidth ?: 0
+            private val intrinsicHeight = applyIcon?.intrinsicHeight ?: 0
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int)
             {}
@@ -161,12 +161,14 @@ class ProfilesFragment : ScopedFragment(),
                     val iconRight = itemView.right - iconMargin
                     val iconBottom = iconTop + intrinsicWidth
 
-                    // Draw the apply icon
-                    val wrapped = DrawableCompat.wrap(applyIcon!!)
-                    DrawableCompat.setTint(wrapped, Color.WHITE)
-                    wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
+                    // Draw the apply icon (skip if the drawable failed to load)
+                    applyIcon?.let { icon ->
+                        val wrapped = DrawableCompat.wrap(icon)
+                        DrawableCompat.setTint(wrapped, Color.WHITE)
+                        wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
 
-                    wrapped.draw(c)
+                        wrapped.draw(c)
+                    }
                 }
 
                 if (dX > 0) {
@@ -181,12 +183,14 @@ class ProfilesFragment : ScopedFragment(),
                     val iconRight = itemView.left + iconMargin + intrinsicWidth
                     val iconBottom = iconTop + intrinsicWidth
 
-                    // Draw the apply icon
-                    val wrapped = DrawableCompat.wrap(applyIcon!!)
-                    DrawableCompat.setTint(wrapped, Color.WHITE)
-                    wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
+                    // Draw the apply icon (skip if the drawable failed to load)
+                    applyIcon?.let { icon ->
+                        val wrapped = DrawableCompat.wrap(icon)
+                        DrawableCompat.setTint(wrapped, Color.WHITE)
+                        wrapped.setBounds(iconLeft, iconTop, iconRight, iconBottom)
 
-                    wrapped.draw(c)
+                        wrapped.draw(c)
+                    }
                 }
 
                 super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
@@ -209,11 +213,13 @@ class ProfilesFragment : ScopedFragment(),
 
                         if (swipeBack) {
 
+                            // getProfileAt is bounds-checked (null on NO_POSITION);
+                            // only fire the click when a real profile resolves.
                             if (dX > 300) { // If slid towards right > 300px?, adjust for sensitivity
-                                onProfileClick(mProfilesAdapter.getProfileAt(viewHolder.adapterPosition))
+                                mProfilesAdapter.getProfileAt(viewHolder.adapterPosition)?.let { onProfileClick(it) }
                             }
                             if (dX < -300) { // Show right side
-                                onProfileClick(mProfilesAdapter.getProfileAt(viewHolder.adapterPosition))
+                                mProfilesAdapter.getProfileAt(viewHolder.adapterPosition)?.let { onProfileClick(it) }
                             }
                         }
 
@@ -233,17 +239,26 @@ class ProfilesFragment : ScopedFragment(),
         itemTouchHelper.attachToRecyclerView(profilesRecycler)
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String)
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?)
     {
-        if (key == Constants.PROFILE_KEY)
+        // key can be null when all prefs are cleared (Android 11+); compare safely.
+        val prefs = sharedPreferences
+        if (prefs != null && key == Constants.PROFILE_KEY)
         {
             launch {
-                val profileId = ProfileUtils.getCurrentProfile(sharedPreferences)
-                val currentConfig = Acc.instance.readConfig()
+                val profileId = ProfileUtils.getCurrentProfile(prefs)
+                // readConfig() is a blocking root call; run it off the main thread
+                // and never let a failure crash the fragment.
+                val currentConfig = try {
+                    withContext(Dispatchers.IO) { Acc.instance.readConfig() }
+                } catch (e: Exception) {
+                    LogExt().e(javaClass.simpleName, "onSharedPreferenceChanged readConfig failed: ${e.message}")
+                    return@launch
+                }
                 val selectedProfileConfig = mProfilesViewModel.getProfileById(profileId)?.accConfig
 
                 if (profileId != -1 && currentConfig != selectedProfileConfig)
-                    ProfileUtils.clearCurrentSelectedProfile(sharedPreferences)
+                    ProfileUtils.clearCurrentSelectedProfile(prefs)
                 else mProfilesAdapter.setActiveProfile(profileId)
             }
         }

@@ -66,6 +66,11 @@ class DashboardFragment : ScopedFragment()
 
         super.onViewCreated(view, savedInstanceState)
 
+        // Initialise preferences up front (the observer below reads it). The view
+        // exists here so the context is valid; doing it inside activity?.let could
+        // leave it uninitialised and crash the observer with a property-access error.
+        preferences = Preferences(view.context)
+
         //-----------------------------------------------------------------
 
         val transaction = activity?.supportFragmentManager?.beginTransaction()

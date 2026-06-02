@@ -6,6 +6,10 @@ import com.google.gson.reflect.TypeToken
 import mattecarra.accapp.models.AccConfig
 import mattecarra.accapp.models.ProfileEnables
 
+// Every to*() converter parses JSON stored in the DB. A corrupted/legacy/empty
+// value (Gson can return null or throw JsonSyntaxException) must NOT crash the
+// query that loads profiles or schedules. Each parse is wrapped and falls back
+// to a sane default so the row degrades gracefully instead of taking down the app.
 object ConfigConverter
 {
 
@@ -20,7 +24,8 @@ object ConfigConverter
     @JvmStatic
     fun toEnables(enables: String): ProfileEnables
     {
-        return Gson().fromJson(enables, ProfileEnables::class.java)
+        return try { Gson().fromJson(enables, ProfileEnables::class.java) ?: ProfileEnables() }
+        catch (e: Exception) { e.printStackTrace(); ProfileEnables() }
     }
 
     @TypeConverter
@@ -34,7 +39,8 @@ object ConfigConverter
     @JvmStatic
     fun toScripts(scripts: String?): List<Int>?
     {
-        return Gson().fromJson(scripts, object : TypeToken<List<Int>>() {}.type)
+        return try { Gson().fromJson(scripts, object : TypeToken<List<Int>>() {}.type) }
+        catch (e: Exception) { e.printStackTrace(); null }
     }
 
     @TypeConverter
@@ -48,7 +54,8 @@ object ConfigConverter
     @JvmStatic
     fun toConfigCapacity(configCapacity: String): AccConfig.ConfigCapacity
     {
-        return Gson().fromJson(configCapacity, AccConfig.ConfigCapacity::class.java)
+        return try { Gson().fromJson(configCapacity, AccConfig.ConfigCapacity::class.java) ?: AccConfig.ConfigCapacity() }
+        catch (e: Exception) { e.printStackTrace(); AccConfig.ConfigCapacity() }
     }
 
     @TypeConverter
@@ -62,7 +69,8 @@ object ConfigConverter
     @JvmStatic
     fun toConfigVoltage(configVoltage: String) : AccConfig.ConfigVoltage
     {
-        return Gson().fromJson(configVoltage, AccConfig.ConfigVoltage::class.java)
+        return try { Gson().fromJson(configVoltage, AccConfig.ConfigVoltage::class.java) ?: AccConfig.ConfigVoltage() }
+        catch (e: Exception) { e.printStackTrace(); AccConfig.ConfigVoltage() }
     }
 
     @TypeConverter
@@ -76,7 +84,8 @@ object ConfigConverter
     @JvmStatic
     fun toConfigTemperature(configTemperature: String) : AccConfig.ConfigTemperature
     {
-        return Gson().fromJson(configTemperature, AccConfig.ConfigTemperature::class.java)
+        return try { Gson().fromJson(configTemperature, AccConfig.ConfigTemperature::class.java) ?: AccConfig.ConfigTemperature() }
+        catch (e: Exception) { e.printStackTrace(); AccConfig.ConfigTemperature() }
     }
 
     @TypeConverter
@@ -90,6 +99,7 @@ object ConfigConverter
     @JvmStatic
     fun toConfigCoolDown(configCoolDown: String) : AccConfig.ConfigCoolDown?
     {
-        return Gson().fromJson(configCoolDown, AccConfig.ConfigCoolDown::class.java)
+        return try { Gson().fromJson(configCoolDown, AccConfig.ConfigCoolDown::class.java) }
+        catch (e: Exception) { e.printStackTrace(); null }
     }
 }

@@ -58,7 +58,8 @@ class LogExt
 
     private fun logToFile(msg: String?)
     {
-        logToFile(msg!!, LOG_NAME)
+        // Logging must never crash the app; drop a null message instead of !!.
+        logToFile(msg ?: return, LOG_NAME)
     }
 
     private fun logToFile(msg: String, filename: String)

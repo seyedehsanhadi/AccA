@@ -49,13 +49,20 @@ class ProfileSpinnerAdapter : BaseAdapter(), SpinnerAdapter
 typealias AddScheduleListener = ((profileId: Long, scheduleName: String, time: String,
                                   executeOnce: Boolean, executeOnBoot: Boolean) -> Unit)
 
+// readDefaultConfig() is a blocking root call used to seed the placeholder
+// profile; if it throws, fall back to in-memory defaults so building the
+// dialog never crashes.
+private fun safeDefaultConfig(): mattecarra.accapp.models.AccConfig =
+    try { runBlocking { Acc.instance.readDefaultConfig() } }
+    catch (e: Exception) { e.printStackTrace(); mattecarra.accapp.models.AccConfig() }
+
 fun MaterialDialog.addScheduleDialog(
     profilesLiveData: LiveData<List<AccaProfile>>,
     profiles: MutableList<AccaProfile> = mutableListOf(
         AccaProfile(
             -1,
             context.getString(R.string.new_config),
-            runBlocking { Acc.instance.readDefaultConfig() },
+            safeDefaultConfig(),
             ProfileEnables()
         )
     ),
@@ -138,7 +145,7 @@ fun MaterialDialog.editScheduleDialog(
 ): MaterialDialog {
     return addScheduleDialog(
         profilesLiveData,
-        runBlocking { Acc.instance.readDefaultConfig() }.let { defaultConfig ->
+        safeDefaultConfig().let { defaultConfig ->
             mutableListOf(
                 AccaProfile(-1, context.getString(R.string.schedule_profile_keep_current), defaultConfig, ProfileEnables()),
                 AccaProfile(-2, context.getString(R.string.schedule_profile_edit_current), defaultConfig, ProfileEnables()),
