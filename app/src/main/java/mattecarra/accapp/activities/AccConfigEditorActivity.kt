@@ -168,6 +168,11 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         initUi()
 
         viewModel.clearHistory()
+
+        // On the async (no-extra) path, onCreateOptionsMenu already ran BEFORE viewModel was
+        // initialised, so the undo item was disabled and its observer never wired. Rebuild the
+        // menu now that viewModel exists so undo works on the edit-current-config path too.
+        invalidateOptionsMenu()
     }
 
     private fun initUi()

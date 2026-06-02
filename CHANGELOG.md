@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc28] - 2026-06-03
+
+**Pre-release — stable candidate.** Fixes 3 regressions that an adversarial verification pass (13 agents, 99 checks) found in rc27's own fixes. All 70 rc27 fixes verified correct; these 3 are the only corrections.
+
+### Fixed (regressions introduced in rc27)
+- **Schedules tab highlight + Back key.** The rc27 async nav check returned `false`, so the tab never highlighted and Back exited the app instead of returning to Home. Now, once the DJS check passes, the tab is selected programmatically (re-entrant, guarded) so the highlight and Back behave correctly.
+- **Schedules tab double-trigger.** Rapid taps could stack multiple DJS checks / install dialogs. Added an in-flight debounce.
+- **Config-editor Undo button stuck disabled.** On the edit-current-config path, `onCreateOptionsMenu` ran before the async setup initialised the ViewModel, leaving Undo greyed out all session. `finishSetup()` now calls `invalidateOptionsMenu()` once the ViewModel exists.
+
+### Changed
+- Version 1.1.6-rc28 (build 94). ACC daemon bundle unchanged (rc22).
+
 ## [1.1.6-rc27] - 2026-06-03
 
 **Pre-release.** App-wide robustness remediation — 70 fixes from a full read-only audit (13 agents over 32 files), reviewed compile-clean. No daemon change (ACC bundle unchanged from rc24).

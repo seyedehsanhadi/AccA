@@ -117,6 +117,10 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         binding.mainBottomNav.selectedItemId = selectedNavBarItem
     }
 
+    // Schedules tab runs an async DJS check off-main; these guard re-entrancy + debounce.
+    private var djsNavInFlight = false
+    private var loadSchedulesOnSelect = false
+
     /**
      * Function for handing navigation bar clicks
      */
@@ -139,11 +143,21 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 return true
             }
             R.id.botNav_schedules -> {
+                // Second pass: the async DJS check already passed, so actually SELECT the tab
+                // (return true) and load the fragment -- this is what makes the highlight correct
+                // and Back return to Home (onBackPressed reads mainBottomNav.selectedItemId).
+                if (loadSchedulesOnSelect) {
+                    loadSchedulesOnSelect = false
+                    loadFragment(schedulesFragment)
+                    return true
+                }
                 // Djs.isDjsInstalled / initDjs / isInstalledDjsOutdated do blocking root shell
                 // work -> doing them inline on this nav callback froze the UI (ANR). Run them
-                // off the main thread, then navigate / show the dialog back on Main. We don't
-                // commit the nav selection synchronously here (return false) -- the async branch
-                // either loads the Schedules fragment or pops the install dialog.
+                // off the main thread, then navigate / show the dialog back on Main. We return
+                // false (don't select the tab yet); on success we programmatically re-select it,
+                // which re-enters this branch via the loadSchedulesOnSelect flag above.
+                if (djsNavInFlight) return false   // debounce rapid taps -> no stacked dialogs
+                djsNavInFlight = true
                 launch {
                     // state: 0 = ready (load schedules), 1 = not installed (ask first),
                     // 2 = installed but missing/outdated (install directly), like the old branches.
@@ -159,9 +173,11 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                         LogExt().e(javaClass.simpleName, "DJS check failed: ${e.message}")
                         1   // fall through to the install dialog on any failure
                     }
+                    djsNavInFlight = false
                     if (isFinishing || isDestroyed) return@launch
                     when (state) {
-                        0 -> loadFragment(schedulesFragment)
+                        // re-select the tab; the re-entry consumes loadSchedulesOnSelect + loads it
+                        0 -> { loadSchedulesOnSelect = true; binding.mainBottomNav.selectedItemId = R.id.botNav_schedules }
                         2 -> installDjs()
                         else -> djsInstallationDialog()
                     }
