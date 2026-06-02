@@ -111,6 +111,7 @@ class LogViewerActivity : ScopedAppActivity()
             echo "@@BATTERY"; $acca -i 2>/dev/null
             echo "@@CONFIG";  $acca -sp 2>/dev/null
             echo "@@SWITCH";  $acca -s s: 2>/dev/null
+            echo "@@SWITCHTEST"; cat /data/adb/vr25/acc-data/logs/switch-test.log 2>/dev/null; printf '\n-- daemon-confirmed working switches --\n'; cat /data/adb/vr25/acc-data/logs/working-switches.log 2>/dev/null
             echo "@@LOGTAIL"; tail -n 40 /dev/.vr25/acc/accd-*.log 2>/dev/null | sed -E 's/^[0-9]+:[[:space:]]*//'
             echo "@@END"
         """.trimIndent()
@@ -122,7 +123,8 @@ class LogViewerActivity : ScopedAppActivity()
         sb.append(section(out, "@@DAEMON", "@@BATTERY", "Daemon"))
         sb.append(section(out, "@@BATTERY", "@@CONFIG", "Battery"))
         sb.append(section(out, "@@CONFIG", "@@SWITCH", "Config"))
-        sb.append(section(out, "@@SWITCH", "@@LOGTAIL", "Charging switches"))
+        sb.append(section(out, "@@SWITCH", "@@SWITCHTEST", "Charging switches (available)"))
+        sb.append(section(out, "@@SWITCHTEST", "@@LOGTAIL", "Switch test results (which method works on this phone)"))
         sb.append(section(out, "@@LOGTAIL", "@@END", "Daemon log (recent)"))
 
         return sb.toString().trimEnd() + "\n"
