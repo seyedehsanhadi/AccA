@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc3] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc2 — fixes the `acca --state` export bugs found on a Pixel 9a.
+
+### Fixed (in the bundled daemon)
+- The "Show ACC state" script now shows the **correct acc version** (was empty), a **derived charging status** (was "unknown" on the front-end path), and an **always-fresh snapshot** (was frozen on repeated runs).
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc2 (versionCode 202505194)**.
+- Version 1.1.6-rc3 (build 69).
+
 ## [1.1.6-rc2] - 2026-06-02
 
 **Pre-release.** AccA can now ask ACC for its state export.

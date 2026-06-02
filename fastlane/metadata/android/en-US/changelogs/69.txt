@@ -1,0 +1,1 @@
+- Pre-release (RC3). Bundles ACC rc2: fixes the "Show ACC state" (acca --state) export — correct acc version (was empty), a derived charging status (was "unknown"), and an always-fresh snapshot (was frozen).
