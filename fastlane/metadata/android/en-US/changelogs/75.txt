@@ -1,0 +1,1 @@
+- Pre-release (RC9). Bundles ACC rc9 — reworked switch auto-lock so it finally locks on Pixel/Tensor: judges a switch by current (idle or discharge = stopped), locks the first that truly cuts, retries until it does. Tap the ACC-update prompt, then reboot.

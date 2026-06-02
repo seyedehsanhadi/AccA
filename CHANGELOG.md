@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6-rc9] - 2026-06-02
+
+**Pre-release.** Bundles ACC rc9 — auto-lock reworked, finally locks on Pixel.
+
+### Fixed (bundled daemon)
+- The limit never held because the switch the Pixel needs (`charge_stop_level`) works by **discharging**, but the daemon demanded a true-idle switch and only tried once. Reworked: it now judges a switch purely by current (idle **or** discharge = stopped), locks the first that truly cuts, and keeps trying until it does. **Tap the ACC-update prompt, then reboot.**
+
+### Changed
+- Bundled ACC daemon: **v2025.5.18-stable.6-rc9 (202505200)**.
+- Version 1.1.6-rc9 (build 75).
+
 ## [1.1.6-rc8] - 2026-06-02
 
 **Pre-release.** Bundles ACC rc8 — THE fix for stop-then-reset.
