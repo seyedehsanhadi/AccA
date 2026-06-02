@@ -63,7 +63,17 @@ object Acc {
     }
 
     fun isAccInstalled(installationDir: File): Boolean {
-        return Shell.su("test -f ${File(installationDir, "acc/service.sh").absolutePath}").exec().isSuccess
+        // ACC is usable if it is RUNNING now (/dev/.vr25/acc/acca), OR present at the
+        // canonical exec home /data/adb/vr25/acc/service.sh -- a real dir for a
+        // non-Magisk install and a symlink to the module dir for Magisk/KSU/APatch
+        // (install.sh: `ln -sf $installDir /data/adb/$domain/`), OR at the legacy
+        // app-managed location. Before rc17 only the last was checked, so a
+        // SEPARATELY-FLASHED ACC module read as "not installed" and AccA showed
+        // "ACC module not found" even though acca was installed and running.
+        val appService = File(installationDir, "acc/service.sh").absolutePath
+        return Shell.su(
+            "test -e /dev/.vr25/acc/acca || test -f /data/adb/vr25/acc/service.sh || test -f $appService"
+        ).exec().isSuccess
     }
 
     fun isInstalledAccOutdated(): Boolean = runBlocking {
@@ -71,10 +81,15 @@ object Acc {
     }
 
     fun initAcc(installationDir: File): Boolean {
-        return if(isAccInstalled(installationDir))
-            Shell.su("[ -f /dev/.vr25/acc/acca ] || ${File(installationDir, "acc/service.sh").absolutePath}").exec().isSuccess
-        else
-            false
+        if (!isAccInstalled(installationDir)) return false
+        // If the daemon/tool is not up yet, start ACC from whichever service.sh exists,
+        // preferring the canonical exec home (flashed/standalone module) over the
+        // legacy app-managed copy. Fixes a flashed module never being started by AccA.
+        val appService = File(installationDir, "acc/service.sh").absolutePath
+        return Shell.su(
+            "[ -e /dev/.vr25/acc/acca ] || " +
+            "if [ -f /data/adb/vr25/acc/service.sh ]; then sh /data/adb/vr25/acc/service.sh; else sh $appService; fi"
+        ).exec().isSuccess
     }
 
     suspend fun installBundledAccModule(context: Context): Shell.Result?  = withContext(Dispatchers.IO) {
