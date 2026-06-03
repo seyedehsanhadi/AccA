@@ -2,6 +2,15 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6.1] - 2026-06-03
+
+**Stable.** Bundles the latest ACC daemon — **v2025.5.18-stable.6.1 (202505212)** — so a fresh install / in-app ACC install now sets up the hardened daemon directly.
+
+### Changed
+- **Bundled ACC daemon → v2025.5.18-stable.6.1** with the all-phones auto-detection hardening: curated switch priority restored (order-preserving de-dup, was alphabetized), sign-agnostic + unit-scaled auto-lock (fixes inverted-current Motorola and milliamp Exynos false-locks; Pixel/Tensor discharge-hold preserved), input-node classification fix, broader charger-online detection (main-charger/oplus/glink), and a spurious-shutdown guard. App logic unchanged — the audit confirmed AccA needs no control-side changes for cross-device correctness.
+- `Acc.bundledVersion` → 202505212 so the app offers/installs the new daemon.
+- Version 1.1.6.1 (build 96).
+
 ## [1.1.6] - 2026-06-03
 
 **Stable.** A reliability release: the DJS scheduler is now installable and safe, and the whole app went through a crash / ANR / robustness audit (107 findings, 98 confirmed) with every fix adversarially verified. Phone-tested. Bundles ACC v2025.5.18-stable.6 (versionCode 202505211).
