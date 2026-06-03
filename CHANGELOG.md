@@ -2,6 +2,26 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6] - 2026-06-03
+
+**Stable.** A reliability release: the DJS scheduler is now installable and safe, and the whole app went through a crash / ANR / robustness audit (107 findings, 98 confirmed) with every fix adversarially verified. Phone-tested. Bundles ACC v2025.5.18-stable.6 (versionCode 202505211).
+
+### DJS (Daily Job Scheduler)
+- Fixed the false **"DJS Installation Failed!"** dialog — install is now verified against `module.prop` (race-free) instead of an async daemon symlink; version detection has a fallback chain; a missing busybox is reported correctly instead of as a generic failure.
+- Fixed two scheduler data-loss bugs: deleting/editing one schedule no longer wipes siblings (delimiter-anchored match), and a failed edit no longer destroys the schedule (snapshot + rollback).
+
+### App-wide robustness
+- **No more background crashes** — coroutine scopes carry an exception handler and every root/`Acc.instance` call in QS tiles, the widget, dialogs and activities is guarded.
+- **No silent failures** — failed config applies, install errors and dropped schedules are logged/surfaced.
+- **No ANRs** — blocking root shell moved off the main thread (Schedules tab, Settings DJS toggle, config editor, schedule dialog).
+- **Correctness & safety** — charging status reads correctly on ACC 2025.x; injection-safe `djsc`/`acca` command builders; lifecycle-safe fragments (no leaks / stale-view writes); boot handles `QUICKBOOT_POWERON`; `BatteryDialogActivity` is no longer exported.
+
+### Notes
+- Two items deferred pending on-device validation: legacy-ACC (2020–2021) handler binary path, and a no-op foreground-service type at targetSdk 31.
+
+### Changed
+- Version 1.1.6 (build 95). Bundled ACC daemon == v2025.5.18-stable.6.
+
 ## [1.1.6-rc28] - 2026-06-03
 
 **Pre-release — stable candidate.** Fixes 3 regressions that an adversarial verification pass (13 agents, 99 checks) found in rc27's own fixes. All 70 rc27 fixes verified correct; these 3 are the only corrections.
