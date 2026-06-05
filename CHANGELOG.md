@@ -2,6 +2,16 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6.2] - 2026-06-05
+
+**Hotfix — Pixel/Tensor charging resumes again without a reboot.** Bundles **ACC v2025.5.18-stable.6.2 (202505213)**.
+
+Since rc20, Pixel/Tensor used the native firmware limit (`charge_stop_level` + `charge_start_level`) and trusted the driver to resume on its own. But the Tensor `google,charger` driver *latches* "stopped" and ignores `charge_start_level` (an upstream Google bug — it reproduces even with no ACC installed). So once your battery hit the limit, plugging the charger back in did nothing and only a **reboot** restored charging.
+
+The daemon now detects that latched state (plugged in, at/below your resume level, or a fresh plug-in below the limit, while the kernel still reports not-charging) and briefly pulses `charge_stop_level=100` — the only value that re-arms the charger — then immediately restores your real stop level, so there is no overshoot. It self-disables on phones whose firmware already resumes correctly, never fires inside the resume→limit idle band (no sawtooth), and can never overcharge (the limit is still enforced). **Non-Pixel devices are unaffected** (native mode only runs on `google,charger` hardware).
+
+Known follow-up: inverted-current kernels (e.g. some Motorola/msm8953) can still mis-read charge/discharge state when `discharge_polarity` auto-detects wrong; that needs per-device logs and is tracked for 6.3. Manual workaround: set `discharge_polarity=+` or `=-` in AccA.
+
 ## [1.1.6.1] - 2026-06-03
 
 **Stable.** Bundles the latest ACC daemon — **v2025.5.18-stable.6.1 (202505212)** — so a fresh install / in-app ACC install now sets up the hardened daemon directly.
