@@ -2,6 +2,16 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6.3] - 2026-06-05
+
+**Hotfix — resume-after-limit now works on non-Pixel phones too (Motorola/Qualcomm/etc.).** Bundles **ACC v2025.5.18-stable.6.3 (202505214)**.
+
+6.2 fixed Pixel/Tensor. This extends the same idea to generic devices. Some charging switches (`input_suspend`, `current_max=0`, `charging_enabled=0`) hold their "off" state across an unplug/replug, so after your battery hit the limit, plugging the charger back in did nothing until the battery fell to your resume level — or, on switches that latch, only a **reboot** restored charging (the reported Motorola symptom: it stops correctly at the limit, then will not resume on re-plug).
+
+Now, on a genuine plug-in below your limit, ACC re-arms the switch immediately so charging resumes without a reboot. A shared plug-transition tracker drives both the Pixel path (`native_unlatch`) and the generic path (`generic_rearm`). It fires once per plug (no sawtooth), is skipped on the boot loop so it never fights *off mid charge*, and cannot overcharge (the limit logic is unchanged). Verified by a 13-case mock-sysfs harness.
+
+If your phone reports inverted current (shows discharging while charging), that's a separate sign-detection issue still tracked for a later build; manual workaround remains `discharge_polarity=+` / `=-`.
+
 ## [1.1.6.2] - 2026-06-05
 
 **Hotfix — Pixel/Tensor charging resumes again without a reboot.** Bundles **ACC v2025.5.18-stable.6.2 (202505213)**.
