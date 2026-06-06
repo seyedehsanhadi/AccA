@@ -2,6 +2,16 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6.6] - 2026-06-06
+
+**Bundles ACC v2025.5.18-stable.6.3.3 — fixes an overcharge that 1.1.6.5 could cause on some MediaTek phones.**
+
+1.1.6.5 switched MediaTek phones to a charging method (`current_cmd`) meant to give true idle. On some MediaTek kernels (e.g. the Xiaomi "klee" / HyperOS) that method passes ACC's quick check but doesn't actually stop charging at your limit — so the battery charged past it. This release rolls that back: ACC again prefers the method that reliably stops charging on these phones, and a one-time fix moves any affected phone back to it automatically. The earlier "won't charge until reboot" fix is kept (charging still resumes on its own).
+
+Result on affected MediaTek phones: your limit is enforced again (no overcharge), and charging resumes without a reboot. (It may discharge slightly at the limit instead of holding perfectly flat — that's the trade for not overcharging; true idle is disabled where it isn't reliable.) Non-MediaTek phones are unaffected.
+
+After updating, reinstall ACC from the app. If your phone was overcharging, it should now stop at your limit.
+
 ## [1.1.6.5] - 2026-06-06
 
 **Bundles ACC v2025.5.18-stable.6.3.2 — MediaTek phones now truly IDLE at the limit (not discharge), and resume without a reboot.**
