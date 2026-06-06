@@ -2,6 +2,16 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6.4] - 2026-06-06
+
+**Bundles ACC v2025.5.18-stable.6.3.1** — a safe bug-fix batch (the 6.2/6.3 resume logic is unchanged).
+
+The headline: **MediaTek phones now idle at the limit instead of disconnecting/draining, and resume on their own without a reboot.** ACC now tries the MediaTek battery-idle bypass (`current_cmd`) before `input_suspend`, so on MTK/Xiaomi (e.g. the "klee" Xiaomi) charging holds flat at your limit with the charger still feeding the phone, and resumes by itself when it drifts down — no more "it discharges at the limit" or "won't charge until I reboot." It's MediaTek-only and still verified on-device by ACC, so non-MediaTek phones are completely unaffected.
+
+Also: the power-path stays on while paused (true idle, not discharge); a corrupted out-of-range charge limit in the config is clamped to a safe value (it could otherwise overcharge); and the charge scheduler is fixed for `08:xx`/`09:xx` times.
+
+If your phone still discharges at the limit after updating, open AccA and re-run the charging-switch scan so it can pick the new idle method.
+
 ## [1.1.6.3] - 2026-06-05
 
 **Hotfix — resume-after-limit now works on non-Pixel phones too (Motorola/Qualcomm/etc.).** Bundles **ACC v2025.5.18-stable.6.3 (202505214)**.
