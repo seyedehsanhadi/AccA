@@ -2,6 +2,16 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.6.5] - 2026-06-06
+
+**Bundles ACC v2025.5.18-stable.6.3.2 — MediaTek phones now truly IDLE at the limit (not discharge), and resume without a reboot.**
+
+6.3.1's MediaTek fix didn't reach people who'd already been using AccA, for two reasons now fixed: on these chips, stopping the charge alone makes the phone run off the battery (so it drains), and true idle also needs the power path kept on so the charger feeds the phone while the battery sits flat — ACC now uses that combination first. And because updating never re-ran the charging-switch scan, MediaTek users stayed stuck on the old method; a one-time migration now clears that so the daemon re-picks the idle method automatically. Non-MediaTek phones are unaffected.
+
+Also fixes a separate "won't charge until I reboot" bug on phones that use the *input-suspend* method (e.g. some MediaTek Motorola): suspending the input made the phone look unplugged to ACC, so it could never re-enable charging on its own. ACC now re-enables those reliably (it can't overcharge — the limit is still enforced). Other phones are unaffected.
+
+After updating, if it still drains at the limit, open AccA and re-run the charging-switch scan once.
+
 ## [1.1.6.4] - 2026-06-06
 
 **Bundles ACC v2025.5.18-stable.6.3.1** — a safe bug-fix batch (the 6.2/6.3 resume logic is unchanged).
