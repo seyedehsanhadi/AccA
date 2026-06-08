@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.7-rc1] - 2026-06-08
+
+**Bundles ACC v2025.5.18-6.4-rc1 — a safety + diagnostics pre-release.**
+
+ACC 6.4-rc1 hardens how a charging switch is chosen: it is locked only after charging stays stopped across several checks, so a switch that briefly stops then resumes (the cause of the earlier Xiaomi/MediaTek overcharge) is rejected up front — in both the automatic picker and the manual "Scan & lock". The safety watchdog also no longer goes blind on phones that pause by cutting the charger input. Battery info and the `--state` diagnostic now read the kernel battery event in one atomic snapshot, so charging status shows a real trust level instead of "Unknown", and Pixel/Tensor show their native charge-limit instead of an empty switch.
+
+No change to how charging is controlled on a phone that already works; existing settings are kept.
+
 ## [1.1.6.6] - 2026-06-06
 
 **Bundles ACC v2025.5.18-stable.6.3.3 — fixes an overcharge that 1.1.6.5 could cause on some MediaTek phones.**
