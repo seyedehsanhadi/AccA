@@ -26,12 +26,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.input.input
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp._interface.OnProfileClickListener
-import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.activities.AccConfigEditorActivity
 import mattecarra.accapp.adapters.ProfileListAdapter
 import mattecarra.accapp.databinding.ProfilesFragmentBinding
@@ -98,7 +95,10 @@ class ProfilesFragment : ScopedFragment(),
         val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         mPrefs = prefs
 
-        mSharedViewModel = ViewModelProvider(this).get(SharedViewModel::class.java)
+        // Activity scope (not fragment) so this is the SAME SharedViewModel instance the
+        // Dashboard and MainActivity use -- a config applied from here then reaches them
+        // instead of updating a divergent fragment-private copy (A4).
+        mSharedViewModel = ViewModelProvider(requireActivity()).get(SharedViewModel::class.java)
         mProfilesAdapter = ProfileListAdapter(mContext, ProfileUtils.getCurrentProfile(prefs))
         mProfilesAdapter.setOnClickListener(this)
 
@@ -254,25 +254,20 @@ class ProfilesFragment : ScopedFragment(),
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?)
     {
         // key can be null when all prefs are cleared (Android 11+); compare safely.
-        val prefs = sharedPreferences
-        if (prefs != null && key == Constants.PROFILE_KEY)
+        if (sharedPreferences != null && key == Constants.PROFILE_KEY)
         {
-            launch {
-                val profileId = ProfileUtils.getCurrentProfile(prefs)
-                // readConfig() is a blocking root call; run it off the main thread
-                // and never let a failure crash the fragment.
-                val currentConfig = try {
-                    withContext(Dispatchers.IO) { Acc.instance.readConfig() }
-                } catch (e: Exception) {
-                    LogExt().e(javaClass.simpleName, "onSharedPreferenceChanged readConfig failed: ${e.message}")
-                    return@launch
-                }
-                val selectedProfileConfig = mProfilesViewModel.getProfileById(profileId)?.accConfig
-
-                if (profileId != -1 && currentConfig != selectedProfileConfig)
-                    ProfileUtils.clearCurrentSelectedProfile(prefs)
-                else mProfilesAdapter.setActiveProfile(profileId)
-            }
+            // Trust the stored profile id -- just highlight it. The previous version
+            // re-read the live ACC config here and CLEARED the selection when it did not
+            // exactly equal the stored profile. Two bugs lived in that:
+            //   (A1 race) onProfileClick writes PROFILE_KEY *before* its 11-command apply
+            //     finishes, so this listener fired mid-apply, read a half-applied config,
+            //     saw a mismatch, and cleared the just-made selection every time.
+            //   (A2 equality) ACC normalizes on write (resume_temp clamp, control-file
+            //     dropped, unit coercion), so the parsed config can NEVER data-class-equal
+            //     the stored profile for many profiles -> permanent false clears.
+            // Selection is cleared explicitly elsewhere (editing the global config sets
+            // PROFILE_KEY = -1, which lands here and un-highlights via setActiveProfile(-1)).
+            mProfilesAdapter.setActiveProfile(ProfileUtils.getCurrentProfile(sharedPreferences))
         }
     }
 

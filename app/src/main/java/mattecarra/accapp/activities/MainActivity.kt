@@ -109,6 +109,14 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             }
         })
 
+        // Surface ACC apply failures: SharedViewModel.saveAccConfig sets applyFailed when an
+        // updateAccConfig() did not succeed. Without an observer the failure was logged and
+        // silently swallowed -- the user saw "profile applied" while nothing changed.
+        _sharedViewModel.observeApplyFailed(this, Observer { failed ->
+            if (failed == true)
+                Toast.makeText(this, getString(R.string.error_occurred), Toast.LENGTH_LONG).show()
+        })
+
         // Set Bottom Navigation Bar Item Selected Listener
         binding.mainBottomNav.setOnNavigationItemSelectedListener(this)
         setSupportActionBar(binding.mainToolbar)

@@ -125,8 +125,11 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
             // The view may have been torn down while we awaited; bail if detached.
             if (_binding == null || !isAdded) return@launch
 
-            var name = getString(R.string.profile_not_selected)
-            if (selProfile != null && currentConfig == selProfile.accConfig) name = selProfile.profileName
+            // Trust the stored id for the NAME (not exact config-equality, which ACC's
+            // write-normalization breaks -- same A2 flaw as the list). Still show the live
+            // config values via updateInfo. Selection is cleared by setting PROFILE_KEY=-1.
+            val name = if (profileId != -1 && selProfile != null) selProfile.profileName
+                       else getString(R.string.profile_not_selected)
 
             updateInfo(name, currentConfig)
         }
