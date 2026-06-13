@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.7-rc2] - 2026-06-13
+
+**Fixes profiles not "landing" when you tap them, plus ACC 6.4-rc2 daemon fixes.**
+
+### Fixed
+- **Tapping a profile now actually applies and stays selected.** The selection used to bounce off and the dashboard showed "not selected". Two causes: the selection listener re-read the live ACC config mid-apply (race), and it required an exact config match that ACC's own write-normalization (resume-temp clamp, dropped control-file, unit coercion) can never satisfy. The app now trusts the chosen profile id.
+- **Apply failures are now shown** (toast) instead of being silently swallowed.
+- **Profiles and Dashboard share one config state**, so a profile applied from the list immediately reflects on the dashboard.
+
+### Note
+Bundles ACC v2025.5.18-6.4-rc1; the standalone ACC 6.4-rc2 daemon fixes (Pixel/Tensor instant resume, daemon survives "no working switch", more device layouts) ship as the ACC flashable zip.
+
 ## [1.1.7-rc1] - 2026-06-08
 
 **Bundles ACC v2025.5.18-6.4-rc1 — a safety + diagnostics pre-release.**
