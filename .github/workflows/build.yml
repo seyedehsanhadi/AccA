@@ -48,9 +48,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete rc3 --cleanup-tag --yes 2>/dev/null || true
-          assets=""; for f in app/build/outputs/apk/debug/*.apk; do [ -f "$f" ] && assets="$assets $f"; done
           gh release create rc3 --prerelease --target "$GITHUB_SHA" \
             --title "AccA 1.1.7-rc3 (pre-release, debug build)" \
-            --notes "Auto-built debug APK. Verified-switch Apply & Lock, charging-health card, KernelSU path fixes. (Debug-signed; for testing.)" \
-            $assets
+            --notes "Auto-built debug APK. Verified-switch Apply & Lock, charging-health card, KernelSU path fixes. (Debug-signed; for testing.)" 2>/dev/null || true
+          assets=""; for f in app/build/outputs/apk/debug/*.apk; do [ -f "$f" ] && assets="$assets $f"; done
+          [ -n "$assets" ] && gh release upload rc3 $assets --clobber
