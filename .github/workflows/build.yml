@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,3 +40,16 @@ jobs:
         with:
           name: AccA-community-fix-debug
           path: app/build/outputs/apk/debug/*.apk
+
+      # Publish a single rolling pre-release (reuses the "rc3" tag, not a new tag each push)
+      # so the APK is downloadable from the Releases page.
+      - name: Publish rolling pre-release
+        if: github.ref == 'refs/heads/1.1.7-rc2-wip'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete rc3 --cleanup-tag --yes 2>/dev/null || true
+          gh release create rc3 --prerelease --target "$GITHUB_SHA" \
+            --title "AccA 1.1.7-rc3 (pre-release, debug build)" \
+            --notes "Auto-built debug APK from ${GITHUB_SHA:0:7}. Verified-switch Apply & Lock, charging-health card, KernelSU path fixes. (Debug-signed; for testing.)" \
+            app/build/outputs/apk/debug/*.apk
