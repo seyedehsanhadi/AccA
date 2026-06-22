@@ -105,6 +105,63 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Charging-health warning card (B12): hidden unless charging looks broken -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/dash_health_warning_card"
+            style="@style/Widget.MaterialComponents.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="@dimen/card_margin"
+            android:layout_marginTop="@dimen/card_margindiv2"
+            android:layout_marginRight="@dimen/card_margin"
+            android:layout_marginBottom="@dimen/card_margindiv2"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/color_warning"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="3dp"
+            app:contentPadding="@dimen/card_content_padding"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="@dimen/acc_status_icon"
+                    android:layout_height="@dimen/acc_status_icon"
+                    android:layout_marginEnd="@dimen/card_content_padding"
+                    android:layout_marginRight="@dimen/card_content_padding"
+                    android:contentDescription="@string/info"
+                    app:srcCompat="@drawable/ic_outline_error_outline_24px"
+                    app:tint="@color/white" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/health_warning_title"
+                        android:textColor="@color/white"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/health_warning_message"
+                        android:textColor="@color/white"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <RelativeLayout
             android:id="@+id/current_profile"
             android:layout_height="wrap_content"

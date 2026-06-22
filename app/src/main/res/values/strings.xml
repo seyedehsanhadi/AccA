@@ -494,5 +494,27 @@
     <string name="swd_show_temp">Show temperature</string>
     <string name="swd_show_volt">Show Voltage</string>
     <string name="swd_show_profile">Show profile</string>
+    <string name="acc_daemon_stuck_title">ACC daemon not responding</string>
+    <string name="acc_daemon_stuck_message">ACC is installed but its daemon did not start (the check timed out). This usually means a broken or partial install — common on KernelSU. Reboot, or reinstall ACC, then retry.</string>
+    <string name="shutdown_capacity_off_title">Auto power-off disabled</string>
+    <string name="shutdown_capacity_off_warning">With shutdown capacity set to 0, AccA will NOT power the phone off at low battery. The battery can deep-discharge and may become hard to recharge or boot — especially with a drain-type charging switch. Only disable this if you manage charging yourself.</string>
+
+    <!-- Verified-switch cockpit -->
+    <string name="verified_switch_title">Recommended charging switch</string>
+    <string name="verified_switch_for_device">Verified switch for your device: %1$s (%2$s)</string>
+    <string name="verified_switch_needs_test_caveat">This switch was detected but not fully verified — it needs a live test and may leak charge under load on some pump-charger devices. Apply &amp; Lock will run a live test first.</string>
+    <string name="verified_switch_apply_lock">Apply &amp; Lock</string>
+    <string name="verified_switch_testing">Testing the recommended switch…</string>
+    <string name="verified_switch_applied">Verified switch applied and locked.</string>
+    <string name="verified_switch_failed_live_test">Switch failed the live test — not applied.</string>
+    <string name="verified_switch_plug_to_apply">Plug in the charger to test and apply the recommended switch.</string>
+
+    <!-- Charging-health warning card -->
+    <string name="health_warning_title">Charging may be broken</string>
+    <string name="health_warning_message">ACC is running and the charger is plugged in, but the battery is not charging and is below your pause level. The configured charging switch may not work on this device — try the recommended switch, or test another switch in the config editor.</string>
+
+    <!-- B18: deep-discharge risk warning -->
+    <string name="drain_shutdown_zero_title">Deep-discharge risk</string>
+    <string name="drain_shutdown_zero_warning">The selected charging switch is a drain type (it discharges the battery to hold the limit) and auto power-off is disabled (shutdown = 0). Together these can deep-discharge the battery until it is hard to recharge or boot. Consider setting a shutdown capacity, or pick a non-drain switch.</string>
 
 </resources>

@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
+import mattecarra.accapp.acc.VerifiedSwitch
 import mattecarra.accapp.databinding.ActivityAccConfigEditorBinding
 import mattecarra.accapp.databinding.AddChargingSwitchDialogBinding
 import mattecarra.accapp.databinding.ContentAccConfigEditorBinding
@@ -50,6 +51,11 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     private lateinit var mPreferences: Preferences
     private lateinit var initConfig: AccConfig
     private var accConfigOnly: Boolean = false
+
+    // Cached verified-switch artifact (read once on screen load). Used to populate the
+    // "Recommended charging switch" card and to flag a drain-class switch in the capacity
+    // picker (B18). Null until detect() returns; only Verified/NeedsTest are kept.
+    private var verifiedSwitch: VerifiedSwitch? = null
 
     private fun returnResults()
     {
@@ -194,11 +200,14 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
         viewModel.observeCapacity(this, Observer
         {
-            content.shutdownCapacityPicker.minValue = 2
+            content.shutdownCapacityPicker.setFormatter { v -> if (v == 0) getString(R.string.disabled) else v.toString() }
+            content.shutdownCapacityPicker.minValue = 0
             content.shutdownCapacityPicker.maxValue = 20
             content.shutdownCapacityPicker.value = it.shutdown
 
-            content.resumeCapacityPicker.minValue = it.shutdown
+            // B18: resume floor is shutdown+1 so resume can never equal shutdown (resuming at
+            // the shutdown level would race the auto power-off). Floored at 1.
+            content.resumeCapacityPicker.minValue = if (it.shutdown < 1) 1 else it.shutdown + 1
             content.resumeCapacityPicker.maxValue = if (it.pause == 101) 101 else it.pause - 1
             content.resumeCapacityPicker.value = it.resume
 
@@ -326,6 +335,178 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             // with an empty value. Reflect "is a command set" instead.
             viewModel.enables.eRunOnBoot = !viewModel.onBoot.isNullOrBlank()
             viewModel.enables.eRunOnPlug = !viewModel.onPlug.isNullOrBlank()
+        }
+
+        // Wire the Apply & Lock button once; the card itself stays hidden until detect()
+        // confirms a verified/needs-test switch for this device.
+        content.verifiedSwitchApplyButton.setOnClickListener { onApplyAndLockClick() }
+        setupVerifiedSwitchCard()
+    }
+
+    /**
+     * Reads the verified-switch artifact (off the main thread) and, only for a
+     * [VerifiedSwitch.Verified] / [VerifiedSwitch.NeedsTest] result for THIS device,
+     * shows the "Recommended charging switch" card. DeviceMismatch / NoSwitch / None
+     * leave the card hidden. The actual pin always goes through a live test in
+     * [onApplyAndLockClick] — this is a read-only suggestion.
+     */
+    private fun setupVerifiedSwitchCard()
+    {
+        launch {
+            val result = withContext(Dispatchers.IO)
+            {
+                try { VerifiedSwitch.detect() }
+                catch (ex: Exception)
+                {
+                    LogExt().e(javaClass.simpleName, "VerifiedSwitch.detect() failed: $ex")
+                    VerifiedSwitch.None
+                }
+            }
+
+            if (isFinishing || isDestroyed) return@launch
+
+            verifiedSwitch = result
+            when (result)
+            {
+                is VerifiedSwitch.Verified ->
+                {
+                    content.verifiedSwitchTextview.text =
+                        getString(R.string.verified_switch_for_device, result.switch, result.klass)
+                    content.verifiedSwitchCaveat.visibility = View.GONE
+                    content.verifiedSwitchCard.visibility = View.VISIBLE
+                }
+                is VerifiedSwitch.NeedsTest ->
+                {
+                    content.verifiedSwitchTextview.text =
+                        getString(R.string.verified_switch_for_device, result.switch, result.klass)
+                    content.verifiedSwitchCaveat.visibility = View.VISIBLE
+                    content.verifiedSwitchCard.visibility = View.VISIBLE
+                }
+                else -> content.verifiedSwitchCard.visibility = View.GONE
+            }
+        }
+    }
+
+    /**
+     * The verified switch spec from the artifact, or null if the cached result is not a
+     * Verified/NeedsTest hit. Format: "<path> <on> <off>".
+     */
+    private fun verifiedSwitchSpec(): String? = when (val v = verifiedSwitch)
+    {
+        is VerifiedSwitch.Verified -> v.switch
+        is VerifiedSwitch.NeedsTest -> v.switch
+        else -> null
+    }
+
+    /**
+     * B18 helper: is the editor's currently-selected charging switch a drain type?
+     *
+     * The only authoritative class signal available is the verified-switch artifact's
+     * `class` field, so we report drain ONLY when (a) the artifact classifies the device's
+     * switch as "drain" AND (b) the selected switch's control node matches that artifact
+     * switch's node. This is deliberately conservative (positive evidence only) so the
+     * deep-discharge warning never false-fires on an unrelated/unknown switch.
+     */
+    private fun isSelectedSwitchDrainClass(): Boolean
+    {
+        val klass = when (val v = verifiedSwitch)
+        {
+            is VerifiedSwitch.Verified -> v.klass
+            is VerifiedSwitch.NeedsTest -> v.klass
+            else -> null
+        } ?: return false
+        if (!klass.equals("drain", ignoreCase = true)) return false
+
+        val selected = viewModel.chargeSwitch ?: return false
+        val verifiedNode = verifiedSwitchSpec()?.trim()?.substringBefore(' ') ?: return false
+        val selectedNode = selected.trim().substringBefore(' ')
+        return selectedNode.isNotEmpty() && selectedNode == verifiedNode
+    }
+
+    /**
+     * Apply & Lock: live-test the recommended switch, and only on a pass write the manual
+     * pin (charging_switch = "<sw> --", automatic OFF). NEVER writes without a passing test
+     * — this is a charging-safety gate, enforced for Verified just as for NeedsTest. Requires
+     * the phone to be charging (the live test cannot run unplugged).
+     */
+    private fun onApplyAndLockClick()
+    {
+        val switch = verifiedSwitchSpec() ?: return
+
+        launch {
+            val charging = try { Acc.instance.isBatteryCharging() }
+            catch (ex: Exception)
+            {
+                LogExt().e(javaClass.simpleName, "isBatteryCharging() failed: $ex")
+                false
+            }
+
+            if (!charging)
+            { // Cannot live-test unplugged: prompt to plug in instead of testing.
+                if (isFinishing || isDestroyed) return@launch
+                MaterialDialog(this@AccConfigEditorActivity).show {
+                    title(R.string.verified_switch_title)
+                    message(R.string.verified_switch_plug_to_apply)
+                    positiveButton(android.R.string.ok)
+                }
+                return@launch
+            }
+
+            val dialog = MaterialDialog(this@AccConfigEditorActivity).show {
+                title(R.string.verified_switch_title)
+                cancelOnTouchOutside(false)
+                // progress() installs a custom view; do NOT also call message() (MaterialDialog
+                // forbids both). Pass the "testing…" text straight into progress().
+                progress(R.string.verified_switch_testing)
+            }
+
+            val passed = try { Acc.instance.testChargingSwitch(switch) == 0 }
+            catch (ex: Exception)
+            {
+                LogExt().e(javaClass.simpleName, "testChargingSwitch() failed: $ex")
+                false
+            }
+            finally
+            {
+                if (dialog.isShowing) dialog.cancel()
+            }
+
+            if (isFinishing || isDestroyed) return@launch
+
+            if (!passed)
+            {
+                Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_failed_live_test, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            // Passed the live test: write the manual pin via the same config-update path the
+            // editor uses (automatic OFF appends " --"). Done off the main thread.
+            val written = try
+            {
+                withContext(Dispatchers.IO) { Acc.instance.updateAccChargingSwitch(switch, false) }
+            }
+            catch (ex: Exception)
+            {
+                LogExt().e(javaClass.simpleName, "updateAccChargingSwitch() failed: $ex")
+                false
+            }
+
+            if (isFinishing || isDestroyed) return@launch
+
+            if (written)
+            {
+                // Reflect the pinned switch in the editor's LiveData-backed state so the shown
+                // switch + the Automatic toggle refresh and a later Save keeps the pin. (These
+                // two setters are the authoritative store; viewModel.profile is rebuilt from
+                // them on read.)
+                viewModel.chargeSwitch = switch
+                viewModel.isAutomaticSwitchEanbled = false
+                Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_applied, Toast.LENGTH_LONG).show()
+            }
+            else
+            {
+                Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -557,7 +738,21 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         when (picker)
         {
             //capacity
-            content.shutdownCapacityPicker -> viewModel.capacity = viewModel.capacity.copy(shutdown = newVal)
+            content.shutdownCapacityPicker -> {
+                viewModel.capacity = viewModel.capacity.copy(shutdown = newVal)
+                if (newVal == 0 && oldVal > 0)
+                {
+                    // B18: when the selected switch is a drain type, shutdown=0 is a deep-discharge
+                    // risk — show the stronger drain-specific warning instead of the generic one.
+                    // Both are NON-BLOCKING (info only); shutdown=0 stays a valid, saveable config.
+                    val drain = isSelectedSwitchDrainClass()
+                    MaterialDialog(this@AccConfigEditorActivity).show {
+                        title(text = getString(if (drain) R.string.drain_shutdown_zero_title else R.string.shutdown_capacity_off_title))
+                        message(text = getString(if (drain) R.string.drain_shutdown_zero_warning else R.string.shutdown_capacity_off_warning))
+                        positiveButton(android.R.string.ok)
+                    }
+                }
+            }
             content.resumeCapacityPicker -> viewModel.capacity = viewModel.capacity.copy(resume = newVal)
             content.pauseCapacityPicker -> viewModel.capacity = viewModel.capacity.copy(pause = newVal)
             content.temperatureCooldownPicker -> viewModel.temperature = viewModel.temperature.copy(coolDownTemperature = newVal)

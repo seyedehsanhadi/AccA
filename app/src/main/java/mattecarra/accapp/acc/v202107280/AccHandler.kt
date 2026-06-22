@@ -352,12 +352,12 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override suspend fun setChargingLimitForOneCharge(limit: Int): Boolean = withContext(Dispatchers.IO) {
-        // `acc -f` blocks for the entire charge, so it must stay backgrounded. We drop the
-        // OUTER level of backgrounding (was `(acc -f &) &`) and instead first verify `acc`
-        // is resolvable, then launch it backgrounded. This way isSuccess reflects whether
-        // the command could actually be launched (e.g. catches acc absent) while the long
-        // charge itself still runs non-blocking in the background. "true" = launched, not done.
-        Shell.su("command -v acc >/dev/null 2>&1 && (acc -f $limit &)").exec().isSuccess
+        // `acc -f` blocks for the entire charge, so it must stay backgrounded. The bare-PATH
+        // `command -v acc` probe silently no-ops on KernelSU (acc is not on PATH there), so use
+        // the absolute binary path used everywhere else in this handler. isSuccess reflects
+        // whether the command could be launched (catches acc absent) while the long charge
+        // itself still runs non-blocking in the background. "true" = launched, not done.
+        Shell.su("(/dev/.vr25/acc/acca -f $limit &)").exec().isSuccess
     }
 
     // Structural, case-insensitive match so a reworded ACC probe line doesn't

@@ -27,6 +27,7 @@ import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -344,24 +345,30 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             // call spawns the su daemon / shows the root prompt) AND Acc/Djs detection +
             // instance warm-up (their getters do blocking Shell.su). Doing any of these on
             // the main thread froze the UI to a blank/white screen (ANR) -- the reported bug.
-            val state = withContext(Dispatchers.IO) {
-                try {
-                    if (!Shell.rootAccess()) return@withContext "noroot"
-                    val ok = Acc.isAccInstalled(filesDir)
-                    if (ok) {
-                        Acc.instance   // warm ACC off-main
-                        // DJS has the SAME blocking-shell getter; warm it too so the
-                        // Schedules tab (SchedulesViewModel -> Djs.instance) never blocks main.
-                        try { if (Djs.isDjsInstalled(filesDir)) Djs.instance } catch (_: Exception) {}
+            // Cap the blocking ACC probe. If ACC is half-installed / the daemon can't start
+            // (common on KernelSU), acca calls block on `accd --init` (up to ~70s) and the app
+            // appears stuck on a loading screen. Time out and show a clear message instead.
+            val state = withTimeoutOrNull(20_000L) {
+                withContext(Dispatchers.IO) {
+                    try {
+                        if (!Shell.rootAccess()) return@withContext "noroot"
+                        val ok = Acc.isAccInstalled(filesDir)
+                        if (ok) {
+                            Acc.instance   // warm ACC off-main
+                            // DJS has the SAME blocking-shell getter; warm it too so the
+                            // Schedules tab (SchedulesViewModel -> Djs.instance) never blocks main.
+                            try { if (Djs.isDjsInstalled(filesDir)) Djs.instance } catch (_: Exception) {}
+                        }
+                        if (ok) "ok" else "noacc"
+                    } catch (e: Exception) {
+                        LogExt().e(javaClass.simpleName, "ACC detection failed: ${e.message}"); "noacc"
                     }
-                    if (ok) "ok" else "noacc"
-                } catch (e: Exception) {
-                    LogExt().e(javaClass.simpleName, "ACC detection failed: ${e.message}"); "noacc"
                 }
-            }
+            } ?: "stuck"
             if (isFinishing) return@launch
             when (state) {
                 "noroot" -> showNoRoot()
+                "stuck" -> showAccStuck()
                 "ok" -> {
                     try { initUi() }
                     catch (e: Exception) {
@@ -410,6 +417,25 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 finish()
                 false
             }
+        }
+    }
+
+    // ACC files are present but the daemon never initialized (probe timed out). Usually a
+    // broken/partial install -- common on KernelSU. Offer retry / reinstall instead of hanging.
+    private fun showAccStuck() {
+        if (isFinishing) return
+        MaterialDialog(this).show {
+            title(R.string.acc_daemon_stuck_title)
+            message(R.string.acc_daemon_stuck_message)
+            positiveButton(R.string.retry) { detectAccAndInit() }
+            negativeButton(R.string.get_acc) {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
+                } catch (_: Exception) { }
+            }
+            neutralButton(R.string.exit) { finish() }
+            cancelOnTouchOutside(false)
+            onKeyCodeBackPressed { finish(); false }
         }
     }
 

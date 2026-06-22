@@ -55,6 +55,12 @@ class DashboardFragment : ScopedFragment()
     private lateinit var preferences: Preferences
     private var mIsDaemonRunning: Boolean? = null
 
+    // B12 charging-health warning: count consecutive polls where charging looks broken.
+    // The card only appears once the condition is SUSTAINED (>= 2 ticks, ~4s) so a single
+    // transient tick during a normal pause/cooldown switch-over never trips it.
+    private var mHealthWarnTicks: Int = 0
+    private val HEALTH_WARN_MIN_TICKS = 2
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View?
     {
         _binding = DashboardFragmentBinding.inflate(inflater, container, false)
@@ -103,6 +109,8 @@ class DashboardFragment : ScopedFragment()
             binding.dashBatteryTemperatureTextView.text = dash.batteryInfo.getTemperature(preferences.temperatureOutputUnitOfMeasure, true)
             binding.dashBatteryHealthTextView.text = dash.batteryInfo.health
             binding.dashBatteryVoltageTextView.text = dash.batteryInfo.getVoltageNow(preferences.voltageInputUnitOfMeasure, preferences.voltageOutputUnitOfMeasure, true)
+
+            evaluateHealthWarning(dash)
         }
 
         activity?.let { it ->
@@ -276,6 +284,70 @@ class DashboardFragment : ScopedFragment()
             binding.dashDaemonToggleButton.setIconResource(R.drawable.ic_outline_play_arrow_24px)
             binding.dashDaemonToggleButton.setText(R.string.start)
         }
+    }
+
+    /**
+     * B12: warn that charging may be broken — but ONLY when ALL of these hold, and only after
+     * the condition has been SUSTAINED across [HEALTH_WARN_MIN_TICKS] polls:
+     *   - the ACC daemon is running
+     *   - the charger is plugged in (status == "Not charging": Android's plugged-but-halted state)
+     *   - the battery is NOT charging (implied by the status above)
+     *   - capacity is below the configured pause level
+     *   - charging is not already complete (isChargeDone)
+     *   - ACC is NOT intentionally holding charge (isChargeDisabled) -> excludes the normal
+     *     pause-capacity / cooldown / thermal pauses
+     *   - the battery is below the thermal-pause temperature (excludes a max-temp pause)
+     *
+     * It reads only the already-polled [BatteryInfo] plus the cached config (no extra root
+     * calls). "Discharging" is deliberately NOT treated as plugged, so a phone simply running
+     * on battery can never trip the card. Everything is best-effort: if the config is not
+     * loaded yet we do not warn.
+     */
+    private fun evaluateHealthWarning(dash: DashboardValues)
+    {
+        if (_binding == null || !isAdded) return
+
+        val warn = computeHealthWarn(dash)
+
+        // Sustained gate: require the broken-looking condition on consecutive ticks before
+        // showing; any good tick resets the counter and hides the card immediately.
+        if (warn) mHealthWarnTicks++ else mHealthWarnTicks = 0
+
+        binding.dashHealthWarningCard.visibility =
+            if (mHealthWarnTicks >= HEALTH_WARN_MIN_TICKS) View.VISIBLE else View.GONE
+    }
+
+    private fun computeHealthWarn(dash: DashboardValues): Boolean
+    {
+        // Daemon must be running.
+        if (dash.daemon != true) return false
+
+        val info = dash.batteryInfo
+
+        // Plugged but halted. NOT_CHARGING is Android's "power attached, battery not charging"
+        // state; "Charging" obviously means it works, "Discharging" means unplugged/draining.
+        if (info.status != "Not charging") return false
+
+        // Already full / done -> normal, never warn.
+        if (info.isChargeDone) return false
+
+        // ACC intentionally holding charge (pause-cap / cooldown / thermal) -> normal pause.
+        if (info.isChargeDisabled) return false
+
+        // Need the config to know the pause level + thermal ceiling; if it is not loaded yet
+        // we stay silent rather than risk a false positive.
+        if (!::configViewModel.isInitialized) return false
+
+        val pause = configViewModel.getAccConfigValue { it.configCapacity.pause } ?: return false
+        // Above (or at) the pause level, "not charging" is exactly what ACC should do.
+        if (info.capacity < 0 || info.capacity >= pause) return false
+
+        // Exclude a thermal pause: if temperature is at/above the configured max, not charging
+        // is expected. Temperature is -1 when unknown -> skip this guard then.
+        val maxTemp = configViewModel.getAccConfigValue { it.configTemperature.maxTemperature }
+        if (maxTemp != null && info.temperature >= 0 && info.temperature >= maxTemp) return false
+
+        return true
     }
 
 }

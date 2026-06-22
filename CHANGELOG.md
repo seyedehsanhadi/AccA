@@ -2,6 +2,22 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.7-rc3] - 2026-06-22
+
+**One-tap "Apply & Lock" of a tester-verified charging switch, a charging-health warning, and KernelSU fixes.**
+
+### Added
+- **Verified switch → "Apply & Lock".** When the acc-compat tester has verified a switch for this exact device, pin it in one tap -- written only after a live `acca -t` passes on a plugged-in phone and the device fingerprint matches, so it can never pin a stale or wrong-device switch (pump / low-confidence = a suggestion that still requires the test, never auto-pinned). You can still add, test and switch to any other working switch from the editor as before.
+- **Charging-health card** -- warns when the daemon is running but charging is actually broken; gated so it stays quiet during normal pause/cooldown.
+
+### Fixed
+- **KernelSU:** "charge once to N%" and the ACC version readout now use the absolute daemon path (were silent no-ops).
+- **Capacity limits validate as a warning, not a wall** -- resume can't sit below shutdown, drain + disabled-shutdown warns of deep-discharge, but `shutdown_capacity=0` ("Disabled") stays saveable.
+- **No more stuck loading screen** when the daemon can't initialize (KernelSU): the probe times out (~20 s) with a recovery dialog.
+
+### Note
+Pairs with ACC 6.4-rc3 (charging daemon unchanged from rc2); switch verification via the acc-compat v5.3 tester.
+
 ## [1.1.7-rc2] - 2026-06-13
 
 **Fixes profiles not "landing" when you tap them, plus ACC 6.4-rc2 daemon fixes.**

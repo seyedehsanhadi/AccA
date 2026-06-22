@@ -229,8 +229,13 @@ object Acc {
     }
 
     fun getAccVersionToStr(): String {
+        // Use the absolute binary path (KSU has no `acc`/`/dev/acca` on PATH, so the bare
+        // probe returned "" and the About screen showed a blank ACC version). Fall back to
+        // the legacy bare path for any odd install where the canonical path is absent.
         return try {
-            Shell.su("/dev/acca --version").exec().out.joinToString(separator = "\n")
+            Shell.su("/dev/.vr25/acc/acca --version").exec().out.joinToString(separator = "\n").ifBlank {
+                Shell.su("acc --version").exec().out.joinToString(separator = "\n")
+            }
         } catch (e: Exception) {
             ""
         }

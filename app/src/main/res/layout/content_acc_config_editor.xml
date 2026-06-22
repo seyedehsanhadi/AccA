@@ -199,6 +199,65 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Verified-switch cockpit Card (shown only when a verified/needs-test switch exists for this device) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/verified_switch_card"
+            style="@style/Widget.MaterialComponents.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="@dimen/card_margin"
+            android:layout_marginTop="@dimen/card_margin"
+            android:layout_marginRight="@dimen/card_margin"
+            android:visibility="gone"
+            app:cardCornerRadius="@dimen/card_corner_radius"
+            app:cardElevation="3dp"
+            app:contentPadding="@dimen/card_content_padding"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/verified_switch_title"
+                    android:textAppearance="@style/TextAppearance.MaterialComponents.Headline6" />
+
+                <TextView
+                    android:id="@+id/verified_switch_textview"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/card_content_margin"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="16sp"
+                    tools:text="Verified switch for your device: /sys/... 1 0 (cut)" />
+
+                <TextView
+                    android:id="@+id/verified_switch_caveat"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/card_content_margin"
+                    android:text="@string/verified_switch_needs_test_caveat"
+                    android:textSize="14sp"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+                <Button
+                    android:id="@+id/verified_switch_apply_button"
+                    style="@style/Widget.AppCompat.Button.Colored"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/card_content_padding"
+                    android:text="@string/verified_switch_apply_lock"
+                    android:textColor="@color/color_surface" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Voltage Control Card -->
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.MaterialComponents.CardView"
