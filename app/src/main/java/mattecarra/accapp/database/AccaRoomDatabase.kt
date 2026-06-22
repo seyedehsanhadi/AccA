@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mattecarra.accapp.models.*
 
-@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 16)
+@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 17)
 @TypeConverters(ConfigConverter::class)
 abstract class AccaRoomDatabase : RoomDatabase()
 {
@@ -171,6 +171,21 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
+        // 1.1.7-rc3: remove the redundant/confusing "Scan & lock charging switch" script.
+        // It locks ACC's first-stopper switch, which conflicts with BOTH the daemon's own
+        // automatic switch-lock AND the new verified-switch Apply&Lock card (reliability-ranked,
+        // idle-preferring, live-tested). Three "lock a switch" paths gave different outcomes
+        // (e.g. input_suspend-drain vs charge_control_limit-idle) and confused users. The daemon
+        // auto-locks on its own; the card is the premium path; the diagnostic Test/Scan/List
+        // scripts (which never lock) are kept. Data-only DELETE, same pattern as MIGRATION_13_14.
+        private val MIGRATION_16_17: Migration = object : Migration(16, 17)
+        {
+            override fun migrate(database: SupportSQLiteDatabase)
+            {
+                database.execSQL("DELETE FROM scripts_table WHERE scBody = \"sh /data/adb/vr25/acc/acc-switch-scan.sh --apply\";")
+            }
+        }
+
         fun getDatabase(context: Context): AccaRoomDatabase
         {
             val tempInstance = INSTANCE
@@ -180,7 +195,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 // Create database instance here
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                         // If a migration ever throws, or the on-disk DB is a newer/corrupt
                         // version, REBUILD the DB instead of crashing on every launch -- that
                         // crash is what forced a manual uninstall/reinstall ("blank page until
@@ -258,12 +273,6 @@ abstract class AccaRoomDatabase : RoomDatabase()
             db.scriptsDao().insert(AccaScript(0, "Scan charging switches (fast)",
                 "Ranked switch scan; finds which switch actually stops charging (prints BEST=)",
                 "sh /data/adb/vr25/acc/acc-switch-scan.sh",
-                "", 0)
-            )
-
-            db.scriptsDao().insert(AccaScript(0, "Scan & lock charging switch",
-                "Finds the switch that stops charging and locks it; charging then holds at your limit.",
-                "sh /data/adb/vr25/acc/acc-switch-scan.sh --apply",
                 "", 0)
             )
 

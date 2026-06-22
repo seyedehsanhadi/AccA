@@ -565,35 +565,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         else super.onBackPressed()
     }
 
-//    private fun updateAccSwitchCard(config: AccConfig)
-//    {
-//        content.automaticSwitchEnabled.isChecked = config.configIsAutomaticSwitchingEnabled
-//        content.batteryPrioritizeIdleSwitchEnabled.isChecked = config.prioritizeBatteryIdleMode
-//        content.resetBSOnPauseSwitch.isChecked = config.configResetBsOnPause
-//        content.resetStatusUnplugSwitch.isChecked = config.configResetUnplugged
-//    }
-
-    private fun updateProfileSwitchCard(profileEnables: ProfileEnables)
-    {}
-
-    private fun updateCapacityCard(configCapacity: AccConfig.ConfigCapacity)
-    {}
-
-    private fun updateChargeSwitch(configChargeSwitch: String?)
-    {}
-
-    private fun updateTemperatureCard(configTemperature: AccConfig.ConfigTemperature)
-    {}
-
-    private fun updateCoolDownCard(configCoolDown: AccConfig.ConfigCoolDown?)
-    {}
-
-    private fun updateVoltageControlCard(configVoltage: AccConfig.ConfigVoltage)
-    {}
-
-    private fun updateCurrentMaxControlCard(currentMax: Int?)
-    {}
-
     //-------------------------------------------------------------------------------------
 
     fun onBatteryIdleTestButtonClick(v: View)

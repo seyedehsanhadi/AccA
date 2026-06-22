@@ -244,16 +244,26 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
         // runs exactly as before, so normal scripts are unaffected.
         val isTest = script.scBody.contains("-t") || script.scBody.contains("--test")
 
+        // A2: `acca`/`acc` are only on PATH via Magisk's system overlay; on KernelSU/APatch the
+        // built-in scripts must use the absolute path the rest of the app already uses, or they fail
+        // with "acca: not found". Rewrite a leading bare command; absolute `sh /data/adb/...` lines
+        // (e.g. the switch scanner) pass through untouched.
+        val body = when {
+            script.scBody.startsWith("acca ") -> "/dev/.vr25/acc/acca " + script.scBody.substring(5)
+            script.scBody.startsWith("acc ")  -> "/dev/.vr25/acc/acca " + script.scBody.substring(4)
+            else -> script.scBody
+        }
+
         val sr = if (isTest) {
             val tmp = java.io.File(mContext.cacheDir, "acca_run.sh")
             try {
-                tmp.writeText(script.scBody)
+                tmp.writeText(body)
                 Shell.su("timeout 180 sh ${tmp.absolutePath}").exec()
             } finally {
                 try { tmp.delete() } catch (_: Exception) {}
             }
         } else {
-            Shell.su(script.scBody).exec()
+            Shell.su(body).exec()
         }
 
         script.scExitCode = sr.code
