@@ -76,6 +76,18 @@
     <string name="no_root_message">AccA requires ROOT.</string>
     <string name="config_error_title">Config parse error</string>
     <string name="config_error_dialog">Failed to parse ACC config!\nPlease check whether \"su -c acc --set --print\" works.</string>
+
+    <!-- Config validation (mirrors write-config.sh so the daemon never silently coerces values to defaults) -->
+    <string name="invalid_config">Invalid configuration</string>
+    <string name="err_max_temp_range">Max temperature must be between 20 and 60 °C.</string>
+    <string name="err_cooldown_gap">Cool-down temperature must be at least 3 °C below the max temperature.</string>
+    <string name="err_resume_lt_max">Resume temperature must be below the max temperature.</string>
+    <string name="err_resume_window">Resume temperature must be within 10 °C below the max temperature.</string>
+    <string name="err_temp_order">Temperatures must be ordered: resume ≤ cool-down &lt; max.</string>
+    <string name="err_pause_pct">Pause capacity must be between 0 and 100%.</string>
+    <string name="err_cap_resume_lt_pause">Resume capacity must be below the pause capacity.</string>
+    <string name="err_cap_shutdown_lt_resume">Shutdown capacity must be below the resume capacity.</string>
+
     <string name="wait">Please wait...\nThis will take a few seconds.</string>
 
     <!-- Exit On Boot Card Strings -->

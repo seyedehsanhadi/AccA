@@ -57,8 +57,47 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     // picker (B18). Null until detect() returns; only Verified/NeedsTest are kept.
     private var verifiedSwitch: VerifiedSwitch? = null
 
+    /**
+     * Validates an [AccConfig] against the daemon's write-config.sh constraints. Returns null
+     * when the config is acceptable, else a user-facing error string. Without this the daemon
+     * silently coerces out-of-band values back to its defaults, so the user's edit is lost.
+     *
+     * configTemperature.pause is resume_temp in °C (legacy field name); configCapacity uses
+     * shutdown/resume/pause (% here, with pause == 101 the "disabled" sentinel).
+     */
+    private fun validateConfig(c: AccConfig): String?
+    {
+        val t = c.configTemperature                 // coolDownTemperature, maxTemperature, pause(=resume_temp)
+        val max = t.maxTemperature; val cd = t.coolDownTemperature; val res = t.pause
+        if (max !in 20..60) return getString(R.string.err_max_temp_range)
+        if (max - cd < 3)   return getString(R.string.err_cooldown_gap)
+        if (res >= max)     return getString(R.string.err_resume_lt_max)
+        if (max - res > 10) return getString(R.string.err_resume_window)
+        if (cd < res)       return getString(R.string.err_temp_order)
+
+        val cap = c.configCapacity                  // shutdown, resume, pause (% here; 101 == disabled sentinel)
+        if (cap.pause != 101)                       // skip when capacity pause is "disabled"
+        {
+            if (cap.pause !in 0..100) return getString(R.string.err_pause_pct)
+            if (cap.resume >= cap.pause) return getString(R.string.err_cap_resume_lt_pause)
+            if (cap.shutdown >= cap.resume) return getString(R.string.err_cap_shutdown_lt_resume)
+        }
+        return null
+    }
+
     private fun returnResults()
     {
+        val err = validateConfig(viewModel.profile.accConfig)
+        if (err != null)
+        {
+            MaterialDialog(this).show {
+                title(R.string.invalid_config)
+                message(text = err)
+                positiveButton(android.R.string.ok)
+            }
+            return   // do NOT finish(); keep the editor open so the user can fix it
+        }
+
         if (accConfigOnly)  // FIX OUT if load ONLY ACC Config
         {
             if (!viewModel.enables.eCoolDown) viewModel.coolDown = null

@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mattecarra.accapp.models.*
 
-@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 17)
+@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 18)
 @TypeConverters(ConfigConverter::class)
 abstract class AccaRoomDatabase : RoomDatabase()
 {
@@ -186,6 +186,20 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
+        // 1.1.8-rc8: remove the last standalone switch-scan script. Like the --apply
+        // variant dropped in 16_17, the bare scanner (sh /data/adb/vr25/acc/acc-switch-scan.sh)
+        // fights the daemon's own switch auto-discovery, bypasses the acca PATH-rewrite, and
+        // points at a helper that is absent on stock/KSU/APatch installs (dead row). The
+        // verified-switch Apply&Lock card is the supported path. Data-only DELETE, same
+        // pattern as MIGRATION_16_17.
+        private val MIGRATION_17_18: Migration = object : Migration(17, 18)
+        {
+            override fun migrate(database: SupportSQLiteDatabase)
+            {
+                database.execSQL("DELETE FROM scripts_table WHERE scBody = \"sh /data/adb/vr25/acc/acc-switch-scan.sh\";")
+            }
+        }
+
         fun getDatabase(context: Context): AccaRoomDatabase
         {
             val tempInstance = INSTANCE
@@ -195,7 +209,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 // Create database instance here
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
                         // If a migration ever throws, or the on-disk DB is a newer/corrupt
                         // version, REBUILD the DB instead of crashing on every launch -- that
                         // crash is what forced a manual uninstall/reinstall ("blank page until
@@ -267,12 +281,6 @@ abstract class AccaRoomDatabase : RoomDatabase()
             db.scriptsDao().insert(AccaScript(0, "Print current config",
                 "-s|--set e.g., acc -s",
                 "acca -s",
-                "", 0)
-            )
-
-            db.scriptsDao().insert(AccaScript(0, "Scan charging switches (fast)",
-                "Ranked switch scan; finds which switch actually stops charging (prints BEST=)",
-                "sh /data/adb/vr25/acc/acc-switch-scan.sh",
                 "", 0)
             )
 
