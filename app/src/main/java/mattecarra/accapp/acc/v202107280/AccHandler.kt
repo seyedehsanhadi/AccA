@@ -472,7 +472,12 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     override fun getUpdateAccChargingSwitchCommand(switch: String?, automaticSwitchingEnabled: Boolean) : String {
         return if(switch != null) {
-            "/dev/.vr25/acc/acca -s \"charging_switch=${shellEscapeForDoubleQuotes(switch)}${if (automaticSwitchingEnabled) "" else " --"}\""
+            // Always append the " --" manual-lock marker regardless of the caller's
+            // automaticSwitchingEnabled flag. The auto-cycle path has an enforcement gap
+            // (during cycle_switches_off the daemon briefly un-cuts each candidate to
+            // test it); pinning manually closes that gap. Apply&Lock and the Add-new
+            // dialog both already live-test before writing, so locking is safe here.
+            "/dev/.vr25/acc/acca -s \"charging_switch=${shellEscapeForDoubleQuotes(switch)} --\""
         } else {
             "/dev/.vr25/acc/acca -s \"charging_switch=\""
         }

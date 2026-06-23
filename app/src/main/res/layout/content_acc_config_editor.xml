@@ -184,15 +184,6 @@
                             android:textSize="16sp" />
                     </LinearLayout>
 
-                    <androidx.appcompat.widget.SwitchCompat
-                        android:id="@+id/automatic_switch_enabled"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/card_content_margin"
-                        android:checked="true"
-                        android:text="@string/automatic_switch_eanbled"
-                        android:textSize="16sp" />
-
                 </LinearLayout>
 
             </LinearLayout>

@@ -240,7 +240,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         viewModel.observePrioritizeBatteryIdleMode(this, Observer { content.batteryPrioritizeIdleSwitchEnabled.isChecked = it })
         viewModel.observeResetBSOnUnplug(this, Observer { content.resetStatusUnplugSwitch.isChecked = it })
         viewModel.observeResetBSOnPause(this, Observer { content.resetBSOnPauseSwitch.isChecked = it })
-        viewModel.observeIsAutomaticSwitchEnabled(this, Observer { content.automaticSwitchEnabled.isChecked = it })
 
         viewModel.observeCapacity(this, Observer
         {
@@ -263,8 +262,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         viewModel.observeChargeSwitch(this, Observer
         {
             content.chargingSwitchTextview.text = it ?: getString(R.string.automatic)
-            content.automaticSwitchEnabled.isEnabled = it != null
-            if (it == null) content.automaticSwitchEnabled.isChecked = true
         })
 
         viewModel.observeTemperature(this, Observer
@@ -356,8 +353,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
         //SwitchEnabled
         content.capacitySwitchEnabled.setOnCheckedChangeListener(this)
-        if (Acc.instance.version < 202007220) content.automaticSwitchEnabled.visibility = View.GONE
-        content.automaticSwitchEnabled.setOnCheckedChangeListener(this)
         content.voltcontrolSwitchEnabled.setOnCheckedChangeListener(this)
         content.batteryPrioritizeIdleSwitchEnabled.setOnCheckedChangeListener(this)
         content.tempSwitchEnabled.setOnCheckedChangeListener(this)
@@ -690,12 +685,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 content.shutdownCapacityPicker.isEnabled = p1
                 content.resumeCapacityPicker.isEnabled = p1
                 content.pauseCapacityPicker.isEnabled = p1
-            }
-
-            content.automaticSwitchEnabled ->
-            {
-                viewModel.isAutomaticSwitchEanbled = p1
-                viewModel.profile.accConfig.configIsAutomaticSwitchingEnabled = p1
             }
 
             content.voltcontrolSwitchEnabled ->
