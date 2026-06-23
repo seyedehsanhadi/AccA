@@ -48,7 +48,7 @@
     <string name="info_temperature">Temperature:</string>
     <string name="info_health">Health:</string>
     <string name="info_profile">Profile:</string>
-    <!-- Shown when acca --state reports the charging switch is manually pinned (userLocked) -->
+    <!-- Shown when the daemon state report marks the charging switch as user-pinned (userLocked) -->
     <string name="manual_lock_protected">Manual lock — protected</string>
 
     <!-- Status string: e.g. Charging (Fast), Discharging (N/A) -->

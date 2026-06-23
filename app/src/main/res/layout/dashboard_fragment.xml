@@ -329,7 +329,7 @@
                                 android:text="..." />
                         </LinearLayout>
 
-                        <!-- Manual-lock badge: shown only when acca --state reports userLocked -->
+                        <!-- Manual-lock badge: shown only when the daemon state report sets userLocked -->
                         <TextView
                             android:id="@+id/dash_manualLock_textView"
                             android:layout_width="wrap_content"
