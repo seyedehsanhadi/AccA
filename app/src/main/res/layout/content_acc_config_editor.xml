@@ -540,7 +540,7 @@
                         android:layout_height="wrap_content"
                         android:gravity="center_horizontal"
                         android:orientation="horizontal"
-                        android:weightSum="3">
+                        android:weightSum="4">
 
                         <TextView
                             android:id="@+id/cooldown_temp"
@@ -572,6 +572,16 @@
                             android:textColor="?android:attr/textColorPrimary"
                             android:textSize="14sp" />
 
+                        <TextView
+                            android:id="@+id/shutdown_temp_label"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="center_horizontal"
+                            android:text="@string/shutdown_temp"
+                            android:textColor="?android:attr/textColorPrimary"
+                            android:textSize="14sp" />
+
                     </LinearLayout>
 
                     <LinearLayout
@@ -579,7 +589,7 @@
                         android:layout_height="wrap_content"
                         android:layout_margin="@dimen/card_content_margin"
                         android:orientation="horizontal"
-                        android:weightSum="3">
+                        android:weightSum="4">
 
                         <NumberPicker
                             android:id="@+id/temperature_cooldown_picker"
@@ -601,6 +611,15 @@
 
                         <NumberPicker
                             android:id="@+id/temperature_max_pause_seconds_picker"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="3dp"
+                            android:layout_marginLeft="3dp"
+                            android:layout_weight="1"
+                            android:theme="@style/NumberPickerText" />
+
+                        <NumberPicker
+                            android:id="@+id/temperature_shutdown_picker"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="3dp"

@@ -99,12 +99,41 @@ class DashboardFragment : ScopedFragment()
 
             // Battery/Charge details
             binding.dashBatteryCapacityPBar.progress = dash.batteryInfo.capacity
-            binding.dashBatteryStatusTextView.text = getString(R.string.info_status_extended, dash.batteryInfo.status, dash.batteryInfo.chargeType)
 
-            binding.dashBatteryChargingSpeedTextView.text = if (dash.batteryInfo.isCharging()) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
+            // Prefer the rc9+ `acca --state` snapshot when present: its status/measuredClass and
+            // signed current are correct even while ACC is cutting (the legacy `acca -i` reads
+            // unplugged-while-plugged and carries no polarity). Fall back to batteryInfo otherwise.
+            val state = dash.state
+            if (state != null)
+            {
+                // measuredClass is the real measured behaviour (charging/discharging/cut/bypass);
+                // status is the kernel label. Show measuredClass when present, else status.
+                val label = state.measuredClass.ifBlank { state.status }
+                    .replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase() else c.toString() }
+                binding.dashBatteryStatusTextView.text = label
 
-            val plus = if (Acc.instance.version < 202107280) dash.batteryInfo.isCharging() else true
-            binding.dashChargingSpeedTextView.text = dash.batteryInfo.getCurrentNow(preferences.currentInputUnitOfMeasure, preferences.currentOutputUnitOfMeasure, plus, true)
+                val charging = state.measuredClass.equals("charging", true) ||
+                        (state.measuredClass.isBlank() && state.status.equals("Charging", true))
+                binding.dashBatteryChargingSpeedTextView.text =
+                    if (charging) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
+
+                binding.dashChargingSpeedTextView.text =
+                    formatCurrentFromState(state.signedCurrentMilliAmps())
+
+                // Manual-lock badge (rc8 userLocked): ACC will not auto-replace a user-pinned switch.
+                binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
+            }
+            else
+            {
+                binding.dashBatteryStatusTextView.text = getString(R.string.info_status_extended, dash.batteryInfo.status, dash.batteryInfo.chargeType)
+
+                binding.dashBatteryChargingSpeedTextView.text = if (dash.batteryInfo.isCharging()) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
+
+                val plus = if (Acc.instance.version < 202107280) dash.batteryInfo.isCharging() else true
+                binding.dashChargingSpeedTextView.text = dash.batteryInfo.getCurrentNow(preferences.currentInputUnitOfMeasure, preferences.currentOutputUnitOfMeasure, plus, true)
+
+                binding.dashManualLockTextView.visibility = View.GONE
+            }
 
             binding.dashBatteryTemperatureTextView.text = dash.batteryInfo.getTemperature(preferences.temperatureOutputUnitOfMeasure, true)
             binding.dashBatteryHealthTextView.text = dash.batteryInfo.health
@@ -225,6 +254,19 @@ class DashboardFragment : ScopedFragment()
             toggleAccdStatusUi(d.daemon)
             mIsDaemonRunning = d.daemon
         })
+    }
+
+    /**
+     * Formats an already-signed current (milliamps, from `acca --state`) into the user's
+     * chosen output unit, mirroring BatteryInfo.getCurrentNow's "x.xxx A" / "x mA" format.
+     * The sign is already correct (normalised by polarity/units), so no `positive` flag here.
+     */
+    private fun formatCurrentFromState(signedMilliAmps: Float): String
+    {
+        return if (preferences.currentOutputUnitOfMeasure == mattecarra.accapp.CurrentUnit.A)
+            String.format("%.3f", signedMilliAmps / 1000f) + " A"
+        else
+            signedMilliAmps.toInt().toString() + " mA"
     }
 
     private fun toggleAccdStatusUi(running: Boolean?)

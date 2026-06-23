@@ -67,13 +67,16 @@ class AccConfigEditorActivity : ScopedAppActivity(),
      */
     private fun validateConfig(c: AccConfig): String?
     {
-        val t = c.configTemperature                 // coolDownTemperature, maxTemperature, pause(=resume_temp)
-        val max = t.maxTemperature; val cd = t.coolDownTemperature; val res = t.pause
+        val t = c.configTemperature                 // coolDownTemperature, maxTemperature, pause(=resume_temp), shutdown
+        val max = t.maxTemperature; val cd = t.coolDownTemperature; val res = t.pause; val shutdown = t.shutdown
         if (max !in 20..60) return getString(R.string.err_max_temp_range)
         if (max - cd < 3)   return getString(R.string.err_cooldown_gap)
         if (res >= max)     return getString(R.string.err_resume_lt_max)
         if (max - res > 10) return getString(R.string.err_resume_window)
         if (cd < res)       return getString(R.string.err_temp_order)
+        // shutdown_temp ∈ [max(max_temp,40) .. 70] (write-config.sh): the over-temp cutoff
+        // must sit at or above both the pause temperature and 40 °C, and never above 70 °C.
+        if (shutdown !in maxOf(max, 40)..70) return getString(R.string.err_shutdown_temp_range)
 
         val cap = c.configCapacity                  // shutdown, resume, pause (% here; 101 == disabled sentinel)
         if (cap.pause != 101)                       // skip when capacity pause is "disabled"
@@ -275,6 +278,10 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             content.temperatureMaxPauseSecondsPicker.minValue = 10
             content.temperatureMaxPauseSecondsPicker.maxValue = 120
             content.temperatureMaxPauseSecondsPicker.value = it.pause
+
+            content.temperatureShutdownPicker.minValue = 40
+            content.temperatureShutdownPicker.maxValue = 70
+            content.temperatureShutdownPicker.value = it.shutdown
         })
 
         viewModel.observeCoolDown(this, Observer
@@ -334,6 +341,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         content.temperatureCooldownPicker.setOnValueChangedListener(this)
         content.temperatureMaxPicker.setOnValueChangedListener(this)
         content.temperatureMaxPauseSecondsPicker.setOnValueChangedListener(this)
+        content.temperatureShutdownPicker.setOnValueChangedListener(this)
 
         //coolDown
         content.cooldownPercentagePicker.setOnValueChangedListener(this)
@@ -707,6 +715,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 content.temperatureCooldownPicker.isEnabled = p1
                 content.temperatureMaxPicker.isEnabled = p1
                 content.temperatureMaxPauseSecondsPicker.isEnabled = p1
+                content.temperatureShutdownPicker.isEnabled = p1
             }
 
             content.cooldownSwitchEnabled ->
@@ -768,6 +777,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             content.temperatureCooldownPicker -> viewModel.temperature = viewModel.temperature.copy(coolDownTemperature = newVal)
             content.temperatureMaxPicker -> viewModel.temperature = viewModel.temperature.copy(maxTemperature = newVal)
             content.temperatureMaxPauseSecondsPicker -> viewModel.temperature = viewModel.temperature.copy(pause = newVal)
+            content.temperatureShutdownPicker -> viewModel.temperature = viewModel.temperature.copy(shutdown = newVal)
 
             //coolDown
             content.cooldownPercentagePicker, content.cooldownChargeRatioPicker,

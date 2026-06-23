@@ -98,7 +98,7 @@
                 android:layout_marginStart="16dp"
                 android:layout_marginLeft="16dp"
                 android:layout_marginTop="4dp"
-                android:maxLength="5"
+                android:maxLength="4"
                 android:hint="@string/current_max"
                 android:inputType="number" />
         </LinearLayout>

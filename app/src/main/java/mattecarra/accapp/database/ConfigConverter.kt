@@ -85,7 +85,13 @@ object ConfigConverter
     @JvmStatic
     fun toConfigTemperature(configTemperature: String) : AccConfig.ConfigTemperature
     {
-        return try { Gson().fromJson(configTemperature, AccConfig.ConfigTemperature::class.java) ?: AccConfig.ConfigTemperature() }
+        return try {
+            val parsed = Gson().fromJson(configTemperature, AccConfig.ConfigTemperature::class.java) ?: AccConfig.ConfigTemperature()
+            // Gson bypasses the Kotlin default constructor, so a profile saved before the
+            // shutdown_temp field existed deserializes with shutdown=0 (JVM zero), which the
+            // editor's [40..70] validation would reject. Restore ACC's default when absent.
+            if (parsed.shutdown <= 0) parsed.copy(shutdown = 55) else parsed
+        }
         catch (e: Exception) { LogExt().e("ConfigConverter", "toConfigTemperature parse failed: $e"); AccConfig.ConfigTemperature() }
     }
 

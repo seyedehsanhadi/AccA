@@ -106,8 +106,10 @@ fun MaterialDialog.powerLimitDialog(
     fun checkCurrent(value: String?)
     {
         // toIntOrNull: non-numeric or overflowing EditText input must invalidate
-        // the field, never crash the dialog.
-        inputCurrentMaxOK = (value?.toIntOrNull() ?: 0) > 0
+        // the field, never crash the dialog. Upper bound 9999 mirrors write-config.sh:
+        // `acca --set --current >9999` is REJECTED by the daemon (no limit applied at
+        // all) while the app would still report success, so cap it like voltage.
+        inputCurrentMaxOK = (value?.toIntOrNull() ?: 0) in 1..9999
         hideHintErrCurrent(inputCurrentMaxOK)
         setActionButtonEnabled(WhichButton.POSITIVE, inputCurrentMaxOK && inputVoltageMaxOk && inputVoltageControlFileOk)
     }

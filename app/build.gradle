@@ -125,4 +125,10 @@ dependencies {
     // Fragment KTX module
     implementation "androidx.fragment:fragment-ktx:1.3.6"
 
+    // Unit tests (JVM). org.json:json provides a REAL org.json on the unit-test classpath —
+    // Android's bundled org.json is a stub that throws in plain JVM tests — so AccState.parseState
+    // can be exercised without Robolectric/instrumentation.
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20210307'
+
 }

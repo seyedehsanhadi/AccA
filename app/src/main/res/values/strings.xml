@@ -48,6 +48,8 @@
     <string name="info_temperature">Temperature:</string>
     <string name="info_health">Health:</string>
     <string name="info_profile">Profile:</string>
+    <!-- Shown when acca --state reports the charging switch is manually pinned (userLocked) -->
+    <string name="manual_lock_protected">Manual lock — protected</string>
 
     <!-- Status string: e.g. Charging (Fast), Discharging (N/A) -->
     <string name="info_status_extended">%1$s (%2$s)</string>
@@ -71,6 +73,7 @@
     <string name="cooldown_temp">Cooldown temp:</string>
     <string name="max_temp">Max temp:</string>
     <string name="pause_seconds">Pause seconds:</string>
+    <string name="shutdown_temp">Shutdown temp:</string>
     <string name="charge_seconds">Charge seconds:</string>
     <string name="shutdown_capacity">Shutdown (if not charging) at:</string>
     <string name="no_root_message">AccA requires ROOT.</string>
@@ -84,6 +87,7 @@
     <string name="err_resume_lt_max">Resume temperature must be below the max temperature.</string>
     <string name="err_resume_window">Resume temperature must be within 10 °C below the max temperature.</string>
     <string name="err_temp_order">Temperatures must be ordered: resume ≤ cool-down &lt; max.</string>
+    <string name="err_shutdown_temp_range">Shutdown temperature must be between the max temperature (min 40) and 70 °C.</string>
     <string name="err_pause_pct">Pause capacity must be between 0 and 100%.</string>
     <string name="err_cap_resume_lt_pause">Resume capacity must be below the pause capacity.</string>
     <string name="err_cap_shutdown_lt_resume">Shutdown capacity must be below the resume capacity.</string>

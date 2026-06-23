@@ -83,8 +83,10 @@ import java.io.Serializable
      * @param maxTemperature pause charging when the battery reaches this temperature.
      * @param pause resume temperature: resume charging once the battery cools to this
      *        (this maps to ACC's resume_temp in °C; the field name is legacy).
+     * @param shutdown over-temperature cutoff: ACC shuts the device down at this
+     *        temperature (ACC's shutdown_temp in °C). Default 55 matches the daemon.
      */
-    data class ConfigTemperature(var coolDownTemperature: Int = 45, var maxTemperature: Int = 50, var pause: Int = 40) : Serializable
+    data class ConfigTemperature(var coolDownTemperature: Int = 45, var maxTemperature: Int = 50, var pause: Int = 40, var shutdown: Int = 55) : Serializable
     {
         fun toString(context: Context): String
         {

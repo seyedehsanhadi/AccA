@@ -8,6 +8,7 @@ import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.acc.ConfigUpdateResult
 import mattecarra.accapp.acc.ConfigUpdaterEnable
 import mattecarra.accapp.models.AccConfig
+import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.BatteryInfo
 
 interface AccInterface {
@@ -22,6 +23,13 @@ interface AccInterface {
     suspend fun resetBatteryStats(): Boolean
 
     suspend fun getBatteryInfo(): BatteryInfo
+
+    /**
+     * Returns the daemon's structured `acca --state` snapshot (rc9+), or null when the
+     * running ACC predates it / emits an unparseable payload — callers then fall back to
+     * the legacy `acca -i` path. Default is null so only the rc9+ handler implements it.
+     */
+    suspend fun getState(): AccState? = null
 
     suspend fun isBatteryCharging(): Boolean
 
@@ -94,12 +102,13 @@ interface AccInterface {
      * @param coolDownTemperature starts cool down phase at the specified temperature.
      * @param temperatureMax pauses charging at the specified temperature.
      * @param wait seconds to wait until charging is resumed.
+     * @param shutdownTemperature over-temperature cutoff: ACC shuts down at this temperature.
      * @return the boolean result of the command's execution.
      */
-    fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int): String
-    suspend fun updateAccTemperature(coolDownTemperature: Int, temperatureMax: Int, wait: Int) : Boolean = withContext(
+    fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int, shutdownTemperature: Int): String
+    suspend fun updateAccTemperature(coolDownTemperature: Int, temperatureMax: Int, wait: Int, shutdownTemperature: Int) : Boolean = withContext(
         Dispatchers.IO) {
-        Shell.su(getUpdateAccTemperatureCommand(coolDownTemperature, temperatureMax, wait)).exec().isSuccess
+        Shell.su(getUpdateAccTemperatureCommand(coolDownTemperature, temperatureMax, wait, shutdownTemperature)).exec().isSuccess
     }
 
     /**

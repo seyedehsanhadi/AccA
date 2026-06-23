@@ -329,6 +329,19 @@
                                 android:text="..." />
                         </LinearLayout>
 
+                        <!-- Manual-lock badge: shown only when acca --state reports userLocked -->
+                        <TextView
+                            android:id="@+id/dash_manualLock_textView"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:gravity="center_vertical"
+                            android:text="@string/manual_lock_protected"
+                            android:textColor="@color/colorSuccessful"
+                            android:textSize="@dimen/label_text"
+                            android:textStyle="bold"
+                            android:visibility="gone" />
+
                     </LinearLayout>
                 </LinearLayout>
 

@@ -335,7 +335,7 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     override fun getUpdateAccCapacityCommand(shutdown: Int, coolDown: Int, resume: Int, pause: Int): String = ".acc-en -s shutdown_capacity=$shutdown cooldown_capacity=$coolDown resume_capacity=$resume pause_capacity=$pause"
 
-    override fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int): String = ".acc-en -s cooldown_temp=${coolDownTemperature} max_temp=${temperatureMax} max_temp_pause=$wait"
+    override fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int, shutdownTemperature: Int): String = ".acc-en -s cooldown_temp=${coolDownTemperature} max_temp=${temperatureMax} max_temp_pause=$wait"
 
     override fun getUpdateAccVoltControlCommand(voltFile: String?, voltMax: Int?): String = ".acc-en --set max_charging_voltage=${voltMax?.toString().orEmpty()}"
 

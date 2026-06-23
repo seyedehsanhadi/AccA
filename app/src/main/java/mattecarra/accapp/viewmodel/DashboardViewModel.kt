@@ -30,10 +30,14 @@ class DashboardViewModel : ViewModel() {
             while (true) {
                 if (dashboard.hasActiveObservers()) {
                     try {
+                        // Prefer the rc9+ structured `acca --state` (correct plugged/polarity/
+                        // measured-class). getState() returns null on older daemons, so the
+                        // fragment falls back to the legacy batteryInfo unchanged.
                         dashboard.postValue(
                             DashboardValues(
                                 Acc.instance.getBatteryInfo(),
-                                Acc.instance.isAccdRunning()
+                                Acc.instance.isAccdRunning(),
+                                Acc.instance.getState()
                             )
                         )
                     } catch (e: Exception) {

@@ -9,6 +9,7 @@ import mattecarra.accapp.acc.ConfigUpdater
 import mattecarra.accapp.acc.ConfigUpdaterEnable
 import mattecarra.accapp.acc._interface.AccInterface
 import mattecarra.accapp.models.AccConfig
+import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.BatteryInfo
 import mattecarra.accapp.utils.LogExt
 import java.io.IOException
@@ -32,6 +33,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     val COOLDOWN_TEMP_REGEXP = """^\s*cooldown_temp=(\d*)""".toRegex(RegexOption.MULTILINE)
     val MAX_TEMP_REGEXP = """^\s*max_temp=(\d*)""".toRegex(RegexOption.MULTILINE)
     val MAX_TEMP_PAUSE_REGEXP = """^\s*(?:max_temp_pause|resume_temp)=(\d*)""".toRegex(RegexOption.MULTILINE)
+    val SHUTDOWN_TEMP_REGEXP = """^\s*shutdown_temp=(\d*)""".toRegex(RegexOption.MULTILINE)
 
     val COOLDOWN_CHARGE_REGEXP = """^\s*cooldown_charge=(\d*)""".toRegex(RegexOption.MULTILINE)
     val COOLDOWN_PAUSE_REGEXP  = """^\s*cooldown_pause=(\d*)""".toRegex(RegexOption.MULTILINE)
@@ -71,6 +73,9 @@ open class AccHandler(override val version: Int) : AccInterface {
         val temperatureCooldown = matchInt(COOLDOWN_TEMP_REGEXP) ?: 45
         val temperatureMax      = matchInt(MAX_TEMP_REGEXP) ?: 50
         val waitSeconds         = matchInt(MAX_TEMP_PAUSE_REGEXP) ?: 40
+        // shutdown_temp is the over-temperature cutoff (°C). Default 55 = ACC's documented
+        // default, so a config that omits the key never loads as "no cutoff".
+        val shutdownTemp        = matchInt(SHUTDOWN_TEMP_REGEXP) ?: 55
 
         val coolDownChargeSeconds = COOLDOWN_CHARGE_REGEXP.find(config)?.destructured?.component1()?.toIntOrNull()
         val coolDownPauseSeconds = COOLDOWN_PAUSE_REGEXP.find(config)?.destructured?.component1()?.toIntOrNull()
@@ -82,7 +87,7 @@ open class AccHandler(override val version: Int) : AccInterface {
             AccConfig.ConfigCapacity(capacityShutdown, capacityResume, capacityPause),
             AccConfig.ConfigVoltage(null, maxChargingVoltage?.toIntOrNull()),
             maxChargingCurrent?.toIntOrNull(),
-            AccConfig.ConfigTemperature(temperatureCooldown, temperatureMax, waitSeconds),
+            AccConfig.ConfigTemperature(temperatureCooldown, temperatureMax, waitSeconds, shutdownTemp),
             getOnBoot(config),
             getOnPlugged(config),
             if(coolDownChargeSeconds != null && coolDownPauseSeconds != null)
@@ -226,6 +231,11 @@ open class AccHandler(override val version: Int) : AccInterface {
         STATUS_LOWER_REGEXP.find(info)?.destructured?.component1()?.trim()?.let {
             when {
                 it.contains("Not", true) -> STRING_NOT_CHARGING
+                // ACC reports "Idle" (battery-idle hold) and "Not charging" for a plugged-but-
+                // halted battery; both map to the not-charging label so the dashboard never
+                // mislabels an idle/cut hold as discharging on the legacy -i fallback path.
+                it.equals("Idle", true) -> STRING_NOT_CHARGING
+                it.equals("Not charging", true) -> STRING_NOT_CHARGING
                 it.equals("Discharging", true) -> STRING_DISCHARGING
                 it.equals("Charging", true) -> STRING_CHARGING
                 else -> it
@@ -287,6 +297,22 @@ open class AccHandler(override val version: Int) : AccInterface {
             CYCLE_COUNT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             POWER_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: POWER_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f
         )
+    }
+
+    /**
+     * rc9+ structured state. Runs `acca --state`, joins stdout, and parses the JSON via
+     * [AccState.parseState] (which returns null on schemaVersion < 1 or any parse error).
+     * Crash-safe: any shell failure yields null so the dashboard falls back to `acca -i`.
+     */
+    override suspend fun getState(): AccState? = withContext(Dispatchers.IO) {
+        try {
+            val res = Shell.su("/dev/.vr25/acc/acca --state").exec()
+            if (!res.isSuccess) return@withContext null
+            AccState.parseState(res.out.joinToString(separator = "\n"))
+        } catch (e: Exception) {
+            LogExt().e("AccHandler", "acca --state failed: ${e.message}")
+            null
+        }
     }
 
     override suspend fun isBatteryCharging(): Boolean = withContext(Dispatchers.IO) {
@@ -421,7 +447,7 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     override fun getUpdateAccCapacityCommand(shutdown: Int, coolDown: Int, resume: Int, pause: Int): String = "/dev/.vr25/acc/acca -s shutdown_capacity=$shutdown cooldown_capacity=$coolDown resume_capacity=$resume pause_capacity=$pause"
 
-    override fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int): String = "/dev/.vr25/acc/acca -s cooldown_temp=${coolDownTemperature} max_temp=${temperatureMax} max_temp_pause=$wait resume_temp=$wait"
+    override fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int, shutdownTemperature: Int): String = "/dev/.vr25/acc/acca -s cooldown_temp=${coolDownTemperature} max_temp=${temperatureMax} max_temp_pause=$wait resume_temp=$wait shutdown_temp=$shutdownTemperature"
 
     override fun getUpdateAccVoltControlCommand(voltFile: String?, voltMax: Int?): String = "/dev/.vr25/acc/acca --set --voltage ${voltMax?.toString() ?: "-"}"
 
