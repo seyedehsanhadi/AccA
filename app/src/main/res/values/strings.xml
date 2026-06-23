@@ -416,6 +416,9 @@
     <string name="cue_AccVoltControl_pref_title">AccVoltControl</string>
     <string name="cue_AccVoltControl_pref_summary">Enable send \"acca -set —voltage\" command</string>
 
+    <string name="allow_custom_scripts_pref_title">Allow custom shell scripts</string>
+    <string name="allow_custom_scripts_pref_summary">When off, only the bundled acca quick-actions can run. Required to add or edit script bodies.</string>
+
     <string-array name="theme_option_options">
         <item>Light</item>
         <item>Dark</item>

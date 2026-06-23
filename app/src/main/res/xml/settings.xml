@@ -98,6 +98,13 @@
             android:title="@string/cue_AccVoltControl_pref_title"
             app:iconSpaceReserved="false"></CheckBoxPreference>
 
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="pref_allow_custom_scripts"
+            android:summary="@string/allow_custom_scripts_pref_summary"
+            android:title="@string/allow_custom_scripts_pref_title"
+            app:iconSpaceReserved="false"></CheckBoxPreference>
+
     </PreferenceCategory>
 
     <PreferenceCategory

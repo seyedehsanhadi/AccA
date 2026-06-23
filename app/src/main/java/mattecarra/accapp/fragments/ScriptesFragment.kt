@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.preference.PreferenceManager
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -88,7 +89,15 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
             mScriptesAdapter.setScripts(scripts)
         })
 
-        view.findViewById<FloatingActionButton>(R.id.scripts_addBtn_fab).setOnClickListener{ onAddScript() }
+        // Gate authoring of arbitrary root shell behind the "Allow custom shell scripts"
+        // preference (off by default). When off, hide the FAB so users cannot add new
+        // scripts; the 12 seeded acca quick-actions remain runnable.
+        val allowCustomScripts = PreferenceManager.getDefaultSharedPreferences(mContext)
+            .getBoolean("pref_allow_custom_scripts", false)
+
+        val addFab = view.findViewById<FloatingActionButton>(R.id.scripts_addBtn_fab)
+        addFab.setOnClickListener{ onAddScript() }
+        addFab.visibility = if (allowCustomScripts) View.VISIBLE else View.GONE
 
         val itemTouchCallback = object : ItemTouchHelper.SimpleCallback(
             0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT

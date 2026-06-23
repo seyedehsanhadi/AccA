@@ -2,6 +2,7 @@ package mattecarra.accapp.adapters
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.preference.PreferenceManager
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -54,6 +55,13 @@ class ScriptListAdapter internal constructor(context: Context) : RecyclerView.Ad
         holder.optionsIb.setOnClickListener {
             with(PopupMenu(mContext, holder.optionsIb)) {
                 menuInflater.inflate(R.menu.scripts_options_menu, this.menu)
+
+                // Gate Edit (which lets the user replace the script body and run arbitrary
+                // root shell) behind the "Allow custom shell scripts" preference. Off by
+                // default; Rename/Copy/Delete + Run remain available either way.
+                val allowCustomScripts = PreferenceManager.getDefaultSharedPreferences(mContext)
+                    .getBoolean("pref_allow_custom_scripts", false)
+                this.menu.findItem(R.id.script_option_menu_edit)?.isVisible = allowCustomScripts
 
                 setOnMenuItemClickListener {
                     // Resolve the live position; the captured one can be stale.
