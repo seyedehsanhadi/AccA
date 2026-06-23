@@ -74,9 +74,11 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         if (res >= max)     return getString(R.string.err_resume_lt_max)
         if (max - res > 10) return getString(R.string.err_resume_window)
         if (cd < res)       return getString(R.string.err_temp_order)
-        // shutdown_temp ∈ [max(max_temp,40) .. 70] (write-config.sh): the over-temp cutoff
-        // must sit at or above both the pause temperature and 40 °C, and never above 70 °C.
-        if (shutdown !in maxOf(max, 40)..70) return getString(R.string.err_shutdown_temp_range)
+        // shutdown_temp safety: ACC's own rule is shutdown ∈ [max(max_temp, 40) .. 70]; AccA
+        // tightens it to >= max(max_temp + 3, 50) so the emergency cutoff sits at least 3 °C
+        // above the pause temperature (no near-instant shutdowns at the pause point) and never
+        // below the realistic Li-ion safety floor (ACC's 40 floor accepts unsafely-low values).
+        if (shutdown !in maxOf(max + 3, 50)..70) return getString(R.string.err_shutdown_temp_range)
 
         val cap = c.configCapacity                  // shutdown, resume, pause (% here; 101 == disabled sentinel)
         if (cap.pause != 101)                       // skip when capacity pause is "disabled"
@@ -279,7 +281,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             content.temperatureMaxPauseSecondsPicker.maxValue = 120
             content.temperatureMaxPauseSecondsPicker.value = it.pause
 
-            content.temperatureShutdownPicker.minValue = 40
+            content.temperatureShutdownPicker.minValue = 50
             content.temperatureShutdownPicker.maxValue = 70
             content.temperatureShutdownPicker.value = it.shutdown
         })

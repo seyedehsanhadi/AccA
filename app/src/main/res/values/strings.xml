@@ -87,7 +87,7 @@
     <string name="err_resume_lt_max">Resume temperature must be below the max temperature.</string>
     <string name="err_resume_window">Resume temperature must be within 10 °C below the max temperature.</string>
     <string name="err_temp_order">Temperatures must be ordered: resume ≤ cool-down &lt; max.</string>
-    <string name="err_shutdown_temp_range">Shutdown temperature must be between the max temperature (min 40) and 70 °C.</string>
+    <string name="err_shutdown_temp_range">Shutdown temperature must be at least 3 °C above the max (pause) temperature and never below 50 °C; ceiling is 70 °C.</string>
     <string name="err_pause_pct">Pause capacity must be between 0 and 100%.</string>
     <string name="err_cap_resume_lt_pause">Resume capacity must be below the pause capacity.</string>
     <string name="err_cap_shutdown_lt_resume">Shutdown capacity must be below the resume capacity.</string>
@@ -457,7 +457,7 @@
     <string name="charging_switch_on_value_label">Charging switch ON VALUE</string>
     <string name="charging_switch_off_value_label">Charging switch OFF VALUE</string>
     <string name="reset_bs_on_pause">Reset battery stats on pause \%</string>
-    <string name="current_max">Max Current (mA):</string>
+    <string name="current_max">Max Current (mA, 1–9999; empty = native speed)</string>
     <string name="invalid_current_max">Invalid Max Current Value</string>
 
     <!-- Import and Export -->
