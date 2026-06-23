@@ -546,7 +546,7 @@
     <string name="drain_shutdown_zero_warning">The selected charging switch is a drain type (it discharges the battery to hold the limit) and auto power-off is disabled (shutdown = 0). Together these can deep-discharge the battery until it is hard to recharge or boot. Consider setting a shutdown capacity, or pick a non-drain switch.</string>
 
     <!-- 1.1.7 one-shot migration: shown when the daemon's saved charging_switch is missing the
-         manual-lock marker (" --") on first launch after upgrade and AccA re-writes it. -->
+         manual-lock marker on first launch after upgrade and AccA re-writes it. -->
     <string name="relock_v117_done">Charging switch re-locked for safety (1.1.7).</string>
 
 </resources>
