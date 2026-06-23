@@ -39,6 +39,10 @@
     <string name="start">Start</string>
     <string name="stop">Stop</string>
 
+    <!-- Confirm before stopping the daemon (Dashboard) — accidental tap disables charge limit. -->
+    <string name="confirm_stop_daemon_title">Stop ACC daemon?</string>
+    <string name="confirm_stop_daemon_message">ACC will stop enforcing your charge limit until you start it again.</string>
+
     <!-- Battery Card Strings -->
     <string name="title_battery">Battery</string>
     <string name="info_status">Status:</string>
@@ -218,6 +222,9 @@
     <string name="edit_on_plugged">Edit apply_on_plug settings:</string>
 
     <string name="edit_on_plugged_dialog_message">Example: wireless/voltage_max::9000000 forces fast wireless charging on some Pixel devices.</string>
+
+    <!-- Shared root-warning under both apply_on_boot and apply_on_plug edit dialogs. -->
+    <string name="on_boot_plug_root_warning">Runs as root every boot / plug — only paste commands you trust.</string>
 
     <string translatable="false" name="lang_ar">العربية</string>
     <string translatable="false" name="lang_az">Azərbaycan</string>
@@ -459,6 +466,8 @@
     <string name="add_charging_switch">Add Charging Switch</string>
     <string name="charging_switch_on_value_label">Charging switch ON VALUE</string>
     <string name="charging_switch_off_value_label">Charging switch OFF VALUE</string>
+    <!-- Add-Switch needs a live test, which only runs while charging — block save when unplugged. -->
+    <string name="err_add_switch_needs_plug">Plug in the charger to add a switch — it must be live-tested first.</string>
     <string name="reset_bs_on_pause">Reset battery stats on pause \%</string>
     <string name="current_max">Max Current (mA, 1–9999; empty = native speed)</string>
     <string name="invalid_current_max">Invalid Max Current Value</string>

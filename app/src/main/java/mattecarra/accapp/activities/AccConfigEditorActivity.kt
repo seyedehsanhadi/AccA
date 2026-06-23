@@ -803,7 +803,9 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     {
         MaterialDialog(this@AccConfigEditorActivity).show {
             title(R.string.edit_on_boot)
-            message(R.string.edit_on_boot_dialog_message)
+            // Existing description + a one-line root-warning. The hooks run as root on every
+            // boot/plug, so paste-untrusted-command is the realistic foot-gun to flag here.
+            message(text = getString(R.string.edit_on_boot_dialog_message) + "\n\n" + getString(R.string.on_boot_plug_root_warning))
             input(
                 prefill = viewModel.onBoot ?: "",
                 allowEmpty = true,
@@ -820,7 +822,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     {
         MaterialDialog(this@AccConfigEditorActivity).show {
             title(R.string.edit_on_plugged)
-            message(R.string.edit_on_plugged_dialog_message)
+            message(text = getString(R.string.edit_on_plugged_dialog_message) + "\n\n" + getString(R.string.on_boot_plug_root_warning))
             input(
                 prefill = viewModel.onPlug ?: "",
                 allowEmpty = true,
@@ -884,16 +886,32 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                             val binding = AddChargingSwitchDialogBinding.inflate(layoutInflater)
                             customView(view = binding.root)
                             positiveButton { dialog ->
-                                val progressDialog =
-                                    MaterialDialog(this@AccConfigEditorActivity).show {
-                                        title(R.string.test_switch)
-                                        progress(R.string.wait)
-                                    }
-
 //                                val view = dialog.getCustomView()
 //                                val switch = "${view.charging_switch_edit_text.text} ${view.charging_switch_on_value_edit_text.text} ${view.charging_switch_off_value_edit_text.text}"
                                 val switch = "${binding.chargingSwitchEditText.text} ${binding.chargingSwitchOnValueEditText.text} ${binding.chargingSwitchOffValueEditText.text}"
                                 this@AccConfigEditorActivity.launch {
+                                    // A new switch MUST be live-tested before it's added; running unplugged would
+                                    // accept an untested entry. Mirrors the Apply&Lock plug guard. Refuse the save
+                                    // here (BEFORE showing the spinner / opening the try-finally that dismisses the
+                                    // Add-new dialog) so the user keeps their typed values and can plug-in + retry.
+                                    val charging = try { Acc.instance.isBatteryCharging() }
+                                    catch (ex: Exception)
+                                    {
+                                        LogExt().e(javaClass.simpleName, "isBatteryCharging() failed: $ex")
+                                        false
+                                    }
+                                    if (!charging)
+                                    {
+                                        Toast.makeText(this@AccConfigEditorActivity, R.string.err_add_switch_needs_plug, Toast.LENGTH_LONG).show()
+                                        return@launch
+                                    }
+
+                                    val progressDialog =
+                                        MaterialDialog(this@AccConfigEditorActivity).show {
+                                            title(R.string.test_switch)
+                                            progress(R.string.wait)
+                                        }
+
                                     try
                                     {
                                         var success = true

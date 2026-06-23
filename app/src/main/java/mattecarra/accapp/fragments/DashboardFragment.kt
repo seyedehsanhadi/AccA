@@ -182,48 +182,19 @@ class DashboardFragment : ScopedFragment()
         }
 
         binding.dashDaemonToggleButton.setOnClickListener {
-            Toast.makeText(context, R.string.wait, Toast.LENGTH_LONG).show()
-
-            launch {
-                val finished = AtomicBoolean(false)
-                val stopDaemon = Acc.instance.isAccdRunning()
-
-                binding.dashDaemonToggleButton.isEnabled = false
-                binding.dashDaemonRestartButton.isEnabled = false
-
-                val observer = Observer<DashboardValues> { daemonInfo ->
-                    if (daemonInfo?.daemon == !stopDaemon && !finished.getAndSet(true))
-                    { //if accDeamon status is the opposite of the status it had before the action -> change had effect
-                        finished.set(true)
-
-                        // The view may be gone by the time this observer fires; guard.
-                        _binding?.let { b ->
-                            b.dashDaemonToggleButton.isEnabled = true
-                            b.dashDaemonRestartButton.isEnabled = true
-                        }
-                    }
-                }
-
-                mViewModel.getDashboardValues().observe(viewLifecycleOwner, observer)
-
-                withContext(Dispatchers.IO) {
-                    if (stopDaemon) Acc.instance.abcStopDaemon()
-                    else Acc.instance.abcStartDaemon()
-                }
-
-                delay(5000)
-
-                mViewModel.getDashboardValues().removeObserver(observer)
-
-                if (!finished.getAndSet(true))
-                {
-                    // View may have been torn down during the delay; guard binding access.
-                    _binding?.let { b ->
-                        b.dashDaemonToggleButton.isEnabled = true
-                        b.dashDaemonRestartButton.isEnabled = true
-                    }
+            // If the daemon is currently running, the tap will stop it -> confirm first so an
+            // accidental tap can't silently disable the charge limit. Starting it is risk-free,
+            // so skip the dialog in that direction.
+            if (mIsDaemonRunning == true)
+            {
+                MaterialDialog(view.context).show {
+                    title(R.string.confirm_stop_daemon_title)
+                    message(R.string.confirm_stop_daemon_message)
+                    positiveButton(R.string.stop) { performDaemonToggle() }
+                    negativeButton(android.R.string.cancel)
                 }
             }
+            else performDaemonToggle()
         }
 
         binding.dashDaemonRestartButton.setOnClickListener {
@@ -284,6 +255,56 @@ class DashboardFragment : ScopedFragment()
             true ->
             {
                 if (running != null && !running) setAccdStatusUi(running)
+            }
+        }
+    }
+
+    /**
+     * Toggle daemon body, factored out of the click handler so the Stop-confirm dialog can
+     * gate it without duplicating the run. Always-on; the confirm only sits in front of it.
+     */
+    private fun performDaemonToggle()
+    {
+        Toast.makeText(context, R.string.wait, Toast.LENGTH_LONG).show()
+
+        launch {
+            val finished = AtomicBoolean(false)
+            val stopDaemon = Acc.instance.isAccdRunning()
+
+            binding.dashDaemonToggleButton.isEnabled = false
+            binding.dashDaemonRestartButton.isEnabled = false
+
+            val observer = Observer<DashboardValues> { daemonInfo ->
+                if (daemonInfo?.daemon == !stopDaemon && !finished.getAndSet(true))
+                { //if accDeamon status is the opposite of the status it had before the action -> change had effect
+                    finished.set(true)
+
+                    // The view may be gone by the time this observer fires; guard.
+                    _binding?.let { b ->
+                        b.dashDaemonToggleButton.isEnabled = true
+                        b.dashDaemonRestartButton.isEnabled = true
+                    }
+                }
+            }
+
+            mViewModel.getDashboardValues().observe(viewLifecycleOwner, observer)
+
+            withContext(Dispatchers.IO) {
+                if (stopDaemon) Acc.instance.abcStopDaemon()
+                else Acc.instance.abcStartDaemon()
+            }
+
+            delay(5000)
+
+            mViewModel.getDashboardValues().removeObserver(observer)
+
+            if (!finished.getAndSet(true))
+            {
+                // View may have been torn down during the delay; guard binding access.
+                _binding?.let { b ->
+                    b.dashDaemonToggleButton.isEnabled = true
+                    b.dashDaemonRestartButton.isEnabled = true
+                }
             }
         }
     }
