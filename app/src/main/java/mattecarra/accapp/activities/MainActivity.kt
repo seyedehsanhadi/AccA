@@ -381,6 +381,13 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                             cancelOnTouchOutside(false)
                         }
                     }
+                    // 1.1.7 one-shot re-lock migration: if the upgrade-from-1.1.6 user had the
+                    // removed "Automatically cycle through switches" toggle ON, their saved
+                    // charging_switch is missing the " --" lock marker and the daemon is in
+                    // auto-mode (cycle_switches_off enforcement gap). Run AFTER root + ACC are
+                    // confirmed (we're inside the "ok" branch) and BEFORE any other config write
+                    // can race. Fire-and-forget on IO -- the helper handles its own toast.
+                    launch { Acca117RelockMigration.maybeRelockSwitchOnceForV117(this@MainActivity) }
                 }
                 else -> showAccNotFound()
             }

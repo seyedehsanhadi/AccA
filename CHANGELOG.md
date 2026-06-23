@@ -2,6 +2,28 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.7] - 2026-06-23
+
+**Reads the ACC daemon accurately, never writes a value it would silently reject, and pairs with ACC 6.4.**
+
+### Added
+- **Live dashboard from ACC's `--state` snapshot** instead of scraping `acc -i` line by line. The dashboard shows the real charging state and signed current even while ACC is cutting at the limit — the old parser could read "Charging" while the battery was actually discharging — and shows a **"Manual lock — protected"** badge whenever ACC has your switch user-pinned.
+- **Shutdown-temperature control** (4th picker in the temperature card). The over-temperature cutoff was invisible and uneditable; it's now editable with a 50–70 °C bound stricter than the daemon's own (the cutoff must sit ≥ 3 °C above your pause temperature, and never below 50 °C).
+
+### Changed
+- **Charging switch is always manually locked.** The "Automatically cycle through switches" toggle wrote the switch without the lock marker, which let the daemon re-cycle switches on its own; during that cycle each failing candidate briefly re-enabled charging, so battery could rise past the pause level. The toggle is gone; every switch you set through AccA (Apply & Lock, Add new, edit) is locked. ACC's verified-switch Apply & Lock card and the Add-new dialog both already live-test before pinning.
+- **Max charging current is capped at 9999 mA in the editor**, with a hint that an empty value means native (fastest) charging. Above 9999, the daemon silently applied no current limit at all while the app reported success — leaving charging uncapped.
+- **Stop daemon now asks for confirmation.** The Dashboard's Stop button pops a one-line "ACC will stop enforcing your charge limit until you start it again" before stopping. Start has no confirm.
+- **Add charging switch requires the cable plugged in**, since the live `acca -t` test only runs while charging. The dialog stays open so your typed values are preserved.
+- **`apply_on_boot` / `apply_on_plug` show a one-line warning** that the command runs as root on every boot/plug.
+- **Custom shell scripts are off by default** in the Scripts tab. The 12 bundled `acca` quick-actions remain runnable; adding or editing a custom script is gated behind a Settings → Experimental Tools toggle.
+
+### Fixed
+- **Config edits mirror the daemon's own rules** (temperature ordering and the 3 °C cool-down gap, capacity domains and ordering, shutdown_temp band), so saved values are no longer silently reset to the daemon's defaults.
+
+### Note
+Pairs with ACC 6.4 (bundled versionCode 202505230). Carries everything from the 1.1.7-rc line — the ACC 6.4 safety + switch-lock hardening, one-tap "Apply & Lock" of a verified switch, the charging-health card, the KernelSU/APatch path fixes, and the profile-apply fix. Existing settings are kept; profiles saved with the old "auto-cycle" option are silently upgraded to manual-lock the next time you save them.
+
 ## [1.1.7-rc3] - 2026-06-22
 
 **One-tap "Apply & Lock" of a tester-verified charging switch, a charging-health warning, and KernelSU fixes.**
