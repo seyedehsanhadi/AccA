@@ -536,6 +536,31 @@
     <string name="verified_switch_applied">Verified switch applied and locked.</string>
     <string name="verified_switch_failed_live_test">Switch failed the live test — not applied.</string>
     <string name="verified_switch_plug_to_apply">Plug in the charger to test and apply the recommended switch.</string>
+    <!-- TASK 4: inline Apply &amp; Lock progress (spinner + status) shown in the card -->
+    <string name="verified_switch_testing_live">Testing the switch live…</string>
+    <string name="verified_switch_locked">Locked ✓</string>
+
+    <!-- Find my charging switch (runs the bundled acc-compat tester with a live log) -->
+    <string name="find_switch_title">Find my charging switch</string>
+    <string name="find_switch_apply">Apply this switch</string>
+    <string name="find_switch_cancel">Cancel</string>
+    <string name="find_switch_elapsed">%1$ds elapsed</string>
+    <string name="find_switch_found">Found: %1$s (%2$s, %3$s)</string>
+    <string name="find_switch_none">No reliable switch found — try a stronger charger, or see the log above.</string>
+    <string name="find_switch_apply_testing">Testing the switch live…</string>
+    <string name="find_switch_apply_locked">Locked ✓</string>
+    <string name="find_switch_extract_failed">Could not extract the tester. Make sure root access is granted, then try again.</string>
+    <!-- Friendly status header, mapped from the tester's own section markers -->
+    <string name="find_switch_status_starting">Starting…</string>
+    <string name="find_switch_status_resetting">Resetting to native charging…</string>
+    <string name="find_switch_status_probing">Looking at your charger…</string>
+    <string name="find_switch_status_testing">Testing switches…</string>
+    <string name="find_switch_status_verifying">Verifying it holds…</string>
+    <string name="find_switch_status_weak_charger">Weak charger — results may be unreliable.</string>
+    <string name="find_switch_status_done">Done</string>
+    <string name="find_switch_status_no_switch">No reliable switch found</string>
+    <string name="find_switch_status_error">Could not run the tester</string>
+    <string name="close">Close</string>
 
     <!-- Charging-health warning card -->
     <string name="health_warning_title">Charging may be broken</string>

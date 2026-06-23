@@ -54,6 +54,14 @@
             android:parentActivityName=".activities.MainActivity" />
 
         <activity android:name=".activities.AccConfigEditorActivity" />
+        <activity
+            android:name=".activities.SwitchFinderActivity"
+            android:label="@string/find_switch_title"
+            android:parentActivityName=".activities.AccConfigEditorActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="mattecarra.accapp.activities.AccConfigEditorActivity" />
+        </activity>
         <activity android:name=".activities.SettingsActivity" />
         <activity android:name=".activities.ExportProfilesActivity" />
         <activity android:name=".activities.ImportProfilesActivity" />

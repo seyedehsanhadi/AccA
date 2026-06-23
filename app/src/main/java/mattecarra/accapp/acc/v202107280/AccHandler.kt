@@ -349,11 +349,23 @@ open class AccHandler(override val version: Int) : AccInterface {
             emptyList()
     }
 
+    // A switch "works" when `acca -t` reports success. ACC returns exit 0 for a working CUT
+    // switch but exit 15 for a working IDLE/BYPASS switch (by design: acc.sh does
+    // `$idleMode && return 15 || return 0`), and prints "Switch works" on success either way.
+    // Treat all three signals as a pass so a working bypass switch is no longer rejected; the
+    // not-charging case (exit 2) and a genuine failure (exit 1) stay non-passing.
+    private fun switchTestPassed(code: Int, out: List<String>): Boolean =
+        code == 0 || code == 15 || out.any { it.contains("Switch works", ignoreCase = true) }
+
     override suspend fun testChargingSwitch(chargingSwitch: String?): Int = withContext(Dispatchers.IO) {
         try {
             // Hard-bound the test (see ensureDaemonRunning): it stops the daemon
             // and can otherwise run for minutes, wedging the shell.
-            Shell.su("timeout 150 /dev/.vr25/acc/acca -t${chargingSwitch?.let{" $it"} ?: ""}").exec().code
+            val res = Shell.su("timeout 150 /dev/.vr25/acc/acca -t${chargingSwitch?.let{" $it"} ?: ""}").exec()
+            // Normalise a working switch to 0 so every caller's `== 0` success check stays correct
+            // AND now accepts the exit-15 bypass case. Non-passing codes (2 = plug in, 1 = fails)
+            // pass through unchanged so callers can still tell those apart.
+            if (switchTestPassed(res.code, res.out)) 0 else res.code
         } finally {
             ensureDaemonRunning()
         }

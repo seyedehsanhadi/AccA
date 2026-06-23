@@ -472,6 +472,12 @@ class AccConfigEditorActivity : ScopedAppActivity(),
      * pin (charging_switch = "<sw> --", automatic OFF). NEVER writes without a passing test
      * — this is a charging-safety gate, enforced for Verified just as for NeedsTest. Requires
      * the phone to be charging (the live test cannot run unplugged).
+     *
+     * `testChargingSwitch(...) == 0` is the "works" predicate: the v202107280 handler normalises
+     * a passing test to exit 0 (covering a CUT switch's exit 0, a BYPASS/IDLE switch's exit 15,
+     * and a "Switch works" stdout) so a working bypass switch is no longer rejected here.
+     *
+     * Shows an inline spinner + live status in the card (TASK 4) instead of a silent wait.
      */
     private fun onApplyAndLockClick()
     {
@@ -496,13 +502,11 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 return@launch
             }
 
-            val dialog = MaterialDialog(this@AccConfigEditorActivity).show {
-                title(R.string.verified_switch_title)
-                cancelOnTouchOutside(false)
-                // progress() installs a custom view; do NOT also call message() (MaterialDialog
-                // forbids both). Pass the "testing…" text straight into progress().
-                progress(R.string.verified_switch_testing)
-            }
+            // Inline progress: spinner + "Testing the switch live…", button disabled meanwhile.
+            content.verifiedSwitchApplyButton.isEnabled = false
+            content.verifiedSwitchApplySpinner.visibility = View.VISIBLE
+            content.verifiedSwitchApplyProgress.visibility = View.VISIBLE
+            content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_testing_live)
 
             val passed = try { Acc.instance.testChargingSwitch(switch) == 0 }
             catch (ex: Exception)
@@ -510,15 +514,14 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 LogExt().e(javaClass.simpleName, "testChargingSwitch() failed: $ex")
                 false
             }
-            finally
-            {
-                if (dialog.isShowing) dialog.cancel()
-            }
 
             if (isFinishing || isDestroyed) return@launch
 
             if (!passed)
             {
+                content.verifiedSwitchApplySpinner.visibility = View.GONE
+                content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_failed_live_test)
+                content.verifiedSwitchApplyButton.isEnabled = true
                 Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_failed_live_test, Toast.LENGTH_LONG).show()
                 return@launch
             }
@@ -537,6 +540,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
             if (isFinishing || isDestroyed) return@launch
 
+            content.verifiedSwitchApplySpinner.visibility = View.GONE
             if (written)
             {
                 // Reflect the pinned switch in the editor's LiveData-backed state so the shown
@@ -545,13 +549,37 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 // them on read.)
                 viewModel.chargeSwitch = switch
                 viewModel.isAutomaticSwitchEanbled = false
+                content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_locked)
                 Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_applied, Toast.LENGTH_LONG).show()
             }
             else
             {
+                content.verifiedSwitchApplyStatus.setText(R.string.error_occurred)
+                content.verifiedSwitchApplyButton.isEnabled = true
                 Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    /**
+     * Opens [SwitchFinderActivity], which runs the bundled acc-compat tester with a live log and,
+     * on completion, lets the user apply the discovered switch. Wired from the "Find my charging
+     * switch" button in the capacity card. After it returns we re-read the verified-switch
+     * artifact so the editor's "Recommended charging switch" card appears if the run found one.
+     */
+    fun onFindSwitchClick(v: View)
+    {
+        startActivity(Intent(this, SwitchFinderActivity::class.java))
+    }
+
+    override fun onResume()
+    {
+        super.onResume()
+        // Returning from the switch finder may have written a fresh artifact; re-detect so the
+        // Recommended-switch card shows up without needing to re-open the editor. Only after the
+        // async config load has populated viewModel (initUi already ran the first detect); the
+        // re-detect is idempotent — it re-reads the artifact and shows/hides the card.
+        if (::viewModel.isInitialized) setupVerifiedSwitchCard()
     }
 
     private fun showConfigReadError()
