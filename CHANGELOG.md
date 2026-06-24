@@ -2,54 +2,64 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
-## [1.1.7] - 2026-06-23
+## [1.1.7] - 2026-06-24
 
-**The big stable since 1.1.6. Cleaner dashboard, more honest limits, safer defaults, and one-tap "Apply & Lock" of a tester-verified charging switch. Pairs with ACC 6.4.**
+The big stable since 1.1.6. A cleaner, more honest dashboard; accurate and complete charge limits; safer defaults; one tap to detect and lock the charging switch that works on your phone; and a built-in diagnostic. Bundles ACC 6.4 stable.
 
-### What's new for you
+### Dashboard
 
-- **The dashboard now matches what the daemon is actually doing.** Battery status, signed current, "plugged" state, and the active charging switch are read from ACC's atomic state snapshot instead of scraped text. So when ACC is holding your limit, the dashboard says *Discharging* and shows the negative current — not the misleading "Charging" the old parser sometimes printed.
-- **Manual lock — protected badge.** When your charging switch is user-pinned, the dashboard shows a small badge so you know ACC won't auto-replace it.
-- **Shutdown temperature is editable.** ACC's hard over-temperature cutoff used to be invisible. There's now a fourth picker in the temperature card with a safe range (50–70 °C; it also has to sit at least 3 °C above your pause temperature).
-- **One-tap "Apply & Lock" of a verified switch.** If you've run the `acc-compat` tester for your phone, AccA recognises its result, lives-tests it once on a plugged-in phone, and pins it for you — only when the fingerprint matches your exact device.
-- **Charging-health warning card.** If the daemon is running but charging is actually stuck, the dashboard surfaces it instead of staying silent.
+- Status, signed current, plug state and the active switch are read from ACC's atomic state snapshot instead of scraped text, so while ACC holds your limit it correctly shows Discharging with the real negative current.
+- A badge marks a switch you have locked manually (ACC will not auto-replace it).
+- A health card warns when the daemon is running but charging is actually stuck, instead of staying silent.
+
+### Find my charging switch
+
+- One tap runs the bundled acc-compat tester on your phone with live progress, finds the switch that actually works, and offers Apply and Lock. It is written only after a live `acca -t` passes and the result matches your exact device.
+- Copy or Share the full run log so you can paste it back to us for help.
+- The screen stays awake during the run so it always finishes.
+- Tester upgraded to v5.7: it ranks the most reliable switch first, proves a firmware percent limit before recommending it, and warns when a switch can behave differently per charger (for example fast USB PD versus wireless). It also ships as a standalone script you can run yourself in Termux or over ADB.
+
+### Accurate and complete limits
+
+- The temperature card's third value is now correctly Resume temp in degrees C, the temperature charging resumes at after a thermal pause, not the old and wrong "pause seconds".
+- Shutdown temperature is editable (50 to 70 C, at least 3 C above pause).
+- Millivolt capacity is supported: set Shutdown, Resume and Stop by voltage as well as percent, for voltage-precise limiting.
+- Stop and Resume capacity are locked to 0 to 100 percent so the daemon never silently rewrites them.
+- Every edit mirrors the daemon's own rules (temperature ordering, the 3 C cool-down gap, capacity and temperature bands). Save is blocked with the exact rule when a value would be reset. Max charging current is capped at 9999 mA (empty means native speed).
 
 ### Safer by default
 
-- **Charging switch is always locked.** The "Automatically cycle through switches" toggle is gone. While it was on, the daemon could re-run switch discovery in the background and battery could briefly rise past the pause level during that cycle. Every switch you set in AccA (Apply & Lock, Add new, edit) is now manually locked. If you're upgrading from 1.1.6 with an unlocked switch, AccA re-locks it for you the first time you open the app and shows a short toast.
-- **Stop daemon asks first.** The Dashboard's Stop button now confirms before stopping ("ACC will stop enforcing your charge limit until you start it again"). Start is unchanged.
-- **Add charging switch requires the cable plugged in.** The live `acca -t` test only works while charging anyway; the dialog now waits for you to plug in before letting you save.
-- **`apply_on_boot` / `apply_on_plug` show a one-line warning** that the command runs as root every boot or plug.
-- **Custom shell scripts are off by default in the Scripts tab.** The 12 bundled `acca` quick-actions stay runnable. Adding or editing your own script body now requires turning on "Allow custom shell scripts" in Settings → Experimental Tools.
+- The charging switch is always locked. The "Automatically cycle through switches" toggle is gone, because it could let the battery briefly rise past your limit during background discovery. Upgrading from 1.1.6 re-locks an unlocked switch automatically.
+- Stop asks first ("ACC will stop enforcing your charge limit until you start it again").
+- Adding a switch waits for the cable to be plugged in, because the live test needs it.
+- apply_on_boot and apply_on_plug show a root warning. Custom shell scripts are off by default; the 12 curated acca quick-actions still run.
 
-### Stricter limits, so the daemon never silently overrules you
+### Diagnostics
 
-- **Config edits mirror the daemon's own rules.** Temperature ordering, the 3 °C cool-down gap, capacity domains, the shutdown-temperature band — AccA blocks Save when a value would be silently reset to the daemon's default. The error message says which rule was violated.
-- **Max charging current is capped at 9999 mA in the editor**, with a hint that empty = native (fastest) charging. Above 9999, the daemon silently applied no current limit at all while the app reported success — leaving charging uncapped.
+- A built-in Deep Diagnostic captures one shareable report (device architecture, every charge-control node, the live config, and a passive 60-second observe), so an unsupported phone can be diagnosed from a single paste.
 
-### KernelSU / APatch
-- The "charge once to N %", ACC version readout, and switch-discovery actions now use the absolute daemon path on KernelSU/APatch (they were silent no-ops on some setups).
-- No more stuck loading screen when the daemon can't initialise: the probe times out around 20 seconds with a recovery dialog.
+### KernelSU and APatch
 
-### Profile apply
+- "Charge once to N percent", the ACC version readout and switch discovery use the absolute daemon path (they were silent no-ops on some setups). The init probe times out around 20 seconds with a recovery dialog instead of a stuck loading screen.
 
-- Tapping a profile now actually applies and stays selected. The selection used to bounce off because of a race between the apply and a re-read of the daemon's normalisation. AccA now trusts the chosen profile, and apply failures are surfaced as a toast instead of being silently swallowed.
+### Profiles
 
-### Bundled ACC
+- Tapping a profile now applies and stays selected; apply failures surface as a toast instead of being swallowed.
 
-ACC 6.4 (`versionCode 202505230`) is bundled. Headline fixes since the previous stable (6.3.3) — all device-tested:
+### Bundled ACC 6.4 stable (device-tested)
 
-- **A switch you manually pin is never auto-replaced.** ACC warns you to fix a failing manual switch instead of silently switching to a different node.
-- **A raised limit and auto-resume react within seconds, not up to ~120 s.** The old deep-sleep nap entered when the cable looked unplugged (which an input-cut switch made it look) — now gated on whether the cable is physically present.
-- **Switches are locked only after a sustained hold.** The "passes a quick check then re-arms" overcharge family (MediaTek `current_cmd`, Xiaomi HyperOS klee) is rejected up front.
-- **A manual switch reset re-discovers reliably.** Blanking the switch (set back to automatic) now re-arms charging and re-picks the best switch within seconds.
-- **Defense-in-depth for post-fresh-install discovery.** ACC now caches the last verified switch and tries it first on the next discovery; it also stops re-arming charging on a failed candidate when the battery is already at or above the pause level. Battery rise during fresh-install discovery is bounded to about 1 %.
-- **Polarity-correct state export, present-first plug detection, no more "discharge speed" while plugged**, plus clean uninstall + KernelSU/APatch path fixes.
+Bundles ACC v2025.5.18-stable.6.4 (versionCode 202505240). Headline daemon improvements since 6.3.3:
+
+- A boot-window guard cuts charging before the daemon starts, so a phone rebooted at its limit does not overcharge while the daemon waits for boot to complete.
+- A switch you pin manually is never auto-replaced; ACC warns you to fix it instead, and your lock survives a reboot.
+- A raised limit and auto-resume react within seconds, not up to about 120 seconds.
+- Switches are locked only after a sustained hold, so the "passes a quick check then re-arms" overcharge family is rejected up front.
+- A manual switch reset re-discovers reliably; fresh-install discovery is bounded to about 1 percent.
+- Polarity-correct state, present-first plug detection, corrupt-config survival, and wider device support.
 
 ### Notes
-- Bundled ACC: `v2025.5.18-6.4` (`versionCode 202505230`).
-- Existing settings are kept on upgrade. Profiles saved with the old "auto-cycle" option are silently re-saved as manual-lock the next time you save them.
-- The "Automatically cycle through switches" toggle has been removed.
+
+- Existing settings are kept on upgrade; old auto-cycle profiles are re-saved as manual-lock.
 
 ## [1.1.7-rc3] - 2026-06-22
 
