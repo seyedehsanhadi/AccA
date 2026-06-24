@@ -1,6 +1,6 @@
 #!/system/bin/sh
 
-V=5.5
+V=5.6
 PSY="${PSY:-/sys/class/power_supply}"
 TMPD="${TMPD:-/data/local/tmp}"
 BK="${BK:-$TMPD/acc_compat_bk}"
@@ -108,9 +108,56 @@ classify_state(){ _csc="$(_norm "$3" "$4")"; _csp=0; { [ "$1" = 1 ] || [ "$2" = 
     case "$_csc" in -*) echo DISCHARGING; return;; esac
     [ "${_csm:-0}" -gt "$5" ] 2>/dev/null && echo MISLABEL || echo STANDBY; return; fi
   case "$_csc" in
-    -*) [ "${_csm:-0}" -gt "$5" ] 2>/dev/null && echo DRAIN || echo CUT;;
+    # v5.5.1: a discharging current while plugged is only a genuine DRAIN when the charger is still
+    # ONLINE (input present, yet the battery is losing) -- that is the concerning "can't outpace the
+    # load / weak hold" case. When online=0 the charger INPUT is physically cut (input_suspend et al.),
+    # so the discharge is just the screen/CPU LOAD running off battery, NOT a charge leak -> it is a
+    # clean CUT, not a DRAIN. Previously any discharge>idle was demoted to DRAIN, mislabeling a working
+    # input-cut switch under a screen-on test load and burying it below a marginal bypass.
+    -*) if [ "$2" = 1 ] && [ "${_csm:-0}" -gt "$5" ] 2>/dev/null; then echo DRAIN; else echo CUT; fi;;
     *)  if [ "${_csm:-0}" -gt "$5" ] 2>/dev/null; then echo CHARGING
         elif [ "$2" = 1 ]; then echo BYPASS; else echo CUT; fi;; esac; }
+
+# reco_pick: the SINGLE source of truth for the reliability-first recommendation order. Given the best
+# already-picked label of each class (empty = that class has no clean hit), echo "<label>|<class>" of
+# the MOST RELIABLE present one. The order is forced by field OVERCHARGE evidence, not wear: a VERIFIED
+# native firmware limit (cannot overshoot) and a hard CUT (can only stop) have never overcharged a phone
+# in the field; an unverified BYPASS is the #1 real-world overcharge cause (charge-pump fakes "idle"
+# while feeding) so it ranks BELOW cut; a native limit that only ACCEPTS the value (enforcement unproven)
+# ranks near the bottom; throttle never holds. RECO, the verdict text and the artifact class ALL consume
+# this -- change the order in ONE place here. $1=native-verified $2=cut $3=bypass $4=drain $5=native-accepts $6=throttle
+reco_pick(){
+  for _rp in "native-level:$1" "cut:$2" "bypass:$3" "drain:$4" "native-accepts:$5" "throttle:$6"; do
+    _rpl="${_rp#*:}"
+    [ -n "$_rpl" ] && { printf '%s|%s\n' "$_rpl" "${_rp%%:*}"; return 0; }
+  done; }
+
+# Split reco_pick's "label|class" output. CRITICAL mksh trap: a bare `|` in a ${var%pat}/${var#pat}
+# glob is ALTERNATION in mksh (not a literal), so `${x%|*}` strips NOTHING. Use cut (delimiter-based).
+_lblof(){ printf '%s' "$1" | cut -d'|' -f1; }
+_clsof(){ printf '%s' "$1" | cut -d'|' -f2; }
+
+# note_for: one-line plain-language trade-off per class, shown to the user next to each alternative
+# (the "(CUT)"/"(BYPASS)" parenthetical the user asked for, expanded into why). Pure -> selftest-able.
+note_for(){ case "$1" in
+  native-level)   echo "firmware limit -- reliable and no battery cycling when it truly enforces";;
+  cut)            echo "hard cut -- most reliable, can never overcharge; battery cycles a little";;
+  bypass)         echo "gentlest (battery idle), but verify it holds -- charge-pump phones can fake idle";;
+  drain)          echo "stops charge but the battery slowly drains while plugged";;
+  native-accepts) echo "firmware limit accepts the value but enforcement is unconfirmed -- re-test at your real cap";;
+  throttle)       echo "only SLOWS charging -- may not hold a hard cap";;
+  *)              echo "";;
+esac; }
+
+# native_verdict: native-level is the #1 recommendation, so "enforced" must be PROVEN, not assumed.
+# A firmware limit is verified-enforcing ONLY if a real current measurement showed charging collapsed
+# (samp_last=0, not all samples charging) AND it did not re-arm over the longer overshoot window AND the
+# sensor was not blind (status/voltage alone cannot prove a level limit holds -- the fake-native trap).
+# Anything else -> accepts (re-test). $1=samp_last $2=samp_n $3=blind(0/1) $4=rearmed(0/1)
+native_verdict(){
+  [ "$3" = 1 ] && { echo accepts; return; }
+  { [ "$1" = 0 ] && [ "${2:-3}" -lt 3 ] 2>/dev/null && [ "$4" = 0 ]; } && { echo verified; return; }
+  echo accepts; }
 
 # --selftest: prove the two pure functions above against a synthetic matrix. No device I/O,
 # so it runs anywhere and is the regression gate for every future polarity/classify change.
@@ -138,6 +185,26 @@ selftest(){ _sp=0; _sf=0
   _ck i_dischg   "$(classify_state 0 0 500 inverted 10)"  DISCHARGING
   _ck i_mislabel "$(classify_state 0 0 -500 inverted 10)" MISLABEL
   _ck plus200dis "$(classify_state 1 1 200 inverted 10)"  DRAIN
+  _ck cutinload  "$(classify_state 1 0 -500 normal 10)"   CUT
+  _ck icutinload "$(classify_state 1 0 500 inverted 10)"  CUT
+  _ck cutinload0 "$(classify_state 1 0 -5 normal 10)"     CUT
+  _ck reco_native    "$(reco_pick nat cx bx dx ax tx)"      "nat|native-level"
+  _ck reco_cut       "$(reco_pick '' cx bx dx '' '')"       "cx|cut"
+  _ck reco_cutbeatsbp "$(reco_pick '' cx bx '' '' '')"      "cx|cut"
+  _ck reco_bypass    "$(reco_pick '' '' bx dx '' '')"       "bx|bypass"
+  _ck reco_drain     "$(reco_pick '' '' '' dx '' '')"       "dx|drain"
+  _ck reco_naccept   "$(reco_pick '' '' '' '' ax '')"       "ax|native-accepts"
+  _ck reco_throttle  "$(reco_pick '' '' '' '' '' tx)"       "tx|throttle"
+  _ck reco_none      "$(reco_pick '' '' '' '' '' '')"       ""
+  _ck note_cut       "$(note_for cut)"     "hard cut -- most reliable, can never overcharge; battery cycles a little"
+  _ck note_bypass_y  "$([ -n "$(note_for bypass)" ] && echo y)"  y
+  _ck note_unknown   "$(note_for zzz)"     ""
+  _ck split_lbl  "$(_lblof 'charge_control_limit=6|bypass')"  "charge_control_limit=6"
+  _ck split_cls  "$(_clsof 'charge_control_limit=6|bypass')"  bypass
+  _ck nv_verified "$(native_verdict 0 0 0 0)"  verified
+  _ck nv_blind    "$(native_verdict 0 0 1 0)"  accepts
+  _ck nv_rearm    "$(native_verdict 0 0 0 1)"  accepts
+  _ck nv_charging "$(native_verdict 1 3 0 0)"  accepts
   echo "== self-test: $_sp passed, $_sf failed =="
   [ "$_sf" = 0 ]; }
 
@@ -299,7 +366,7 @@ MYPID=$$
 ( i=0; lim=$(( (MAXSEC + 120) / 5 )); while [ $i -lt $lim ]; do sleep 5; kill -0 "$MYPID" 2>/dev/null || exit 0; i=$((i+1)); done; kill -TERM "$MYPID" 2>/dev/null ) &
 WATCHDOG=$!
 
-log "############ ACC COMPATIBILITY v5.5 (smart-observe + blind-verify + firmware-teach + verdict card + charger-speed) ############"
+log "############ ACC COMPATIBILITY v5.6 (smart-observe + blind-verify + firmware-teach + verdict card + charger-speed) ############"
 log "collected in report: phone model, soc, android+kernel build, charge-node names/values, charger driver names. no accounts/imei/serial/location."
 log "SAFE MODE: WRITES only well-known, reversible charge switches (ACC's standard enable/suspend set) + native %-limits. Unknown/vendor/learned nodes are READ + reported, NEVER written. No bypass/regulator/OTG/PD/fuel-gauge writes. Battery protection is never disabled. Every write is snapshotted and restored."
 log ""
@@ -652,6 +719,12 @@ classify_held(){
     case "$(read_st)" in Discharging|discharging) echo DRAIN; return;; esac
     echo CUT; return
   fi
+  # v5.5.1: input physically cut -- */online dropped to 0 while still plugged -- is the strongest CUT
+  # (CUT-input), so recognize it BEFORE the discharge->DRAIN heuristic. Under a screen-on test load the
+  # battery then discharges, but with the input cut that drain is the LOAD, not a charge leak; demoting
+  # it to DRAIN mislabeled a working input-cut switch (e.g. input_suspend) and buried it below a marginal
+  # bypass. A current-cap or bypass switch keeps online=1, so this never misfires on those classes.
+  online_now || { echo CUT-input; return; }
   if [ "$(sgn "$CL")" != "$CHGDIR" ] && [ "$(abs "$CL")" -gt "$IDLE" ] 2>/dev/null; then echo DRAIN; return; fi
   if [ "$(is_idle "$CL")" = 1 ]; then
     onl=1; online_now || onl=0
@@ -808,8 +881,16 @@ test_level(){
   if [ "$engage" = 1 ]; then
     sleep "$POLL"
     hold_probe
-    if [ "$SAMP_LAST" = 0 ] && [ "$SAMP_N" -lt 3 ]; then
-      log "    engage stop=${pstop}% at SOC ${CAP}% -> last=$CL ENFORCED [native limit works]"
+    # v5.6: harden native-level (it is the #1 recommendation, so it must be PROVEN). Require a real
+    # current collapse (non-blind), then re-check over a longer window to catch a firmware that holds
+    # briefly then re-arms past the cap (the "accepts then overshoots" trap, e.g. Pixel multi-path).
+    _lvl_blind=0; [ "$BLINDV" = 1 ] && _lvl_blind=1
+    _lvl_rearm=0; _li=0
+    if [ "$SAMP_LAST" = 0 ] && [ "$SAMP_N" -lt 3 ] && [ "$_lvl_blind" = 0 ]; then
+      while [ "$_li" -lt 4 ]; do sleep 6; hold_probe; [ "$SAMP_LAST" = 1 ] && { _lvl_rearm=1; break; }; _li=$((_li+1)); done
+    fi
+    if [ "$(native_verdict "$SAMP_LAST" "$SAMP_N" "$_lvl_blind" "$_lvl_rearm")" = verified ]; then
+      log "    engage stop=${pstop}% at SOC ${CAP}% -> last=$CL ENFORCED + held +$(( _li*6 ))s [native limit VERIFIED]"
       LEVELOK="$LEVELOK|$lbl"; WORKING="${WORKING:-$stop (LEVEL)}"; lvl_enf=1
       [ -n "$CFG_LEVEL" ] || CFG_LEVEL="$stop $resume pcap"
       [ -z "$TEACH_P" ] && { TEACH_P="$stop"; TEACH_ON="$resume"; TEACH_OFF="$pstop"; }
@@ -822,8 +903,12 @@ test_level(){
         diff_pairs "$SCHG" "$SHELD" | sed -n '1,10p' | pclean2 | while read -r l; do log "      ~ $l"; done
       fi
     else
-      log "    engage stop=${pstop}% at SOC ${CAP}% -> last=$CL [value accepted, enforcement not seen in window]"
+      _why="value accepted, enforcement not seen in window"
+      [ "$_lvl_rearm" = 1 ] && _why="held then RE-ARMED after ~$(( _li*6 ))s -- accepts-but-overshoots, NOT a verified cap"
+      [ "$_lvl_blind" = 1 ] && _why="status/voltage moved but the current sensor is BLIND -- cannot prove a level cap holds"
+      log "    engage stop=${pstop}% at SOC ${CAP}% -> last=$CL [$_why]"
       LEVELOK="$LEVELOK|$lbl(accepts)"
+      [ "$_lvl_rearm" = 1 ] && REASSERT="$REASSERT|$lbl"
     fi
   else
     LEVELOK="$LEVELOK|$lbl(accepts)"
@@ -874,6 +959,7 @@ battery/night_charging|0|1
 /sys/class/asuslib/charger_limit_en|0|1
 /sys/devices/platform/soc/soc:qcom,pmic_glink/soc:qcom,pmic_glink:qcom,battery_charger/force_charger_suspend|0|1
 /sys/devices/platform/soc/soc:qcom,pmic_glink/soc:qcom,pmic_glink:mmi,qti-glink-charger/force_usb_suspend|0|1
+*/force_chg_usb_suspend|0|1
 /sys/kernel/debug/google_charger/input_suspend|0|1
 /sys/kernel/debug/google_charger/chg_suspend|0|1
 /sys/kernel/nubia_charge/charger_bypass|off|on
@@ -1352,19 +1438,19 @@ if [ "$ACTIVE" = 0 ]; then
     printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "     - $l"; done
     log "  -> ACC can almost certainly cap charging on this phone. Re-run plugged in (40-80%) to confirm enforcement."
   fi
-elif [ -n "$BYPASS" ]; then
-  log "YES (BEST): TRUE BYPASS confirmed -- battery idle, charger powers phone, sustained ~15s."
-  printf '%s\n' "$BYPASS" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "     - $l"; done
 elif [ -n "$LEVELOK" ] && printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | grep -vqE '\(accepts\)|\(ro\)'; then
-  log "YES: native firmware level-limit works (enforcement confirmed). ACC drives it; battery holds flat."
+  log "YES (BEST): native firmware level-limit works, enforcement confirmed -- the most reliable cap (firmware can't overshoot); ACC drives it and the battery holds flat."
   printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "     - $l"; done
 elif [ -n "$CUT" ]; then
   if [ "$BLINDV" = 1 ]; then
     log "YES (blind-verified): charging STOPS when the switch engages -- confirmed by charging-state + charge_type + voltage, then resumes on re-enable. (current_now is frozen on this ROM, so it was not used.)"
   else
-    log "YES: ACC holds your limit by CUTTING charge (verified sustained ~15s; resumes on replug)."
+    log "YES (most reliable): ACC holds your limit by CUTTING charge -- a hard cut can never overcharge (verified sustained ~15s; resumes on replug)."
   fi
   printf '%s\n' "$CUT" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "     - $l"; done
+elif [ -n "$BYPASS" ]; then
+  log "YES: TRUE BYPASS -- battery idle, charger powers the phone (gentlest on the battery), sustained ~15s. Ranked below a hard cut because an unverified bypass can keep feeding on charge-pump phones; prefer the cut unless you specifically want zero battery cycling."
+  printf '%s\n' "$BYPASS" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "     - $l"; done
 elif [ -n "$DRAIN" ]; then
   log "PARTIAL: only switches that DISCHARGE while plugged hold. Usable but battery drains slowly when capped."
   printf '%s\n' "$DRAIN" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "     - $l"; done
@@ -1381,7 +1467,7 @@ fi
 log ""
 log "---- Can the phone run on the cable WITHOUT charging the battery? ----"
 if [ -n "$BYPASS" ]; then
-  log "  YES (best): TRUE BYPASS -- charger powers the phone directly, battery stays IDLE (no charge, no discharge). Lowest battery wear."
+  log "  YES (lowest wear): TRUE BYPASS -- charger powers the phone directly, battery stays IDLE (no charge, no discharge). Gentlest on the battery, though a hard CUT is the more reliable cap (see RECOMMENDED)."
 elif [ -n "$LEVELOK" ] && printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | grep -vqE '\(accepts\)|\(ro\)'; then
   log "  YES (native limit): at/above the set limit the firmware holds the battery flat and the phone keeps running on the charger."
 elif [ -n "$CUT" ]; then
@@ -1418,6 +1504,19 @@ pick_clean(){ pcf="$BK/pickclean"; printf '%s\n' "$1" | tr '|' '\n' | sed '/^$/d
   pc_pick=
   while IFS= read -r pc_c; do [ -n "$pc_c" ] || continue; is_clean "$pc_c" && { pc_pick="$pc_c"; break; }; done < "$pcf"
   printf '%s' "$pc_pick"; }
+# is_usable / pick_usable: looser than is_clean -- a switch is USABLE for the recommendation if it HELD
+# the cut and isn't latch/resume-STUCK. It KEEPS switches whose resume is "after-reset" (the daemon
+# re-arms them automatically, e.g. input_suspend needs apsd_rerun) or slow/unknown. This is essential
+# for reliability-first: a reliable CUT that resumes after ACC re-arms must still outrank a clean BYPASS
+# (the cut can never overcharge; the bypass can fake idle on charge-pump phones). is_clean stays for the
+# stricter "one-tap perfect" checks elsewhere.
+is_usable(){ case "|$STUCKS|" in *"|$1|"*) return 1;; esac
+  case "$RESUMES" in *"$1=STUCK"*) return 1;; esac
+  return 0; }
+pick_usable(){ puf="$BK/pickusable"; printf '%s\n' "$1" | tr '|' '\n' | sed '/^$/d' > "$puf" 2>/dev/null
+  pu_pick=
+  while IFS= read -r pu_c; do [ -n "$pu_c" ] || continue; is_usable "$pu_c" && { pu_pick="$pu_c"; break; }; done < "$puf"
+  printf '%s' "$pu_pick"; }
 label_path(){ lpp="$1"
   case "$lpp" in
     "fcc-zero "*) lpp="${lpp#fcc-zero }";;
@@ -1428,22 +1527,73 @@ label_path(){ lpp="$1"
   printf '%s' "${lpp%%=*}"; }
 cfg_lookup(){ clp="$(label_path "$1")"; [ -n "$clp" ] || return
   printf '%s\n' "$ADDLINES" | sed 's/^[ 	]*//' | grep -F "$clp " | sed -n '1p' | sed 's/ (.*$//'; }
+
+# acc_current: what ACC's daemon currently has LOCKED, so the report + AccA can show "ACC uses X"
+# alongside the verified options (the user wants to compare the engine's pick against the alternatives).
+acc_current(){
+  _accsw="$(grep -m1 '^chargingSwitch=' /data/adb/vr25/acc-data/config.txt 2>/dev/null | sed -e 's/^chargingSwitch=(//' -e 's/).*$//' -e 's/  *--$//')"
+  [ -n "$_accsw" ] || _accsw="$(sed -n '1p' /data/adb/vr25/acc-data/.last-good-switch 2>/dev/null)"
+  [ -n "$_accsw" ] || return 0
+  _acccls=cut
+  case "$_accsw" in
+    *charge_stop_level*|*charge_control_limit*|*batt_full_capacity*) _acccls=level;;
+    *current_max*|*constant_charge_current*|*input_current*)         _acccls=current-cap;;
+    *night_charging*|*store_mode*|*bms*charge_disable*)              _acccls=bypass;;
+  esac
+  printf 'acc_current_switch=%s\nacc_current_class=%s\n' "$_accsw" "$_acccls"; }
+
+# emit_alts: serialize every OTHER working switch (not the recommendation), reliability-ranked, as
+# additive altN_* keys (schema=1, ignored by old AccA). All per-switch data was already computed during
+# the run -- v5.5 discarded it; v5.6 surfaces it so AccA can show "Other working switches" + per-row Apply.
+emit_alts(){
+  _TAB="$(printf '\t')"; _rf="$BK/ranked"; : > "$_rf" 2>/dev/null
+  _erow(){ printf '%s\n' "$2" | tr '|' '\n' | sed '/^$/d' | while read -r _l; do
+    _lc="$(printf '%s' "$_l" | sed 's/(accepts)$//;s/(ro)$//')"; [ -n "$_lc" ] || continue
+    printf '%s%s%s\n' "$1" "$_TAB" "$_lc" >> "$_rf"; done; }
+  _leE="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | grep -vE '\(accepts\)|\(ro\)' | tr '\n' '|')"
+  _leA="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | grep -E '\(accepts\)' | tr '\n' '|')"
+  _erow native-level "$_leE"; _erow cut "$CUT"; _erow bypass "$BYPASS"; _erow drain "$DRAIN"; _erow native-accepts "$_leA"; _erow throttle "$THROTTLE"
+  _an=0
+  while IFS="$_TAB" read -r _cls _lbl; do
+    [ -n "$_lbl" ] || continue
+    [ "$_lbl" = "$RECO_LBL" ] && continue
+    _ctrl="$(cfg_lookup "$_lbl")"; [ -n "$_ctrl" ] || continue
+    _an=$((_an+1))
+    _res=ok; case "$RESUMES" in *"|$_lbl=after-reset"*) _res=after-reset;; *"|$_lbl=SLOW"*) _res=slow;; *"|$_lbl=STUCK"*) _res=stuck;; *"|$_lbl=UNKNOWN"*) _res=unknown;; esac
+    _lat=no; case "|$STUCKS|" in *"|$_lbl|"*) _lat=yes;; esac
+    _cf=verified; case "$_cls" in native-accepts) _cf=accepts;; bypass) case "${DRVS:-}" in *bq2597*|*ln8000*|*ln8410*|*sc854*|*sc855*) _cf=needs-long-test;; esac;; esac
+    printf 'alt%s_switch=%s\nalt%s_class=%s\nalt%s_conf=%s\nalt%s_resume=%s\nalt%s_latch=%s\nalt%s_note=%s\n' \
+      "$_an" "$_ctrl" "$_an" "$_cls" "$_an" "$_cf" "$_an" "$_res" "$_an" "$_lat" "$_an" "$(note_for "$_cls")"
+  done < "$_rf"
+  printf 'alt_count=%s\n' "$_an"; }
+
 le_enf="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | grep -vE '\(accepts\)|\(ro\)' | sed -n '1p')"
 RECO=none; RECO_LATCH=0; RECO_LBL=
-rb="$(pick_clean "$BYPASS")"; rc="$(pick_clean "$CUT")"; rdr="$(pick_clean "$DRAIN")"; rt="$(pick_clean "$THROTTLE")"
-if   [ -n "$rb" ];     then RECO="$rb (BYPASS)"; RECO_LBL="$rb"
-elif [ -n "$le_enf" ]; then RECO="$le_enf (native level limit)"; RECO_LBL="$le_enf"
-elif [ -n "$rc" ];     then RECO="$rc (CUT)"; RECO_LBL="$rc"
-elif [ -n "$rdr" ];    then RECO="$rdr (CUT, discharges while plugged)"; RECO_LBL="$rdr"
-elif [ -n "$rt" ];     then RECO="$rt (throttle only)"; RECO_LBL="$rt"
-elif [ -n "$BYPASS$CUT$DRAIN" ]; then
-  RECO_LATCH=1
-  if [ -n "$BYPASS" ]; then RECO_LBL="$(pick1 "$BYPASS")"; RECO="$RECO_LBL (BYPASS, but LATCHES -- needs re-arm)"
-  elif [ -n "$CUT" ]; then RECO_LBL="$(pick1 "$CUT")"; RECO="$RECO_LBL (CUT, but LATCHES -- needs re-arm)"
-  else RECO_LBL="$(pick1 "$DRAIN")"; RECO="$RECO_LBL (CUT/drain, but LATCHES -- needs re-arm)"; fi
-else
-  la="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | sed -n '1p')"
-  [ -n "$la" ] && { RECO="$la (native level limit, accepts values -- re-run at the real threshold to confirm enforcement)"; RECO_LBL="$la"; }
+rb="$(pick_usable "$BYPASS")"; rc="$(pick_usable "$CUT")"; rdr="$(pick_usable "$DRAIN")"; rt="$(pick_usable "$THROTTLE")"
+# reliability-first recommendation via reco_pick (single source of truth): a VERIFIED native limit and
+# a hard CUT outrank a BYPASS, because in the field the unverified bypass is the class that overcharges.
+_reco="$(reco_pick "$le_enf" "$rc" "$rb" "$rdr" "" "$rt")"
+if [ -n "$_reco" ]; then
+  RECO_LBL="$(_lblof "$_reco")"
+  case "$(_clsof "$_reco")" in
+    native-level) RECO="$RECO_LBL (native level limit, verified)";;
+    cut)          RECO="$RECO_LBL (CUT)";;
+    bypass)       RECO="$RECO_LBL (BYPASS)";;
+    drain)        RECO="$RECO_LBL (CUT, discharges while plugged)";;
+    throttle)     RECO="$RECO_LBL (throttle only)";;
+  esac
+fi
+if [ -z "$RECO_LBL" ]; then
+  if [ -n "$BYPASS$CUT$DRAIN" ]; then
+    RECO_LATCH=1
+    # latch fallback, same reliability-first order: CUT before BYPASS before DRAIN.
+    if [ -n "$CUT" ]; then RECO_LBL="$(pick1 "$CUT")"; RECO="$RECO_LBL (CUT, but LATCHES -- needs re-arm)"
+    elif [ -n "$BYPASS" ]; then RECO_LBL="$(pick1 "$BYPASS")"; RECO="$RECO_LBL (BYPASS, but LATCHES -- needs re-arm)"
+    else RECO_LBL="$(pick1 "$DRAIN")"; RECO="$RECO_LBL (CUT/drain, but LATCHES -- needs re-arm)"; fi
+  else
+    la="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | sed -n '1p')"
+    [ -n "$la" ] && { RECO="$la (native level limit, accepts values -- re-run at the real threshold to confirm enforcement)"; RECO_LBL="$la"; }
+  fi
 fi
 if [ "$RECO" = none ] && [ -n "$ACC_IDLE1$ACC_DRAIN1" ]; then
   if [ -n "$ACC_IDLE1" ]; then ACC_FALLBACK="$ACC_IDLE1"; RECO="${ACC_IDLE1%% *} (ACC-verified IDLE from ACC's own history -- tester found no hold this run)"; RECO_LBL="${ACC_IDLE1%% *}"
@@ -1453,11 +1603,11 @@ fi
 SUGGEST=
 [ -n "$RECO_LBL" ] && SUGGEST="$(cfg_lookup "$RECO_LBL")"
 if [ -z "$SUGGEST" ]; then
-  if [ -n "$rb" ] && [ -n "$CFG_BYPASS" ]; then SUGGEST="$CFG_BYPASS"
-  elif [ -n "$le_enf" ] && [ -n "$CFG_LEVEL" ]; then SUGGEST="$CFG_LEVEL"
+  # reliability-first fallback (mirror reco_pick): verified-native > CUT > BYPASS > DRAIN > ACC history.
+  if [ -n "$le_enf" ] && [ -n "$CFG_LEVEL" ]; then SUGGEST="$CFG_LEVEL"
   elif [ -n "$CUT" ] && [ -n "$CFG_CUT" ]; then SUGGEST="$CFG_CUT"
-  elif [ -n "$DRAIN" ] && [ -n "$CFG_DRAIN" ]; then SUGGEST="$CFG_DRAIN"
   elif [ -n "$BYPASS" ] && [ -n "$CFG_BYPASS" ]; then SUGGEST="$CFG_BYPASS"
+  elif [ -n "$DRAIN" ] && [ -n "$CFG_DRAIN" ]; then SUGGEST="$CFG_DRAIN"
   elif [ -n "$ACC_FALLBACK" ]; then SUGGEST="$ACC_FALLBACK"
   fi
 fi
@@ -1546,7 +1696,7 @@ log "  L6d combo engine         : ${cn:-0} grouped candidate(s)"
 log "  L6e firmware-teaching    : teacher=${TEACH_P:-none}; learned $NLEARN, tested $TEACHED, VERIFIED $TBUILT new switch(es)$([ -n "$BUILT" ] && echo " + built 1 combo")"
 log ""
 log "=====SUMMARY====="
-log "SCRIPT=acc-compat-v5.5"
+log "SCRIPT=acc-compat-v5.6"
 log "DEVICE=$(getprop ro.product.manufacturer 2>/dev/null)_$(getprop ro.product.device 2>/dev/null)"
 log "SOC=$(getprop ro.board.platform 2>/dev/null)"
 log "ANDROID=$(getprop ro.build.version.release 2>/dev/null)"
@@ -1586,7 +1736,12 @@ log ""
 ART=/data/local/tmp/acc-compat-verified
 acls=unknown
 case "$RECO" in
-  *BYPASS*) acls=bypass;; *"native level"*) acls=level;; *CUT*) acls=cut;; *drain*|*DRAIN*) acls=drain;; *throttle*) acls=throttle;;
+  # order matters: the drain + native phrasings both contain "CUT"/level words, so match them FIRST.
+  *"native level"*) acls=level;;
+  *"discharges while plugged"*|*"CUT/drain"*) acls=drain;;
+  *BYPASS*) acls=bypass;;
+  *CUT*) acls=cut;;
+  *throttle*) acls=throttle;;
 esac
 case "$RECO" in
   none) aconf=none;; *LATCHES*) aconf=latch-needs-rearm;; *"accepts values"*) aconf=unconfirmed;; *history*) aconf=from-ACC-history;; *) aconf=verified;;
@@ -1605,14 +1760,25 @@ RESUME_OK=na
   *"|$RECO_LBL=STUCK"*)       RESUME_OK=stuck;;
 esac
 REARM_DONE=no; printf '%s' "${SUGGEST:-}" | grep -Eq "$REARM_RE" && REARM_DONE=yes
+# v5.6: ACC's current locked switch + the ranked OTHER working switches, additive before ok=1.
+ACCCUR="$(acc_current)"; ALTS="$(emit_alts)"
 case "$aconf" in
   verified|pump-needs-long-test)
     if [ -n "${SUGGEST:-}" ] && [ "${SUGGEST:-none}" != none ]; then
-      printf 'schema=1\ncharging_switch=%s\nclass=%s\nconf=%s\npolarity=%s\nunits=%s\nresume=%s\nweak_charger=%s\nrearm_checked=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.5\nts=%s\nok=1\n' "$SUGGEST" "$acls" "$aconf" "${POLARITY:-normal}" "${UNIT:-mA}" "$RESUME_OK" "${WEAK_CHARGER:-0}" "$REARM_DONE" "$_advc" "$_advs" "${TS:-}" > "${ART}.tmp" 2>/dev/null
+      # $() strips trailing newlines from ACCCUR/ALTS, so emit each as its own newline-terminated chunk
+      # (guarded on non-empty -> no blank lines) and keep ok=1 strictly last for the sentinel check.
+      { printf 'schema=1\ncharging_switch=%s\nclass=%s\nconf=%s\npolarity=%s\nunits=%s\nresume=%s\nweak_charger=%s\nrearm_checked=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.6\nts=%s\n' "$SUGGEST" "$acls" "$aconf" "${POLARITY:-normal}" "${UNIT:-mA}" "$RESUME_OK" "${WEAK_CHARGER:-0}" "$REARM_DONE" "$_advc" "$_advs" "${TS:-}"
+        [ -n "$ACCCUR" ] && printf '%s\n' "$ACCCUR"
+        [ -n "$ALTS" ] && printf '%s\n' "$ALTS"
+        printf 'ok=1\n'; } > "${ART}.tmp" 2>/dev/null
     else
-      printf 'schema=1\nresult=no-switch\nreason=no-pinnable\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.5\nok=1\n' "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs" > "${ART}.tmp" 2>/dev/null
+      { printf 'schema=1\nresult=no-switch\nreason=no-pinnable\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.6\n' "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs"
+        [ -n "$ACCCUR" ] && printf '%s\n' "$ACCCUR"
+        printf 'ok=1\n'; } > "${ART}.tmp" 2>/dev/null
     fi ;;
-  *) printf 'schema=1\nresult=no-switch\nreason=%s\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.5\nok=1\n' "$aconf" "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs" > "${ART}.tmp" 2>/dev/null ;;
+  *) { printf 'schema=1\nresult=no-switch\nreason=%s\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.6\n' "$aconf" "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs"
+       [ -n "$ACCCUR" ] && printf '%s\n' "$ACCCUR"
+       printf 'ok=1\n'; } > "${ART}.tmp" 2>/dev/null ;;
 esac
 if [ -s "${ART}.tmp" ] && [ "$(tail -n1 "${ART}.tmp" 2>/dev/null)" = ok=1 ]; then
   mv -f "${ART}.tmp" "$ART" 2>/dev/null && chmod 0644 "$ART" 2>/dev/null
@@ -1649,7 +1815,7 @@ else
   log "|  -> input ~${_imax}mA / battery ~${_ib}mA -- source+IC are delivering; compare against the stock-ROM number for the fast-charge target."
 fi
 log "+===================================================="
-log "|  VERDICT  (acc-compat v5.5)"
+log "|  VERDICT  (acc-compat v5.6)"
 log "|  Device:       $(getprop ro.product.model 2>/dev/null) [$_advc / $_advs]"
 log "|  Best switch:  ${SUGGEST:-none}"
 log "|  Type: $acls    Confidence: $aconf"

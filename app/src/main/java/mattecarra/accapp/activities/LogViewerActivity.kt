@@ -19,6 +19,7 @@ import mattecarra.accapp.R
 import mattecarra.accapp.databinding.ActivityLogViewerBinding
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ScopedAppActivity
+import java.io.File
 
 /**
  * Diagnostics screen.
@@ -74,6 +75,43 @@ class LogViewerActivity : ScopedAppActivity()
             report = text
             binding.logReportText.text = text
             setBusy(false)
+        }
+    }
+
+    /**
+     * Deep diagnostic: runs the bundled comprehensive acc-diag (device + the FULL charge-control node
+     * inventory, so unknown phones are covered, + the daemon flight recorder + a computed failure
+     * verdict), observe-only, and shows it here so the existing Copy / Share buttons work on it. The
+     * script also auto-saves a copy to Downloads. This is the bundle a user sends us to get supported.
+     */
+    private fun runDeepDiag()
+    {
+        setBusy(true)
+        binding.logReportText.text = getString(R.string.deep_diagnostic_running)
+        launch {
+            val text = withContext(Dispatchers.IO) { gatherDeepDiag() }
+            report = text
+            binding.logReportText.text = text
+            setBusy(false)
+            if (text.contains("schema=diag") && text.contains("ok=1"))
+                Toast.makeText(this@LogViewerActivity, R.string.diag_saved_downloads, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun gatherDeepDiag(): String
+    {
+        if (!Shell.rootAccess())
+            return "root: NOT GRANTED\n\nThe deep diagnostic needs root to read ACC's data.\n"
+        return try {
+            val appFile = File(filesDir, "acc-diag.sh")
+            assets.open("acc-diag.sh").use { input -> appFile.outputStream().use { output -> input.copyTo(output) } }
+            Shell.su("cp ${appFile.absolutePath} /data/local/tmp/acc-diag.sh && chmod 0755 /data/local/tmp/acc-diag.sh").exec()
+            Shell.su("sh /data/local/tmp/acc-diag.sh >/dev/null 2>&1").exec()
+            val out = Shell.su("cat \$(ls -t /data/local/tmp/acc-diag-*.txt 2>/dev/null | head -1)").exec().out.joinToString("\n")
+            if (out.isBlank()) "Deep diagnostic produced no output (is ACC installed?)." else out
+        } catch (e: Exception) {
+            LogExt().e(javaClass.simpleName, "acc-diag failed: $e")
+            "Deep diagnostic failed: ${e.message}\n"
         }
     }
 
@@ -317,6 +355,7 @@ class LogViewerActivity : ScopedAppActivity()
         when (item.itemId)
         {
             android.R.id.home -> { finish(); return true }
+            R.id.menu_deep_diag -> { runDeepDiag(); return true }
             R.id.menu_capture -> { captureCharging(); return true }
             R.id.menu_export_bundle -> { exportFullBundle(); return true }
         }

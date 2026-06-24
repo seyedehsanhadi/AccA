@@ -12,6 +12,9 @@
     <string name="log_export_failed">Export failed (need root / ACC running)</string>
     <string name="log_capture">Capture charging (20s)</string>
     <string name="log_capturing">Capturing charging activity… keep the charger plugged in</string>
+    <string name="deep_diagnostic">Deep diagnostic (full report)</string>
+    <string name="deep_diagnostic_running">Running full diagnostic… (~1 min, observe-only)</string>
+    <string name="diag_saved_downloads">Saved to Downloads — share it with the Share button or your file manager</string>
 
     <!-- ACC Tile Strings -->
     <string name="tile_acc_no_root">No Root</string>
