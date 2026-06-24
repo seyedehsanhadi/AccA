@@ -81,8 +81,14 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         // below the realistic Li-ion safety floor (ACC's 40 floor accepts unsafely-low values).
         if (shutdown !in maxOf(max + 3, 50)..70) return getString(R.string.err_shutdown_temp_range)
 
-        val cap = c.configCapacity                  // shutdown < resume < pause, all percent 0..100
-        if (cap.pause !in 0..100) return getString(R.string.err_pause_pct)
+        val cap = c.configCapacity                  // shutdown < resume < pause; percent 0..100 OR mV 3001..5000
+        if (cap.pause > 100) {                       // ACC mV-capacity domain (voltage thresholds)
+            if (cap.pause !in 3001..5000) return getString(R.string.err_cap_pause_mv)
+            if (cap.resume !in 3001..5000) return getString(R.string.err_cap_mv_domain)
+            if (cap.shutdown in 1..3000 || cap.shutdown > 5000) return getString(R.string.err_cap_mv_domain)
+        } else {
+            if (cap.pause !in 0..100) return getString(R.string.err_pause_pct)
+        }
         if (cap.resume >= cap.pause) return getString(R.string.err_cap_resume_lt_pause)
         if (cap.shutdown >= cap.resume) return getString(R.string.err_cap_shutdown_lt_resume)
         return null
@@ -241,20 +247,44 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
         viewModel.observeCapacity(this, Observer
         {
-            content.shutdownCapacityPicker.setFormatter { v -> if (v == 0) getString(R.string.disabled) else v.toString() }
-            content.shutdownCapacityPicker.minValue = 0
-            content.shutdownCapacityPicker.maxValue = 20
-            content.shutdownCapacityPicker.value = it.shutdown
+            // ACC capacity thresholds are percent (0..100) OR millivolts (3001..5000); the domain is
+            // detected from pause (> 100 = mV). The percent branch is byte-identical to the original so
+            // existing % configs behave exactly as before; the mV branch lets voltage-based limits be
+            // seen/edited instead of being clamped to 100 and rejected. Ordering (shutdown<resume<pause)
+            // is enforced by validateConfig() in both domains.
+            if (it.pause > 100) {
+                content.shutdownCapacityPicker.setFormatter { v -> if (v < 1) getString(R.string.disabled) else "$v mV" }
+                content.shutdownCapacityPicker.minValue = 0
+                content.shutdownCapacityPicker.maxValue = 5000
+                content.shutdownCapacityPicker.value = it.shutdown
 
-            // B18: resume floor is shutdown+1 so resume can never equal shutdown (resuming at
-            // the shutdown level would race the auto power-off). Floored at 1.
-            content.resumeCapacityPicker.minValue = if (it.shutdown < 1) 1 else it.shutdown + 1
-            content.resumeCapacityPicker.maxValue = it.pause - 1
-            content.resumeCapacityPicker.value = it.resume
+                content.resumeCapacityPicker.setFormatter { v -> "$v mV" }
+                content.resumeCapacityPicker.minValue = 3001
+                content.resumeCapacityPicker.maxValue = 5000
+                content.resumeCapacityPicker.value = it.resume
 
-            content.pauseCapacityPicker.minValue = it.resume + 1
-            content.pauseCapacityPicker.maxValue = 100
-            content.pauseCapacityPicker.value = it.pause
+                content.pauseCapacityPicker.setFormatter { v -> "$v mV" }
+                content.pauseCapacityPicker.minValue = 3001
+                content.pauseCapacityPicker.maxValue = 5000
+                content.pauseCapacityPicker.value = it.pause
+            } else {
+                content.shutdownCapacityPicker.setFormatter { v -> if (v == 0) getString(R.string.disabled) else v.toString() }
+                content.shutdownCapacityPicker.minValue = 0
+                content.shutdownCapacityPicker.maxValue = 20
+                content.shutdownCapacityPicker.value = it.shutdown
+
+                // B18: resume floor is shutdown+1 so resume can never equal shutdown (resuming at
+                // the shutdown level would race the auto power-off). Floored at 1.
+                content.resumeCapacityPicker.setFormatter(null)
+                content.resumeCapacityPicker.minValue = if (it.shutdown < 1) 1 else it.shutdown + 1
+                content.resumeCapacityPicker.maxValue = it.pause - 1
+                content.resumeCapacityPicker.value = it.resume
+
+                content.pauseCapacityPicker.setFormatter(null)
+                content.pauseCapacityPicker.minValue = it.resume + 1
+                content.pauseCapacityPicker.maxValue = 100
+                content.pauseCapacityPicker.value = it.pause
+            }
         })
 
         viewModel.observeChargeSwitch(this, Observer

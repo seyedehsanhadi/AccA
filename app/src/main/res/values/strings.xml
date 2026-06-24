@@ -98,6 +98,8 @@
     <string name="err_pause_pct">Pause capacity must be between 0 and 100%.</string>
     <string name="err_cap_resume_lt_pause">Resume capacity must be below the pause capacity.</string>
     <string name="err_cap_shutdown_lt_resume">Shutdown capacity must be below the resume capacity.</string>
+    <string name="err_cap_pause_mv">Pause voltage must be between 3001 and 5000 mV.</string>
+    <string name="err_cap_mv_domain">In voltage mode, shutdown, resume and pause must all be 3001–5000 mV (shutdown may be 0 to disable shutdown).</string>
 
     <string name="wait">Please wait...\nThis will take a few seconds.</string>
 
@@ -287,6 +289,7 @@
     <string translatable="false" name="lang_zh_tw">文言</string>
 
     <string name="template_capacity_profile">Shutdown: %1$d%% - Resume: %2$d%% - Stop: %3$d%%</string>
+    <string name="template_capacity_profile_mv">Shutdown: %1$d mV - Resume: %2$d mV - Stop: %3$d mV</string>
     <string name="template_temperature_profile">Cool: %1$d&#176;C - Max: %2$d&#176;C - Resume: %3$d&#176;C</string>
     <string name="template_cool_down_profile">Start at: %1$d%% - Charge for %2$ds - Pause for %3$ds</string>
 

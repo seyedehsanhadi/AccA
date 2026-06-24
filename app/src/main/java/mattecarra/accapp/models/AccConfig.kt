@@ -57,7 +57,10 @@ import java.io.Serializable
     {
         fun toString(context: Context): String
         {
-            return String.format(context.getString(R.string.template_capacity_profile), shutdown, resume, pause)
+            // pause > 100 = ACC's millivolt capacity domain; show mV instead of % so the dashboard and
+            // profile cards are not mislabeled "100%" for a voltage-based limit.
+            val tmpl = if (pause > 100) R.string.template_capacity_profile_mv else R.string.template_capacity_profile
+            return String.format(context.getString(tmpl), shutdown, resume, pause)
         }
     }
 
