@@ -2,6 +2,20 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [1.1.8-rc1] - 2026-06-24
+
+A hotfix for a battery-reading bug, surfaced on Pixel and Tensor. Bundles ACC 6.4.1.
+
+### Fixed
+- **Impossible dashboard current values.** The current reading is anchored to the unambiguous voltage scale, so a small idle current (a few mA) at the charge limit is no longer shown about 1000 times too large. A display safety net also folds any out-of-range value, so the dashboard can never render a nonsense number.
+- **"Discharging" while actually holding.** With the bundled ACC 6.4.1, a current polarity cached wrong (seen on Pixel and Android 17) self-corrects, so charging and idle are no longer reported as discharging.
+
+### Bundled ACC 6.4.1
+- Bundles ACC v2025.5.18-6.4.1-rc1 (versionCode 202505241): correct current scale and self-healing polarity in the daemon and the acc-compat tester, plus flat-hold idle on Pixel and Tensor when the native firmware limit backstops it.
+
+### Notes
+- Release candidate for testing. The signing key is unchanged, so updating from an older build still needs an uninstall first.
+
 ## [1.1.7] - 2026-06-24
 
 The big stable since 1.1.6. A cleaner, more honest dashboard; accurate and complete charge limits; safer defaults; one tap to detect and lock the charging switch that works on your phone; and a built-in diagnostic. Bundles ACC 6.4 stable.

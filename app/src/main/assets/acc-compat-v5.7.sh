@@ -580,6 +580,15 @@ ABSB="$(abs "$RAW")"
 UNIT=mA; THR=50; IDLE=10
 if [ "$ABSB" -ge 16000 ] 2>/dev/null; then UNIT=uA; THR=50000; IDLE=10000; fi
 if [ "$UNIT" = mA ]; then
+  # anchor the unit to an UNAMBIGUOUS signal: charge_full_design and voltage_now are always
+  # large and share the cell's unit prefix, so a small instantaneous current at detection time
+  # cannot mislabel a uA phone as mA (Pixel 9a held at the cap reported "mA" for a uA sensor).
+  _cfd="$(san "$(read1 "$BATT/charge_full_design" 2>/dev/null)")"
+  _vnw="$(san "$(read1 "$BATT/voltage_now" 2>/dev/null)")"
+  { [ "${_cfd#-}" -ge 1000000 ] 2>/dev/null || [ "${_vnw#-}" -ge 1000000 ] 2>/dev/null; } && \
+    { UNIT=uA; THR=50000; IDLE=10000; log "  unit set to uA (design/voltage anchor cfd=$_cfd v=$_vnw)"; }
+fi
+if [ "$UNIT" = mA ]; then
   for ucf in "$BATT/constant_charge_current" "$BATT/constant_charge_current_max" $PSY/*/current_max $PSY/*/input_current_limit; do
     ex "$ucf" || continue
     uv="$(san "$(read1 "$ucf")")"

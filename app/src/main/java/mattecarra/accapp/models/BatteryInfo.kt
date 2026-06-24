@@ -120,9 +120,16 @@ class BatteryInfo(val name: String,
      */
     fun getCurrentNow(unit: CurrentUnit): Float
     {
-        return if (unit == CurrentUnit.uA) (currentNow / 1000f)
+        var mA = if (unit == CurrentUnit.uA) (currentNow / 1000f)
         else if(unit == CurrentUnit.mA) currentNow
         else (currentNow * 1000) // CurrentUnit.A --> mA !!
+        // Safety net for a mis-scaled feed (the historical uA-reported-as-A bug that printed
+        // "impossible" millions of mA on the dashboard): a phone cell's current is physically
+        // well under 20 A, so fold an out-of-range magnitude back by 1000 until it is sane.
+        // With a correctly-scaled daemon this never triggers. Display only.
+        var guard = 0
+        while ((mA > 20000f || mA < -20000f) && guard < 3) { mA /= 1000f; guard++ }
+        return mA
     }
 
     fun getCurrentNow(input: CurrentUnit, output: CurrentUnit, positive: Boolean, withMeaUnit: Boolean): String
