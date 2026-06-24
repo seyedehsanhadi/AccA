@@ -1,11 +1,40 @@
 #!/system/bin/sh
+# =====================================================================
+#  acc-compat v5.7  --  ACC charging-switch compatibility tester
+#  RUN (rooted phone):
+#    Termux:  termux-setup-storage    # once, to reach /sdcard/Download
+#             su -c 'sh /sdcard/Download/acc-compat-v5.7.sh'
+#    ADB:     adb shell 'su -c "sh /sdcard/Download/acc-compat-v5.7.sh"'
+#    Tip:     plain  sh acc-compat-v5.7.sh  auto-elevates to root for you.
+#  Report -> your Download folder (and printed below so you can copy it).
+#  No-root self-check (runs anywhere):  sh acc-compat-v5.7.sh --selftest
+# =====================================================================
 
 V=5.7
 # v5.7: --selftest/--version are PURE (no device I/O). Flag them here so the report/backup
 # file setup below is skipped, letting the regression gate run anywhere (dev box, no root).
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
+
+# v5.7: auto-elevate so a user can just `sh acc-compat-v5.7.sh` from Termux or any shell. Selftest
+# and --version stay unprivileged (skipped here). Re-exec ONCE under su/tsu/sudo; if none, show how-to.
+_uid="$(id -u 2>/dev/null)"
+if [ "${_STONLY:-}" != 1 ] && [ -n "$_uid" ] && [ "$_uid" != 0 ] && [ -z "${ACC_REEXEC:-}" ]; then
+  for _su in su tsu sudo; do command -v "$_su" >/dev/null 2>&1 && { echo "[*] acc-compat: elevating to root via $_su ..."; exec "$_su" -c "ACC_REEXEC=1 sh '$0' $*"; }; done
+  echo "!! acc-compat needs root. Grant root in your root manager, then run:  su -c 'sh $0'"; exit 1
+fi
+
 PSY="${PSY:-/sys/class/power_supply}"
-TMPD="${TMPD:-/data/local/tmp}"
+# v5.7: pick a WRITABLE work dir so the tester runs as root OR in Termux/any shell. Honors a TMPD=
+# override; for --selftest (no device I/O) just default it; otherwise probe root-tmp first, then $HOME.
+if [ -n "${TMPD:-}" ]; then :
+elif [ "${_STONLY:-}" = 1 ]; then TMPD=/data/local/tmp
+else
+  for _t in /data/local/tmp "${TMPDIR:-}" "$HOME/.acc-compat" "$HOME" /tmp; do
+    [ -n "$_t" ] || continue; mkdir -p "$_t" 2>/dev/null
+    [ -d "$_t" ] && ( : > "$_t/.acc_wt" ) 2>/dev/null && { rm -f "$_t/.acc_wt" 2>/dev/null; TMPD="$_t"; break; }
+  done
+  [ -n "${TMPD:-}" ] || TMPD=/data/local/tmp
+fi
 BK="${BK:-$TMPD/acc_compat_bk}"
 SNAP="$BK/snap.tsv"; DISC="$BK/disc.txt"; SNLIST="$BK/snlist"
 SCHG="$BK/s_chg.tsv"; SUNP="$BK/s_unplug.tsv"; SHELD="$BK/s_held.tsv"; GENC="$BK/gen.tsv"
@@ -27,8 +56,14 @@ REARM_RE='current_max|constant_charge_current|input_current'
 [ "${_STONLY:-}" = 1 ] || mkdir -p "$BK" 2>/dev/null
 
 [ -n "${SRCDIR:-}" ] || case "$0" in */*) SRCDIR="${0%/*}";; esac
+# v5.7: Download FIRST (as requested), and cover root + Termux layouts everywhere -- the FUSE /sdcard
+# view, the real /data/media/0 behind it, Termux's $HOME/storage, and $EXTERNAL_STORAGE.
 pick_outdir(){
-  for d in "${SRCDIR:-}" /sdcard/Download /storage/emulated/0/Download /sdcard/Documents /sdcard /storage/emulated/0 /storage/self/primary "$TMPD"; do
+  for d in \
+    /sdcard/Download /storage/emulated/0/Download /data/media/0/Download \
+    "${EXTERNAL_STORAGE:-}/Download" "$HOME/storage/downloads" "$HOME/storage/shared/Download" \
+    /sdcard/Documents /sdcard /storage/emulated/0 /storage/self/primary \
+    "${SRCDIR:-}" "$HOME" "$TMPD"; do
     [ -n "$d" ] && [ -d "$d" ] || continue
     if ( : > "$d/.acc_wtest" ) 2>/dev/null; then rm -f "$d/.acc_wtest" 2>/dev/null; printf '%s' "$d"; return; fi
   done
