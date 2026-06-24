@@ -267,15 +267,15 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         viewModel.observeTemperature(this, Observer
         {
             content.temperatureCooldownPicker.minValue = 20
-            content.temperatureCooldownPicker.maxValue = 90
+            content.temperatureCooldownPicker.maxValue = 60
             content.temperatureCooldownPicker.value = it.coolDownTemperature
 
             content.temperatureMaxPicker.minValue = 20
-            content.temperatureMaxPicker.maxValue = 95
+            content.temperatureMaxPicker.maxValue = 60
             content.temperatureMaxPicker.value = it.maxTemperature
 
             content.temperatureMaxPauseSecondsPicker.minValue = 20
-            content.temperatureMaxPauseSecondsPicker.maxValue = 90
+            content.temperatureMaxPauseSecondsPicker.maxValue = 60
             content.temperatureMaxPauseSecondsPicker.value = it.pause
 
             content.temperatureShutdownPicker.minValue = 50
