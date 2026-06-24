@@ -1,6 +1,9 @@
 #!/system/bin/sh
 
-V=5.6
+V=5.7
+# v5.7: --selftest/--version are PURE (no device I/O). Flag them here so the report/backup
+# file setup below is skipped, letting the regression gate run anywhere (dev box, no root).
+case "${1:-}" in --selftest|--version) _STONLY=1;; esac
 PSY="${PSY:-/sys/class/power_supply}"
 TMPD="${TMPD:-/data/local/tmp}"
 BK="${BK:-$TMPD/acc_compat_bk}"
@@ -21,7 +24,7 @@ EFFECT_RE='^(status|charge_type|charging_speed|current_now|current_avg|current_m
 # v5.5: nodes whose "off" can pass the ~15s hold then be re-armed by charger firmware later
 # (the current-cap class). These get the two-phase long re-verify in test_switch.
 REARM_RE='current_max|constant_charge_current|input_current'
-mkdir -p "$BK" 2>/dev/null
+[ "${_STONLY:-}" = 1 ] || mkdir -p "$BK" 2>/dev/null
 
 [ -n "${SRCDIR:-}" ] || case "$0" in */*) SRCDIR="${0%/*}";; esac
 pick_outdir(){
@@ -31,6 +34,7 @@ pick_outdir(){
   done
   printf '%s' "$TMPD"
 }
+if [ "${_STONLY:-}" != 1 ]; then
 SRCDIR="${SRCDIR%/}"
 OUTDIR="$(pick_outdir)"
 TS="$(date +%Y%m%d-%H%M%S 2>/dev/null | tr -cd '0-9-')"
@@ -45,6 +49,7 @@ OUT2="$TMPD/$OUTBASE"
 : > "$BK/combo.tsv" 2>/dev/null; : > "$BK/combo_seen" 2>/dev/null
 : > "$SHELD2" 2>/dev/null; : > "$TEACHC" 2>/dev/null; : > "$BK/teach_combo.tsv" 2>/dev/null
 rm -f /data/local/tmp/acc-compat-verified 2>/dev/null
+fi
 
 log(){ printf '%s\n' "$*"; printf '%s\n' "$*" >> "$OUT" 2>/dev/null; [ "$OUT" = "$OUT2" ] || printf '%s\n' "$*" >> "$OUT2" 2>/dev/null; }
 canon(){ case "$1" in
@@ -149,6 +154,16 @@ note_for(){ case "$1" in
   *)              echo "";;
 esac; }
 
+# path_note: v5.7 path-dependence advisory. A switch's class can change with the charger -- field
+# evidence (Motorola Edge 50 Pro): force_usb_suspend HELD on 5W wireless but was DEAD on 60W USB-PD,
+# and a node faked idle (overcharge) under PD. So an input-cut/bypass verdict is proven only for the
+# charger tested; a VERIFIED firmware %-limit is charger-independent. Pure -> selftest-able. $1=class.
+path_note(){ case "$1" in
+  level|native-level|native-accepts) echo "";;
+  cut|drain|bypass) echo "verified for the charger used in THIS test -- some phones (esp. fast USB-PD) change behaviour by charge path; if charging looks uncapped on another charger, re-run, and prefer a firmware %-limit if your phone has one";;
+  *) echo "";;
+esac; }
+
 # native_verdict: native-level is the #1 recommendation, so "enforced" must be PROVEN, not assumed.
 # A firmware limit is verified-enforcing ONLY if a real current measurement showed charging collapsed
 # (samp_last=0, not all samples charging) AND it did not re-arm over the longer overshoot window AND the
@@ -205,6 +220,13 @@ selftest(){ _sp=0; _sf=0
   _ck nv_blind    "$(native_verdict 0 0 1 0)"  accepts
   _ck nv_rearm    "$(native_verdict 0 0 0 1)"  accepts
   _ck nv_charging "$(native_verdict 1 3 0 0)"  accepts
+  # v5.7 field scenarios (Motorola Edge 50 Pro): qpnp ENFORCED under PD (collapsed, 1 sample) = verified;
+  # still-charging in the window = accepts. Plus the path-dependence note fires only for input-cut classes.
+  _ck field_enforced "$(native_verdict 0 1 0 0)" verified
+  _ck field_accepts  "$(native_verdict 1 1 0 0)" accepts
+  _ck pnote_level    "$(path_note level)"  ""
+  _ck pnote_cut_y    "$([ -n "$(path_note cut)" ] && echo y)"    y
+  _ck pnote_drain_y  "$([ -n "$(path_note drain)" ] && echo y)"  y
   echo "== self-test: $_sp passed, $_sf failed =="
   [ "$_sf" = 0 ]; }
 
@@ -366,7 +388,7 @@ MYPID=$$
 ( i=0; lim=$(( (MAXSEC + 120) / 5 )); while [ $i -lt $lim ]; do sleep 5; kill -0 "$MYPID" 2>/dev/null || exit 0; i=$((i+1)); done; kill -TERM "$MYPID" 2>/dev/null ) &
 WATCHDOG=$!
 
-log "############ ACC COMPATIBILITY v5.6 (smart-observe + blind-verify + firmware-teach + verdict card + charger-speed) ############"
+log "############ ACC COMPATIBILITY v$V (smart-observe + blind-verify + firmware-teach + verdict card + charger-speed + path-aware) ############"
 log "collected in report: phone model, soc, android+kernel build, charge-node names/values, charger driver names. no accounts/imei/serial/location."
 log "SAFE MODE: WRITES only well-known, reversible charge switches (ACC's standard enable/suspend set) + native %-limits. Unknown/vendor/learned nodes are READ + reported, NEVER written. No bypass/regulator/OTG/PD/fuel-gauge writes. Battery protection is never disabled. Every write is snapshotted and restored."
 log ""
@@ -856,7 +878,11 @@ test_level(){
   hasstart=0; os=
   [ -n "$start" ] && ex "$start" && { hasstart=1; snap_add "$start"; os="$(rd "$start" | sed -n '1p')"; }
   engage=0; pstop=80
-  if [ "$ACTIVE" = 1 ] && [ "$CAP" -ge 12 ] 2>/dev/null && [ "$CAP" -lt 100 ]; then pstop=$(( CAP-2 )); engage=1; fi
+  # v5.7: prove the native limit DECISIVELY. A cap only 2% below SOC let some firmwares ride the
+  # hysteresis and not cut within the observe window (Motorola qpnp read "accepts" -> lost the #1
+  # slot to a path-dependent drain switch). 5% below SOC forces a clear cut -> enforcement becomes
+  # observable -> native_verdict=verified where the firmware limit is the real, charger-independent answer.
+  if [ "$ACTIVE" = 1 ] && [ "$CAP" -ge 12 ] 2>/dev/null && [ "$CAP" -lt 100 ]; then pstop=$(( CAP-5 )); engage=1; fi
   [ "$pstop" -ge 96 ] 2>/dev/null && pstop=95
   [ "$pstop" -le 5 ] 2>/dev/null && { pstop=80; engage=0; }
   [ "$engage" = 1 ] && { gate || engage=0; }
@@ -881,6 +907,9 @@ test_level(){
   if [ "$engage" = 1 ]; then
     sleep "$POLL"
     hold_probe
+    # v5.7: a real firmware cut can lag a few seconds past the write. If still charging after the first
+    # probe, wait once more before concluding -- a slow-but-real cut must not be misread as unenforced.
+    [ "$SAMP_LAST" = 1 ] && { sleep "$SETTLE"; hold_probe; }
     # v5.6: harden native-level (it is the #1 recommendation, so it must be PROVEN). Require a real
     # current collapse (non-blind), then re-check over a longer window to catch a firmware that holds
     # briefly then re-arms past the cap (the "accepts then overshoots" trap, e.g. Pixel multi-path).
@@ -959,6 +988,7 @@ battery/night_charging|0|1
 /sys/class/asuslib/charger_limit_en|0|1
 /sys/devices/platform/soc/soc:qcom,pmic_glink/soc:qcom,pmic_glink:qcom,battery_charger/force_charger_suspend|0|1
 /sys/devices/platform/soc/soc:qcom,pmic_glink/soc:qcom,pmic_glink:mmi,qti-glink-charger/force_usb_suspend|0|1
+*/device/force_charger_suspend|0|1
 */force_chg_usb_suspend|0|1
 /sys/kernel/debug/google_charger/input_suspend|0|1
 /sys/kernel/debug/google_charger/chg_suspend|0|1
@@ -1696,7 +1726,7 @@ log "  L6d combo engine         : ${cn:-0} grouped candidate(s)"
 log "  L6e firmware-teaching    : teacher=${TEACH_P:-none}; learned $NLEARN, tested $TEACHED, VERIFIED $TBUILT new switch(es)$([ -n "$BUILT" ] && echo " + built 1 combo")"
 log ""
 log "=====SUMMARY====="
-log "SCRIPT=acc-compat-v5.6"
+log "SCRIPT=acc-compat-v$V"
 log "DEVICE=$(getprop ro.product.manufacturer 2>/dev/null)_$(getprop ro.product.device 2>/dev/null)"
 log "SOC=$(getprop ro.board.platform 2>/dev/null)"
 log "ANDROID=$(getprop ro.build.version.release 2>/dev/null)"
@@ -1729,6 +1759,7 @@ log "STUCK=${STUCKS#\|}"
 log "SUGGEST_SWITCH=${SUGGEST:-none}"
 log "FIRST_RESPONDING=${WORKING:-none}"
 log "RECOMMENDED=$RECO"
+log "PATH_SENSITIVE=$(case "$RECO" in *"native level"*) echo no;; *CUT*|*BYPASS*|*DRAIN*|*drain*|*discharges*) echo yes;; *) echo no;; esac)"
 log "=====END====="
 log ""
 log "recommended switch: $RECO"
@@ -1743,6 +1774,7 @@ case "$RECO" in
   *CUT*) acls=cut;;
   *throttle*) acls=throttle;;
 esac
+_pnote="$(path_note "$acls")"; [ -n "$_pnote" ] && { log ""; log "  NOTE (charge path): $_pnote"; }
 case "$RECO" in
   none) aconf=none;; *LATCHES*) aconf=latch-needs-rearm;; *"accepts values"*) aconf=unconfirmed;; *history*) aconf=from-ACC-history;; *) aconf=verified;;
 esac
@@ -1767,16 +1799,16 @@ case "$aconf" in
     if [ -n "${SUGGEST:-}" ] && [ "${SUGGEST:-none}" != none ]; then
       # $() strips trailing newlines from ACCCUR/ALTS, so emit each as its own newline-terminated chunk
       # (guarded on non-empty -> no blank lines) and keep ok=1 strictly last for the sentinel check.
-      { printf 'schema=1\ncharging_switch=%s\nclass=%s\nconf=%s\npolarity=%s\nunits=%s\nresume=%s\nweak_charger=%s\nrearm_checked=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.6\nts=%s\n' "$SUGGEST" "$acls" "$aconf" "${POLARITY:-normal}" "${UNIT:-mA}" "$RESUME_OK" "${WEAK_CHARGER:-0}" "$REARM_DONE" "$_advc" "$_advs" "${TS:-}"
+      { printf 'schema=1\ncharging_switch=%s\nclass=%s\nconf=%s\npolarity=%s\nunits=%s\nresume=%s\nweak_charger=%s\nrearm_checked=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.7\nts=%s\n' "$SUGGEST" "$acls" "$aconf" "${POLARITY:-normal}" "${UNIT:-mA}" "$RESUME_OK" "${WEAK_CHARGER:-0}" "$REARM_DONE" "$_advc" "$_advs" "${TS:-}"
         [ -n "$ACCCUR" ] && printf '%s\n' "$ACCCUR"
         [ -n "$ALTS" ] && printf '%s\n' "$ALTS"
         printf 'ok=1\n'; } > "${ART}.tmp" 2>/dev/null
     else
-      { printf 'schema=1\nresult=no-switch\nreason=no-pinnable\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.6\n' "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs"
+      { printf 'schema=1\nresult=no-switch\nreason=no-pinnable\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.7\n' "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs"
         [ -n "$ACCCUR" ] && printf '%s\n' "$ACCCUR"
         printf 'ok=1\n'; } > "${ART}.tmp" 2>/dev/null
     fi ;;
-  *) { printf 'schema=1\nresult=no-switch\nreason=%s\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.6\n' "$aconf" "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs"
+  *) { printf 'schema=1\nresult=no-switch\nreason=%s\npolarity=%s\nweak_charger=%s\ndevice=%s\nsoc=%s\nscript=acc-compat-v5.7\n' "$aconf" "${POLARITY:-normal}" "${WEAK_CHARGER:-0}" "$_advc" "$_advs"
        [ -n "$ACCCUR" ] && printf '%s\n' "$ACCCUR"
        printf 'ok=1\n'; } > "${ART}.tmp" 2>/dev/null ;;
 esac
@@ -1815,7 +1847,7 @@ else
   log "|  -> input ~${_imax}mA / battery ~${_ib}mA -- source+IC are delivering; compare against the stock-ROM number for the fast-charge target."
 fi
 log "+===================================================="
-log "|  VERDICT  (acc-compat v5.6)"
+log "|  VERDICT  (acc-compat v$V)"
 log "|  Device:       $(getprop ro.product.model 2>/dev/null) [$_advc / $_advs]"
 log "|  Best switch:  ${SUGGEST:-none}"
 log "|  Type: $acls    Confidence: $aconf"
