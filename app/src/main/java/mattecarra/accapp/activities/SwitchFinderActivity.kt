@@ -47,8 +47,8 @@ class SwitchFinderActivity : ScopedAppActivity()
     // CallbackList delivers them on a worker thread).
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private val ASSET = "acc-compat-v5.5.sh"
-    private val TESTER_PATH = "/data/local/tmp/acc-compat-v5.5.sh"
+    private val ASSET = "acc-compat-v5.7.sh"
+    private val TESTER_PATH = "/data/local/tmp/acc-compat-v5.7.sh"
 
     override fun onCreate(savedInstanceState: Bundle?)
     {
@@ -347,7 +347,7 @@ class SwitchFinderActivity : ScopedAppActivity()
         // own EXIT trap then runs its safe-restore (re-enables native charging, restarts ACC).
         // submit() runs it asynchronously on libsu's own worker, so it survives our scope being
         // cancelled in onDestroy (a coroutine launch here would be cancelled before it ran).
-        Shell.su("pkill -f acc-compat-v5.5").submit()
+        Shell.su("pkill -f acc-compat-v5.7").submit()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean
