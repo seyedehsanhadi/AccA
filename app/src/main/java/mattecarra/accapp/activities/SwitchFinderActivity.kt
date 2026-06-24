@@ -57,6 +57,10 @@ class SwitchFinderActivity : ScopedAppActivity()
 
         binding = ActivitySwitchFinderBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // The tester run takes minutes; keep the screen on so the device doesn't sleep and let an
+        // aggressive OEM (e.g. MIUI) destroy this activity mid-run -- onDestroy kills the tester,
+        // which aborts detection and falsely reports "no switch". Flag clears when the activity ends.
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         setSupportActionBar(binding.switchFinderToolbar)
         supportActionBar?.title = getString(R.string.find_switch_title)
