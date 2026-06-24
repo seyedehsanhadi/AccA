@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
@@ -350,10 +351,57 @@ class SwitchFinderActivity : ScopedAppActivity()
         Shell.su("pkill -f acc-compat-v5.7").submit()
     }
 
+    override fun onCreateOptionsMenu(menu: Menu): Boolean
+    {
+        menuInflater.inflate(R.menu.switch_finder_menu, menu)
+        return true
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean
     {
-        if (item.itemId == android.R.id.home) { onBackPressed(); return true }
+        when (item.itemId)
+        {
+            android.R.id.home   -> { onBackPressed(); return true }
+            R.id.menu_copy_log  -> { copyLog();  return true }
+            R.id.menu_share_log -> { shareLog(); return true }
+        }
         return super.onOptionsItemSelected(item)
+    }
+
+    /** Copy the full run log to the clipboard so the user can paste it back to us. */
+    private fun copyLog()
+    {
+        val text = binding.switchFinderLog.text?.toString().orEmpty()
+        val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("acc-compat", text))
+        Toast.makeText(this, R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Write the run log into filesDir/logs (the only path the app's FileProvider exposes) and fire a
+     * share chooser. Sharing a file (not EXTRA_TEXT) so the full multi-KB tester log is never truncated.
+     */
+    private fun shareLog()
+    {
+        val text = binding.switchFinderLog.text?.toString().orEmpty()
+        if (text.isBlank()) { Toast.makeText(this, R.string.logs_not_found, Toast.LENGTH_SHORT).show(); return }
+        try
+        {
+            val dir = java.io.File(filesDir, "logs").apply { mkdirs() }
+            val f = java.io.File(dir, "acc-compat-switch-log.txt")
+            f.writeText(text)
+            val uri = androidx.core.content.FileProvider.getUriForFile(applicationContext, "mattecarra.accapp.fileprovider", f)
+            val intent = android.content.Intent(android.content.Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(android.content.Intent.createChooser(intent, getString(R.string.share_log)))
+        }
+        catch (ex: Exception)
+        {
+            LogExt().e(javaClass.simpleName, "shareLog() failed: $ex")
+            Toast.makeText(this, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onDestroy()

@@ -306,6 +306,8 @@
     <string name="installation_failed_busybox">Install busybox first or simply place the binary in /data/adb/bin/</string>
     <string name="share">Share</string>
     <string name="logs_not_found">Log file not found.</string>
+    <string name="copy_log">Copy log</string>
+    <string name="copied_to_clipboard">Log copied to clipboard</string>
     <string name="acc_telegram">For additional support, join ACC Telegram group (t.me/acc_group)!</string>
 
     <string name="current_measure_unit_preference_title">Input Current unit of measure</string>
