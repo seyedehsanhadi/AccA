@@ -274,8 +274,8 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             content.temperatureMaxPicker.maxValue = 95
             content.temperatureMaxPicker.value = it.maxTemperature
 
-            content.temperatureMaxPauseSecondsPicker.minValue = 10
-            content.temperatureMaxPauseSecondsPicker.maxValue = 120
+            content.temperatureMaxPauseSecondsPicker.minValue = 20
+            content.temperatureMaxPauseSecondsPicker.maxValue = 90
             content.temperatureMaxPauseSecondsPicker.value = it.pause
 
             content.temperatureShutdownPicker.minValue = 50
