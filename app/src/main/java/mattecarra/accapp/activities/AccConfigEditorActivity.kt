@@ -63,7 +63,8 @@ class AccConfigEditorActivity : ScopedAppActivity(),
      * silently coerces out-of-band values back to its defaults, so the user's edit is lost.
      *
      * configTemperature.pause is resume_temp in °C (legacy field name); configCapacity uses
-     * shutdown/resume/pause (% here, with pause == 101 the "disabled" sentinel).
+     * shutdown < resume < pause, all percent 0..100. ACC's write-config coerces pause=101 -> 80,
+     * so AccA must keep pause in ACC's percent domain; section on/off is the eCapacity flag, not 101.
      */
     private fun validateConfig(c: AccConfig): String?
     {
@@ -80,13 +81,10 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         // below the realistic Li-ion safety floor (ACC's 40 floor accepts unsafely-low values).
         if (shutdown !in maxOf(max + 3, 50)..70) return getString(R.string.err_shutdown_temp_range)
 
-        val cap = c.configCapacity                  // shutdown, resume, pause (% here; 101 == disabled sentinel)
-        if (cap.pause != 101)                       // skip when capacity pause is "disabled"
-        {
-            if (cap.pause !in 0..100) return getString(R.string.err_pause_pct)
-            if (cap.resume >= cap.pause) return getString(R.string.err_cap_resume_lt_pause)
-            if (cap.shutdown >= cap.resume) return getString(R.string.err_cap_shutdown_lt_resume)
-        }
+        val cap = c.configCapacity                  // shutdown < resume < pause, all percent 0..100
+        if (cap.pause !in 0..100) return getString(R.string.err_pause_pct)
+        if (cap.resume >= cap.pause) return getString(R.string.err_cap_resume_lt_pause)
+        if (cap.shutdown >= cap.resume) return getString(R.string.err_cap_shutdown_lt_resume)
         return null
     }
 
@@ -251,11 +249,11 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             // B18: resume floor is shutdown+1 so resume can never equal shutdown (resuming at
             // the shutdown level would race the auto power-off). Floored at 1.
             content.resumeCapacityPicker.minValue = if (it.shutdown < 1) 1 else it.shutdown + 1
-            content.resumeCapacityPicker.maxValue = if (it.pause == 101) 101 else it.pause - 1
+            content.resumeCapacityPicker.maxValue = it.pause - 1
             content.resumeCapacityPicker.value = it.resume
 
-            content.pauseCapacityPicker.minValue = if (it.resume == 101) 101 else it.resume + 1
-            content.pauseCapacityPicker.maxValue = 101
+            content.pauseCapacityPicker.minValue = it.resume + 1
+            content.pauseCapacityPicker.maxValue = 100
             content.pauseCapacityPicker.value = it.pause
         })
 
