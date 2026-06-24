@@ -2,11 +2,12 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
-## [1.1.8-rc4] - 2026-06-24
+## [1.1.8-rc5] - 2026-06-24
 
 A hotfix for battery-reading and inaccurate-warning issues, surfaced on Pixel, Tensor and OnePlus. Bundles ACC 6.4.1.
 
 ### Fixed
+- **Robust current units on mixed-unit phones.** The bundled ACC now detects microamp-vs-milliamp from a charging current (sticky and persisted) instead of the voltage/charge scale, which mis-detected phones like the OnePlus 8 Pro (microvolt voltage and microamp-hour charge, but milliamp current) and would have shown their current about 1000 times too small.
 - **Impossible dashboard current ("4687 mA").** The dashboard reads current from ACC's live state export, which was mislabelling a small idle current's unit and printing it about 1000 times too large (a 4.7 mA idle current shown as "4687 mA"). The unit is now anchored to ACC's calibrated scale, so it reads correctly. A display safety net also folds any out-of-range value.
 - **"Discharging" while actually holding.** With the bundled ACC 6.4.1, a current polarity cached wrong (seen on Pixel and Android 17) self-corrects, so charging and idle are no longer reported as discharging.
 - **Removed the "Charging may be broken" card.** It false-positived on native-limit and bypass devices, where "plugged but not charging below the pause level" is the firmware's normal hold, not a fault. The bundled ACC daemon already warns accurately, only on a real overcharge.
@@ -15,7 +16,7 @@ A hotfix for battery-reading and inaccurate-warning issues, surfaced on Pixel, T
 - **Cool Down layout.** The third picker is now correctly labelled "Pause seconds" (it had inherited the temperature section "Resume temp" label), and the first label now reads "Start cooling down at %:" instead of a literal "%%".
 
 ### Bundled ACC 6.4.1
-- Bundles ACC v2025.5.18-6.4.1-rc4 (versionCode 202505244): correct current scale (acca -i and the live state export), self-healing polarity, native firmware limit shows as a locked switch, and overcharge-only warnings.
+- Bundles ACC v2025.5.18-6.4.1-rc5 (versionCode 202505245): robust current-unit detection (sticky from a charging current, fixing the mixed-unit OnePlus regression), correct current scale (acca -i and the live state export), self-healing polarity, native firmware limit shows as a locked switch, and overcharge-only warnings.
 
 ### Notes
 - Release candidate for testing. The signing key is unchanged, so updating from an older build still needs an uninstall first. **Reboot after installing** so Magisk activates the updated ACC daemon.
