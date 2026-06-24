@@ -369,15 +369,12 @@ class DashboardFragment : ScopedFragment()
     private fun evaluateHealthWarning(dash: DashboardValues)
     {
         if (_binding == null || !isAdded) return
-
-        val warn = computeHealthWarn(dash)
-
-        // Sustained gate: require the broken-looking condition on consecutive ticks before
-        // showing; any good tick resets the counter and hides the card immediately.
-        if (warn) mHealthWarnTicks++ else mHealthWarnTicks = 0
-
-        binding.dashHealthWarningCard.visibility =
-            if (mHealthWarnTicks >= HEALTH_WARN_MIN_TICKS) View.VISIBLE else View.GONE
+        // rc4: the "charging may be broken" card is disabled. It false-positives on native-limit
+        // and bypass devices, where plugged-but-not-charging below the pause level is the firmware's
+        // NORMAL hold/hysteresis (e.g. a Pixel holding in its charge_start..charge_stop band), not a
+        // fault. ACC's own daemon already warns accurately -- only on a real overcharge past the
+        // limit -- so this app-side guess is redundant and was misleading.
+        binding.dashHealthWarningCard.visibility = View.GONE
     }
 
     private fun computeHealthWarn(dash: DashboardValues): Boolean
