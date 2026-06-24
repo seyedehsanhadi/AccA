@@ -82,6 +82,7 @@
     <string name="pause_seconds">Resume temp (&#176;C):</string>
     <string name="shutdown_temp">Shutdown temp:</string>
     <string name="charge_seconds">Charge seconds:</string>
+    <string name="cooldown_pause_seconds">Pause seconds:</string>
     <string name="shutdown_capacity">Shutdown (if not charging) at:</string>
     <string name="no_root_message">AccA requires ROOT.</string>
     <string name="config_error_title">Config parse error</string>
@@ -477,7 +478,7 @@
     <!-- Add-Switch needs a live test, which only runs while charging — block save when unplugged. -->
     <string name="err_add_switch_needs_plug">Plug in the charger to add a switch — it must be live-tested first.</string>
     <string name="reset_bs_on_pause">Reset battery stats on pause \%</string>
-    <string name="current_max">Max Current (mA, 1–9999; empty = native speed)</string>
+    <string name="current_max">Max current (mA):</string>
     <string name="invalid_current_max">Invalid Max Current Value</string>
 
     <!-- Import and Export -->

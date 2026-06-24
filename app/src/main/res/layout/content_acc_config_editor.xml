@@ -404,7 +404,8 @@
 
                         <TextView
                             android:id="@+id/current_max_title"
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
                             android:layout_height="wrap_content"
                             android:layout_marginEnd="5dp"
                             android:layout_marginRight="5dp"
@@ -756,7 +757,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:gravity="center_horizontal"
-                            android:text="@string/pause_seconds"
+                            android:text="@string/cooldown_pause_seconds"
                             android:textColor="?android:attr/textColorPrimary"
                             android:textSize="14sp" />
 
