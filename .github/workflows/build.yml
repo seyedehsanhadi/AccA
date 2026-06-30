@@ -41,34 +41,6 @@ jobs:
           name: AccA-community-fix-debug
           path: app/build/outputs/apk/debug/*.apk
 
-      # Publish a single rolling pre-release on a fixed `dev` tag (reused, not a new tag each push)
-      # so the latest debug APK is always downloadable from the Releases page.
-      # Step 1: delete the existing rolling release for a clean slate -- clears any stale or
-      # half-uploaded "phantom" assets from previous runs. The tag is kept (no --cleanup-tag),
-      # so there is no tag race.
-      - name: Clear previous rolling release
-        if: github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release delete dev --yes 2>/dev/null || true
-
-      - name: Compute build label
-        if: github.ref == 'refs/heads/main'
-        id: lbl
-        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-
-      # Step 2: recreate the rolling release and upload the current APK via the standard release
-      # action, which handles the create-then-upload propagation race and asset replacement
-      # internally (the hand-rolled gh create/upload path hit transient HTTP 422/404).
-      - name: Publish rolling pre-release
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          target_commitish: ${{ github.sha }}
-          prerelease: true
-          name: "AccA dev build #${{ github.run_number }} (${{ steps.lbl.outputs.sha }})"
-          body: "Rolling auto-built debug APK from the latest `main`. Debug-signed, for testing only -- installs standalone but will not update over a copy of AccA signed with a different key."
-          files: |
-            app/build/outputs/apk/debug/*.apk
-          fail_on_unmatched_files: false
+      # This workflow only validates that `main` builds. It no longer publishes a rolling
+      # "dev" pre-release: only tagged versions are published, signed, via release.yml.
+      # The debug APK is kept as a build artifact above for CI download.

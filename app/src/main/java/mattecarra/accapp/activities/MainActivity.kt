@@ -82,6 +82,8 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         _schedulesViewModel = ViewModelProvider(this).get(SchedulesViewModel::class.java)
         isUiInitialized = true   // ViewModels exist -> nav/menu handlers are safe now
 
+        checkAppUpdate()
+
         // Subscribe to viewmodel config and action if config is null
         _sharedViewModel.observeConfig(this, Observer { r ->
             if (r.first == null) {
@@ -522,6 +524,34 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 }
             } catch (e: Exception) {
                 LogExt().e(javaClass.simpleName, "checkUpdates failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Notify the user when a newer AccA release is published on this fork's GitHub, and
+     * link to the release page. Release APKs are signed with the project key, so the update
+     * installs in place. Fails silently (no network, API error) so it never blocks the UI.
+     */
+    private fun checkAppUpdate() {
+        launch {
+            try {
+                val latest = GithubUtils.getLatestAccaRelease()?.trim()?.trimStart('v', 'V') ?: return@launch
+                val current = try {
+                    packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+                } catch (e: Exception) { "" }
+                if (latest.isBlank() || current.isBlank() || latest == current) return@launch
+                if (isFinishing || isDestroyed) return@launch
+                MaterialDialog(this@MainActivity).show {
+                    title(R.string.app_update_title)
+                    message(text = getString(R.string.app_update_message, latest))
+                    positiveButton(R.string.app_update_get) {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACCA_RELEASE_URL)))
+                    }
+                    negativeButton(android.R.string.cancel)
+                }
+            } catch (e: Exception) {
+                LogExt().e(javaClass.simpleName, "checkAppUpdate failed: ${e.message}")
             }
         }
     }

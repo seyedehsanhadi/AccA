@@ -29,4 +29,5 @@ object Constants {
 
     // ACC is no longer auto-installed by AccA; users flash the module themselves.
     val ACC_RELEASE_URL = "https://github.com/seyedehsanhadi/acc/releases/latest"
+    val ACCA_RELEASE_URL = "https://github.com/seyedehsanhadi/AccA/releases/latest"
 }

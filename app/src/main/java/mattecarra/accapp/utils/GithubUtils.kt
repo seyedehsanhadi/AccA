@@ -20,6 +20,18 @@ object GithubUtils {
         })
     }
 
+    // Latest published AccA app release tag (for the in-app update notification).
+    suspend fun getLatestAccaRelease(): String? = withContext(Dispatchers.IO) {
+        try {
+            JsonParser
+                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/AccA/releases/latest").readText())
+                .asJsonObject.get("tag_name").asString
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "getLatestAccaRelease failed: $e")
+            null
+        }
+    }
+
     suspend fun listAccVersions(): List<String> = withContext(Dispatchers.IO) {
         try {
             JsonParser

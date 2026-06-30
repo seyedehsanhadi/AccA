@@ -457,6 +457,9 @@
     </string>
 
     <string name="about_role_hadi">Fork maintainer - AMPS engine, AccA 2.0</string>
+    <string name="app_update_title">Update available</string>
+    <string name="app_update_message">AccA %1$s is available on GitHub. Update to get the latest fixes.</string>
+    <string name="app_update_get">Get update</string>
     <string name="about_attributes">Attributes</string>
     <string name="about_attrib_telegram_icon">Telegram icon made by Pixel perfect from www.flaticon.com</string>
 

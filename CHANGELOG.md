@@ -2,6 +2,24 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.0] - 2026-06-30
+
+Major release: AMPS, the universal switch finder, is built in; maintained by seyedehsanhadi; release builds are now signed with a stable key so the app updates in place, and the app notifies you when a new version is published.
+
+### Added
+- **Find my switch (AMPS).** A pre-test screen, every verified switch listed and badged (bypass, cut, drain), Apply and Lock with no re-test, and a clear "battery not ready" reason when the precondition gate stops a run.
+- **In-app update notification.** AccA checks this fork's releases and tells you when a newer version is available, with a link to download.
+- AMPS logo on the About screen and a fork-maintainer credit.
+
+### Fixed
+- Valid temperature configs were rejected on save. Shutdown-temperature validation now matches ACC's own rule (at or above the max temperature, floor 40, ceiling 70), so setups like max 50 with shutdown 50 save correctly.
+- Profile import dropped per-section enable flags, and a legacy profile with an invalid shutdown could block the next save. Both fixed.
+- Undo and restore left some toggles stale, so a save could keep a value you thought you reverted. All toggles revert together now.
+- Battery-idle priority defaulted off, flipping ACC's default; it now defaults on. New-profile capacity defaults match ACC. The charging-switch reader strips the trailing manual-lock marker safely.
+
+### Changed
+- Bundled AMPS finder engine 7.0.0 (formerly acc-compat). The update check and ACC release URL point to this fork.
+
 ## [1.1.8-rc5] - 2026-06-24
 
 A hotfix for battery-reading and inaccurate-warning issues, surfaced on Pixel, Tensor and OnePlus. Bundles ACC 6.4.1.
