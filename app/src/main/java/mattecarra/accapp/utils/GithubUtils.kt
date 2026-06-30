@@ -6,6 +6,8 @@ import kotlinx.coroutines.withContext
 import java.lang.Exception
 import java.net.URL
 
+data class ReleaseInfo(val version: String, val notes: String)
+
 object GithubUtils {
     suspend fun getLatestAccCommit(branch: String = "main"): String? = withContext(Dispatchers.IO) {
         (try {
@@ -40,6 +42,32 @@ object GithubUtils {
                 .asJsonObject.get("tag_name").asString
         } catch (e: Exception) {
             LogExt().e("GithubUtils", "getLatestAccaRelease failed: $e")
+            null
+        }
+    }
+
+    suspend fun getLatestAccaReleaseInfo(): ReleaseInfo? = withContext(Dispatchers.IO) {
+        try {
+            val o = JsonParser
+                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/AccA/releases/latest").readText())
+                .asJsonObject
+            val tag = o.get("tag_name").asString
+            val body = runCatching { o.get("body").asString }.getOrNull().orEmpty()
+            ReleaseInfo(tag, body)
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "getLatestAccaReleaseInfo failed: $e")
+            null
+        }
+    }
+
+    suspend fun getLatestAccReleaseNotes(): String? = withContext(Dispatchers.IO) {
+        try {
+            JsonParser
+                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/acc/releases/latest").readText())
+                .asJsonObject
+                .let { runCatching { it.get("body").asString }.getOrNull() }
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "getLatestAccReleaseNotes failed: $e")
             null
         }
     }

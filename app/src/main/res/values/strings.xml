@@ -462,6 +462,7 @@
     <string name="app_update_get">Get update</string>
     <string name="acc_update_title">ACC update available</string>
     <string name="acc_update_message">A newer ACC module is available on GitHub. Open the release to download and flash it.</string>
+    <string name="update_whats_new">What\'s new:</string>
     <string name="about_attributes">Attributes</string>
     <string name="about_attrib_telegram_icon">Telegram icon made by Pixel perfect from www.flaticon.com</string>
 

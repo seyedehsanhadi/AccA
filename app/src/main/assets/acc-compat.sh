@@ -794,10 +794,10 @@ _lc="$(learn_chgdir "$EFFST" "$CS" "$_gt")"; CHGDIR="${_lc%% *}"; SIGN_CONF="${_
 POL_CONFLICT=0
 if [ -n "$ST_POL" ]; then
   _sp="$(acca_sign "$ST_POL")"
-  if [ -n "$_sp" ] && [ "$(pol_conflict "$_sp" "$CHGDIR" "$_gt" "$SIGN_CONF")" = 1 ]; then
+  if [ -n "$_sp" ] && [ "${SIGN_UNSTABLE:-0}" = 1 ] && [ "$(pol_conflict "$_sp" "$CHGDIR" "$_gt" "$SIGN_CONF")" = 1 ]; then
     POL_CONFLICT=1
-    warn "polarity CONFLICT: acca --state says $ST_POL but a live sample reads chg-sign=$CHGDIR -- the current sign is unreliable on this phone (oplus/MTK latch it per charge session), so a single-sample polarity can mis-read working switches as 'no effect' -> verifying BLIND (status/charge_type/voltage), which is sign-independent."
-  elif [ -n "$_sp" ] && { [ "$ST_TRUST" = trusted ] || [ "$SIGN_CONF" != high ]; }; then
+    warn "polarity CONFLICT: acca --state says $ST_POL but live samples flip sign within the read window (chg-sign=$CHGDIR) -- the current sign is unreliable on this phone (oplus/MTK latch it per charge session), so a single-sample polarity can mis-read working switches as 'no effect' -> verifying BLIND (status/charge_type/voltage), which is sign-independent."
+  elif [ -n "$_sp" ] && [ "$SIGN_CONF" != high ]; then
     CHGDIR="$_sp"; SIGN_CONF=high; POL_SRC="acca-state:$ST_POL"
   fi
 fi
@@ -2250,6 +2250,16 @@ emit_alts(){
   printf 'alt_count=%s\n' "$_an"; }
 
 le_enf="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | grep -vE '\(accepts\)|\(ro\)' | sed -n '1p')"
+LVL_BY_ACC=0
+if [ -z "$le_enf" ]; then
+  _lvlacc="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | sed '/^$/d' | grep -v '(ro)' | sed -n '1p' | sed 's/(accepts)$//')"
+  if [ -n "$_lvlacc" ]; then
+    _accnow="$(grep -m1 '^chargingSwitch=' /data/adb/vr25/acc-data/config.txt 2>/dev/null | sed -e 's/^chargingSwitch=(//' -e 's/).*$//')"
+    case "$_accnow" in
+      *charge_stop_level*|*charge_control_limit*|*batt_full_capacity*|*pcap*) le_enf="$_lvlacc"; LVL_BY_ACC=1;;
+    esac
+  fi
+fi
 RECO=none; RECO_LATCH=0; RECO_LBL=
 rb="$(pick_usable "$BYPASS")"; rc="$(pick_usable "$CUT")"; rdr="$(pick_usable "$DRAIN")"; rt="$(pick_usable "$THROTTLE")"
 rbh="$(pick_usable "${BYPASS_HELD:-}")"
@@ -2257,7 +2267,7 @@ _reco="$(reco_pick "$le_enf" "$rbh" "$rc" "$rb" "$rdr" "" "$rt")"
 if [ -n "$_reco" ]; then
   RECO_LBL="$(_lblof "$_reco")"
   case "$(_clsof "$_reco")" in
-    native-level) RECO="$RECO_LBL (native level limit, verified)";;
+    native-level) [ "${LVL_BY_ACC:-0}" = 1 ] && RECO="$RECO_LBL (native level limit, confirmed in use by ACC)" || RECO="$RECO_LBL (native level limit, verified)";;
     cut)          RECO="$RECO_LBL (CUT)";;
     bypass)       RECO="$RECO_LBL (BYPASS)";;
     drain)        RECO="$RECO_LBL (CUT, discharges while plugged)";;

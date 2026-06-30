@@ -131,7 +131,7 @@ object Acc {
         try {
             val bundleFile = File(context.filesDir, "acc_bundle.tar.gz")
 
-            BufferedInputStream(URL("https://github.com/VR-25/acc/archive/$version.tar.gz").openStream())
+            BufferedInputStream(URL("https://github.com/seyedehsanhadi/acc/archive/$version.tar.gz").openStream())
                 .use { inStream ->
                     FileOutputStream(bundleFile)
                         .use {
