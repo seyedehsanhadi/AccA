@@ -20,6 +20,18 @@ object GithubUtils {
         })
     }
 
+    // Latest ACC module versionCode from the fork's module.json (for the ACC update notification).
+    suspend fun getLatestAccVersionCode(): Int? = withContext(Dispatchers.IO) {
+        try {
+            JsonParser
+                .parseString(URL("https://raw.githubusercontent.com/seyedehsanhadi/acc/main/module.json").readText())
+                .asJsonObject.get("versionCode").asInt
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "getLatestAccVersionCode failed: $e")
+            null
+        }
+    }
+
     // Latest published AccA app release tag (for the in-app update notification).
     suspend fun getLatestAccaRelease(): String? = withContext(Dispatchers.IO) {
         try {

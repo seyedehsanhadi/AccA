@@ -83,6 +83,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         isUiInitialized = true   // ViewModels exist -> nav/menu handlers are safe now
 
         checkAppUpdate()
+        checkAccUpdate()
 
         // Subscribe to viewmodel config and action if config is null
         _sharedViewModel.observeConfig(this, Observer { r ->
@@ -552,6 +553,31 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 }
             } catch (e: Exception) {
                 LogExt().e(javaClass.simpleName, "checkAppUpdate failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Notify when a newer ACC module is published on this fork (versionCode in module.json beats
+     * the installed daemon's), and link to the ACC release page to flash it. Fails silently.
+     */
+    private fun checkAccUpdate() {
+        launch {
+            try {
+                val latest = GithubUtils.getLatestAccVersionCode() ?: return@launch
+                val installed = try { Acc.instance.version } catch (e: Exception) { 0 }
+                if (installed <= 0 || latest <= installed) return@launch
+                if (isFinishing || isDestroyed) return@launch
+                MaterialDialog(this@MainActivity).show {
+                    title(R.string.acc_update_title)
+                    message(R.string.acc_update_message)
+                    positiveButton(R.string.app_update_get) {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
+                    }
+                    negativeButton(android.R.string.cancel)
+                }
+            } catch (e: Exception) {
+                LogExt().e(javaClass.simpleName, "checkAccUpdate failed: ${e.message}")
             }
         }
     }
