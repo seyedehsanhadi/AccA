@@ -57,9 +57,12 @@ jobs:
       - name: Locate built APK
         id: apk
         run: |
-          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -n1)
-          echo "Found APK: $APK"
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          SRC=$(find app/build/outputs/apk/release -name '*.apk' | head -n1)
+          VER="${GITHUB_REF_NAME#v}"
+          DEST="app/build/outputs/apk/release/AccA-${VER}.apk"
+          [ "$SRC" = "$DEST" ] || mv -f "$SRC" "$DEST"
+          echo "Built APK: $DEST"
+          echo "path=$DEST" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -87,7 +90,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/*.apk
+          files: ${{ steps.apk.outputs.path }}
           body_path: release_notes.md
           # tags containing -rc / -pre / -beta publish as a GitHub pre-release;
           # plain version tags (e.g. v1.1.5) publish as a full release.

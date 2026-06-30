@@ -8,7 +8,7 @@ Major release: AMPS, the universal switch finder, is built in; maintained by sey
 
 ### Added
 - **Find my switch (AMPS).** A pre-test screen, every verified switch listed and badged (bypass, cut, drain), Apply and Lock with no re-test, and a clear "battery not ready" reason when the precondition gate stops a run.
-- **In-app update notification.** AccA checks this fork's releases and tells you when a newer version is available, with a link to download.
+- **In-app update notifications for both AccA and ACC,** each showing the changelog (release notes) before you update, with a link to download.
 - AMPS logo on the About screen and a fork-maintainer credit.
 
 ### Fixed
@@ -16,6 +16,7 @@ Major release: AMPS, the universal switch finder, is built in; maintained by sey
 - Profile import dropped per-section enable flags, and a legacy profile with an invalid shutdown could block the next save. Both fixed.
 - Undo and restore left some toggles stale, so a save could keep a value you thought you reverted. All toggles revert together now.
 - Battery-idle priority defaulted off, flipping ACC's default; it now defaults on. New-profile capacity defaults match ACC. The charging-switch reader strips the trailing manual-lock marker safely.
+- The bundled AMPS engine could recommend a battery-draining switch over a working firmware percent-limit when the current-sign reading was unreliable (seen on Pixel 4a, where ACC mis-reported the polarity); it now trusts a high-confidence live reading and defers to ACC's already-running native limit, so a working firmware limit is never demoted below a drain. The install-specific-ACC-version download now points at this fork.
 
 ### Changed
 - Bundled AMPS finder engine 7.0.0 (formerly acc-compat). The update check and ACC release URL point to this fork.
