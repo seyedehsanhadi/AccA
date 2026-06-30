@@ -18,6 +18,8 @@ The app is developed with ordinary users in mind.
 It targets mainly people and aliens alike who feel uncomfortable with terminal.
 ACC and djs commands are still made available, though.
 
+**New in 2.0: AMPS (Find my switch).** AccA now bundles [AMPS](https://github.com/seyedehsanhadi/acc) (Adaptive Multi-device Probe & Selector), a universal charge-switch finder. Tap "Find my switch" and it probes your device, tests each candidate switch live, verifies it actually holds, and recommends the safest one, then locks it for you. It writes only reversible switches and restores everything when it finishes. No terminal, no trial-and-error.
+
 **PLEASE** read acc's documentation (README) **BEFORE** installing AccA!
 It's available in Markdown and HTML formats from the link above.
 All **disclaimers** and **warnings** listed there apply to this project as well!

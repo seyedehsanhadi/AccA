@@ -95,7 +95,7 @@
     <string name="err_resume_lt_max">Resume temperature must be below the max temperature.</string>
     <string name="err_resume_window">Resume temperature must be within 10 °C below the max temperature.</string>
     <string name="err_temp_order">Temperatures must be ordered: resume ≤ cool-down &lt; max.</string>
-    <string name="err_shutdown_temp_range">Shutdown temperature must be at least 3 °C above the max (pause) temperature and never below 50 °C; ceiling is 70 °C.</string>
+    <string name="err_shutdown_temp_range">Shutdown temperature must be at or above the max temperature, at least 40 °C, and at most 70 °C.</string>
     <string name="err_pause_pct">Pause capacity must be between 0 and 100%.</string>
     <string name="err_cap_resume_lt_pause">Resume capacity must be below the pause capacity.</string>
     <string name="err_cap_shutdown_lt_resume">Shutdown capacity must be below the resume capacity.</string>
@@ -456,6 +456,7 @@
         \n\nSpecial thanks to those who have contributed in one way or another to ACC &amp; AccA projects!
     </string>
 
+    <string name="about_role_hadi">AMPS finder engine and AccA 2.0</string>
     <string name="about_attributes">Attributes</string>
     <string name="about_attrib_telegram_icon">Telegram icon made by Pixel perfect from www.flaticon.com</string>
 
@@ -548,17 +549,22 @@
     <!-- TASK 4: inline Apply &amp; Lock progress (spinner + status) shown in the card -->
     <string name="verified_switch_testing_live">Testing the switch live…</string>
     <string name="verified_switch_locked">Locked ✓</string>
+    <!-- A3: show-all-working-switches list (recommended + alternatives, tap one to lock) -->
+    <string name="verified_switch_all_title">All working switches</string>
+    <string name="verified_switch_acc_current">ACC is using now: %1$s</string>
+    <string name="verified_switch_tap_all">Tap to see all %1$d working switches and choose one to lock</string>
 
-    <!-- Find my charging switch (runs the bundled acc-compat tester with a live log) -->
-    <string name="find_switch_title">Find my charging switch</string>
+    <!-- Find my charging switch (runs the bundled AMPS tester with a live log) -->
+    <string name="find_switch_title">Find my charging switch (AMPS)</string>
     <string name="find_switch_apply">Apply this switch</string>
     <string name="find_switch_cancel">Cancel</string>
     <string name="find_switch_elapsed">%1$ds elapsed</string>
     <string name="find_switch_found">Found: %1$s (%2$s, %3$s)</string>
+    <string name="find_switch_choose_hint">▾ Tap to choose from all %1$d working switches</string>
     <string name="find_switch_none">No reliable switch found — try a stronger charger, or see the log above.</string>
     <string name="find_switch_apply_testing">Testing the switch live…</string>
     <string name="find_switch_apply_locked">Locked ✓</string>
-    <string name="find_switch_extract_failed">Could not extract the tester. Make sure root access is granted, then try again.</string>
+    <string name="find_switch_extract_failed">Could not extract AMPS. Make sure root access is granted, then try again.</string>
     <!-- Friendly status header, mapped from the tester's own section markers -->
     <string name="find_switch_status_starting">Starting…</string>
     <string name="find_switch_status_resetting">Resetting to native charging…</string>
@@ -568,8 +574,22 @@
     <string name="find_switch_status_weak_charger">Weak charger — results may be unreliable.</string>
     <string name="find_switch_status_done">Done</string>
     <string name="find_switch_status_no_switch">No reliable switch found</string>
-    <string name="find_switch_status_error">Could not run the tester</string>
+    <string name="find_switch_status_cancelling">Cancelling — restoring charging…</string>
+    <string name="find_switch_cancelled_restored">Cancelled. Charging restored.</string>
+    <string name="find_switch_status_error">Could not run AMPS</string>
     <string name="close">Close</string>
+
+    <!-- Find-switch pre-test explainer (hermetic-test contract: explain + preconditions before anything runs) -->
+    <string name="find_switch_precheck_title">Before you start</string>
+    <string name="find_switch_precheck_body" formatted="false">Briefly pauses ACC, tests the charging controls one by one, then restores everything. It only SUGGESTS a switch — nothing is locked until you tap Apply.\n\nBest at 40–80% battery, phone cool, plugged into a good charger, screen on. You can Cancel any time — charging is always restored.</string>
+    <string name="find_switch_precheck_now">Right now: battery %1$d%%.</string>
+    <string name="find_switch_precheck_temp"> Temperature about %1$d°C.</string>
+    <string name="find_switch_precheck_start">Start test</string>
+    <string name="find_switch_mode_quick">Quick scan  ·  faster (about 3–6 min)</string>
+    <string name="find_switch_mode_deep">Deep scan  ·  every switch, lists all (about 8–12 min)</string>
+    <string name="find_switch_pick_mode">Choose a scan</string>
+    <string name="find_switch_status_reconnected">Still running in the background…</string>
+    <string name="find_switch_status_precondition">Battery not ready</string>
 
     <!-- Charging-health warning card -->
     <string name="health_warning_title">Charging may be broken</string>

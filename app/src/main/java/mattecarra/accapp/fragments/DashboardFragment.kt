@@ -169,7 +169,7 @@ class DashboardFragment : ScopedFragment()
                     }
                     negativeButton(android.R.string.cancel) {
                         launch {
-                            Toast.makeText(context, R.string.charge_limit_not_applied, Toast.LENGTH_LONG).show()
+                            context?.let { Toast.makeText(it, R.string.charge_limit_not_applied, Toast.LENGTH_LONG).show() }   // A8: guard nullable fragment context after the suspend point
                         }
                     }
                 }

@@ -23,7 +23,7 @@ import java.io.Serializable
         var configResetBsOnPause: Boolean = false,
         var configChargeSwitch: String? = null,
         var configIsAutomaticSwitchingEnabled: Boolean = true,
-        var prioritizeBatteryIdleMode: Boolean = false
+        var prioritizeBatteryIdleMode: Boolean = true
     ) : Serializable
     {
 
@@ -53,7 +53,7 @@ import java.io.Serializable
      */
 //    data class ConfigCapacity (var shutdown: Int, var resume: Int, var pause: Int)
 
-    data class ConfigCapacity(var shutdown: Int = 0, var resume: Int = 60, var pause: Int = 70) : Serializable
+    data class ConfigCapacity(var shutdown: Int = 5, var resume: Int = 70, var pause: Int = 75) : Serializable
     {
         fun toString(context: Context): String
         {

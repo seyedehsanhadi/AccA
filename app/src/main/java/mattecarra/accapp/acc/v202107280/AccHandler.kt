@@ -372,7 +372,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override fun getCurrentChargingSwitch(config: String): String? {
-        return SWITCH.find(config)?.destructured?.component1()?.trim()?.removeSurrounding("\"")?.trim()?.ifBlank { null }?.replace(AUTOMATIC_SWITCH_DISABLED, "$1")
+        return SWITCH.find(config)?.destructured?.component1()?.trim()?.removeSurrounding("\"")?.trim()?.removeSuffix(" --")?.trim()?.ifBlank { null }
     }
 
     override fun isAutomaticSwitchEnabled(config: String): Boolean {
@@ -386,7 +386,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override fun isPrioritizeBatteryIdleMode(config: String): Boolean {
-        return PRIORITIZE_BATTERY_IDLE.find(config)?.destructured?.component1()?.toBoolean() ?: false
+        return PRIORITIZE_BATTERY_IDLE.find(config)?.destructured?.component1()?.toBoolean() ?: true
     }
 
     override suspend fun setChargingLimitForOneCharge(limit: Int): Boolean = withContext(Dispatchers.IO) {

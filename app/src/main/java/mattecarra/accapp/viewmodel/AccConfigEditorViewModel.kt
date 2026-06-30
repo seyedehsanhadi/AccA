@@ -210,6 +210,12 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
         onPlugLiveData.value = value.configOnPlug
         configCoolDownLiveData.value = value.configCoolDown
         configChargeSwitchLiveData.value = value.configChargeSwitch
+        // Without these four, undo/restore reverted the underlying profile but left the
+        // toggles on screen stale, so Save silently kept the value the user thought they undid.
+        configIsAutomaticSwitchEnabled.value = value.configIsAutomaticSwitchingEnabled
+        prioritizeBatteryIdleModeLiveData.value = value.prioritizeBatteryIdleMode
+        resetBSOnPauseLiveData.value = value.configResetBsOnPause
+        resetBSOnUnplugLiveData.value = value.configResetUnplugged
     }
 
     ///----------------------------------------------------------------------------

@@ -738,12 +738,15 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                         data?.getSerializableExtra(Constants.DATA_KEY) as? List<ProfileEntry>
                     if (!imports.isNullOrEmpty()) {
                         for (entry: ProfileEntry in imports) {
+                            // Preserve the imported profile's per-section enable flags instead of
+                            // resetting them to defaults. pScripts stay null on purpose: they are
+                            // local script_table uids that would not resolve on this device.
                             _profilesViewModel.insertProfile(
                                 AccaProfile(
                                     0,
                                     entry.getName(),
                                     entry.getConfig(),
-                                    ProfileEnables()
+                                    entry.profile.pEnables
                                 )
                             )
                         }

@@ -17,8 +17,10 @@ import com.afollestad.materialdialogs.callbacks.onDismiss
 import com.afollestad.materialdialogs.customview.customView
 import com.afollestad.materialdialogs.input.input
 import com.afollestad.materialdialogs.list.listItemsSingleChoice
+import com.afollestad.materialdialogs.list.listItems
 import com.afollestad.materialdialogs.list.toggleItemChecked
 import com.afollestad.materialdialogs.list.updateListItemsSingleChoice
+import com.topjohnwu.superuser.Shell
 import it.sephiroth.android.library.xtooltip.ClosePolicy
 import it.sephiroth.android.library.xtooltip.Tooltip
 import kotlinx.coroutines.Dispatchers
@@ -75,11 +77,11 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         if (res >= max)     return getString(R.string.err_resume_lt_max)
         if (max - res > 10) return getString(R.string.err_resume_window)
         if (cd < res)       return getString(R.string.err_temp_order)
-        // shutdown_temp safety: ACC's own rule is shutdown ∈ [max(max_temp, 40) .. 70]; AccA
-        // tightens it to >= max(max_temp + 3, 50) so the emergency cutoff sits at least 3 °C
-        // above the pause temperature (no near-instant shutdowns at the pause point) and never
-        // below the realistic Li-ion safety floor (ACC's 40 floor accepts unsafely-low values).
-        if (shutdown !in maxOf(max + 3, 50)..70) return getString(R.string.err_shutdown_temp_range)
+        // shutdown_temp: match ACC's write-config.sh rule exactly -- shutdown must be in
+        // [max(max_temp, 40) .. 70]. The cutoff sits at or above the max (pause) temperature.
+        // ACC accepts shutdown == max_temp (e.g. 50/50), so AccA must too; the old max+3 / floor-50
+        // tightening rejected valid ACC configs and blocked saves the daemon would have accepted.
+        if (shutdown !in maxOf(max, 40)..70) return getString(R.string.err_shutdown_temp_range)
 
         val cap = c.configCapacity                  // shutdown < resume < pause; percent 0..100 OR mV 3001..5000
         if (cap.pause > 100) {                       // ACC mV-capacity domain (voltage thresholds)
@@ -306,7 +308,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             content.temperatureMaxPauseSecondsPicker.maxValue = 60
             content.temperatureMaxPauseSecondsPicker.value = it.pause
 
-            content.temperatureShutdownPicker.minValue = 50
+            content.temperatureShutdownPicker.minValue = 40
             content.temperatureShutdownPicker.maxValue = 70
             content.temperatureShutdownPicker.value = it.shutdown
         })
@@ -456,6 +458,21 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 }
                 else -> content.verifiedSwitchCard.visibility = View.GONE
             }
+
+            // A3: if the tester reported other working switches too, make the card tappable to open the
+            // full list (recommended + alternatives), so the user can SEE every working switch and pick
+            // which one to lock -- not just the single auto-recommended one.
+            val altCount = when (result)
+            {
+                is VerifiedSwitch.Verified -> result.alts.size
+                is VerifiedSwitch.NeedsTest -> result.alts.size
+                else -> 0
+            }
+            if (altCount > 0)
+            {
+                content.verifiedSwitchTextview.append("\n\n" + getString(R.string.verified_switch_tap_all, altCount + 1))
+                content.verifiedSwitchTextview.setOnClickListener { showAllSwitchesDialog() }
+            }
         }
     }
 
@@ -510,12 +527,70 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     private fun onApplyAndLockClick()
     {
         val switch = verifiedSwitchSpec() ?: return
+        applyVerifiedSpec(switch, verifiedSwitch is VerifiedSwitch.Verified)
+    }
 
+    /**
+     * Single pin path for ANY switch the user picks -- the recommended one OR a row from the
+     * "all working switches" list. trustVerified == the picked spec's own conf was "verified", so we
+     * lock it directly (no charger gate, no `acca -t` retest, A1); otherwise we live-test first.
+     */
+    private fun applyVerifiedSpec(switch: String, trustVerified: Boolean)
+    {
         launch {
-            val charging = try { Acc.instance.isBatteryCharging() }
+            // A1: a Verified artifact means the acc-compat tester ALREADY live-proved THIS exact switch on
+            // THIS device (device+soc fingerprint matched AND it survived the long leak/re-arm test). Trust
+            // it: lock directly with NO "plug in the charger" gate and NO second daemon-stopping `acca -t`
+            // retest -- that double-test (the user-reported "Apply & Lock says connect charger / re-tests"
+            // bug) only made sense before the tester verified holds. A cheap `[ -e node ]` recheck (instant,
+            // NOT a charge test) guards a charger-path/ROM change; NeedsTest and a vanished node fall through
+            // to the live-test path below unchanged.
+            if (trustVerified)
+            {
+                val node = switch.trim().substringBefore(' ')
+                val present = try { withContext(Dispatchers.IO) { Shell.su("[ -e \"$node\" ]").exec().isSuccess } }
+                catch (ex: Exception) { false }
+                if (present)
+                {
+                    content.verifiedSwitchApplyButton.isEnabled = false
+                    content.verifiedSwitchApplySpinner.visibility = View.VISIBLE
+                    content.verifiedSwitchApplyProgress.visibility = View.VISIBLE
+                    content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_locked)
+                    val ok = try { withContext(Dispatchers.IO) {
+                        val w = Acc.instance.updateAccChargingSwitch(switch, false)
+                        // A2: kick the daemon so the pin takes effect NOW (charging actually stops). The
+                        // `--` write already made ACC set .user-locked; safe post-D2 (no un-cap on restart).
+                        if (w) try { Shell.su(Acc.instance.getAccRestartDaemon()).exec() } catch (_: Exception) {}
+                        w
+                    } }
+                    catch (ex: Exception)
+                    {
+                        LogExt().e(javaClass.simpleName, "updateAccChargingSwitch() failed: $ex")
+                        false
+                    }
+                    if (isFinishing || isDestroyed) return@launch
+                    content.verifiedSwitchApplySpinner.visibility = View.GONE
+                    if (ok)
+                    {
+                        viewModel.chargeSwitch = switch
+                        viewModel.isAutomaticSwitchEanbled = false
+                        content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_locked)
+                        Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_applied, Toast.LENGTH_LONG).show()
+                    }
+                    else
+                    {
+                        content.verifiedSwitchApplyStatus.setText(R.string.error_occurred)
+                        content.verifiedSwitchApplyButton.isEnabled = true
+                        Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+            }
+
+            val charging = try { Acc.instance.isChargerPlugged() }
             catch (ex: Exception)
             {
-                LogExt().e(javaClass.simpleName, "isBatteryCharging() failed: $ex")
+                LogExt().e(javaClass.simpleName, "isChargerPlugged() failed: $ex")
                 false
             }
 
@@ -558,7 +633,12 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             // editor uses (automatic OFF appends " --"). Done off the main thread.
             val written = try
             {
-                withContext(Dispatchers.IO) { Acc.instance.updateAccChargingSwitch(switch, false) }
+                withContext(Dispatchers.IO) {
+                    val w = Acc.instance.updateAccChargingSwitch(switch, false)
+                    // A2: kick the daemon so the new switch takes effect immediately (safe post-D2).
+                    if (w) try { Shell.su(Acc.instance.getAccRestartDaemon()).exec() } catch (_: Exception) {}
+                    w
+                }
             }
             catch (ex: Exception)
             {
@@ -585,6 +665,72 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 content.verifiedSwitchApplyStatus.setText(R.string.error_occurred)
                 content.verifiedSwitchApplyButton.isEnabled = true
                 Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /**
+     * A3: show EVERY working switch the tester found -- the recommended one plus the alternatives --
+     * each with its class (BYPASS / CUT / DRAIN / LEVEL / THROTTLE) and confidence, and which one ACC
+     * is using now. Tapping a row pins THAT switch via the same [applyVerifiedSpec] path (a 'verified'
+     * row locks straight away, others live-test first). The rows come from the artifact's alt* keys --
+     * no tester change.
+     */
+    private fun showAllSwitchesDialog()
+    {
+        val recommended: VerifiedSwitch.Alt
+        val alts: List<VerifiedSwitch.Alt>
+        val accLine: String?
+        when (val v = verifiedSwitch)
+        {
+            is VerifiedSwitch.Verified ->
+            {
+                recommended = VerifiedSwitch.Alt(v.switch, v.klass, v.conf, "", v.recLatch, "", v.recStability)
+                alts = v.alts
+                accLine = v.accCurrentSwitch?.let { "$it (${v.accCurrentClass.orEmpty()})" }
+            }
+            is VerifiedSwitch.NeedsTest ->
+            {
+                recommended = VerifiedSwitch.Alt(v.switch, v.klass, v.conf, "", v.recLatch, "", v.recStability)
+                alts = v.alts
+                accLine = v.accCurrentSwitch?.let { "$it (${v.accCurrentClass.orEmpty()})" }
+            }
+            else -> return
+        }
+        val all = (listOf(recommended) + alts).distinctBy { it.switch.trim() }
+        val labels = all.mapIndexed { i, a ->
+            val node = run {
+                val toks = a.switch.trim().split(' ')
+                val paths = toks.filter { it.startsWith("/") }
+                if (paths.size > 1) "grouped (${paths.size} paths)"
+                else {
+                    val segs = (paths.firstOrNull() ?: toks.firstOrNull().orEmpty()).trim('/').split('/').filter { it.isNotEmpty() }
+                    if (segs.size >= 2) segs.takeLast(2).joinToString("/") else segs.lastOrNull().orEmpty()
+                }
+            }
+            val badge = a.klass.ifBlank { "switch" }.uppercase()
+            val cf = if (a.conf == "verified") "verified" else a.conf.ifBlank { "needs test" }
+            val star = if (i == 0) "  ★ recommended" else ""
+            val latch = if (a.latch) " · latches" else ""
+            // v6.0: surface the daemon stability so re-arming switches are SHOWN + selectable, just labeled.
+            val stab = when (a.stability) {
+                "daemon-held" -> " · daemon-held (re-arms, the daemon holds it)"
+                "leaky"       -> " · ⚠ re-arms even when re-applied (risky)"
+                "reassert"    -> " · ⚠ unstable (daemon must re-apply)"
+                else          -> ""
+            }
+            "$badge — $node\n$cf$latch$stab$star"
+        }
+        // v6.0: material-dialogs renders message + listItems as EITHER/OR -- a set accLine used to suppress the
+        // whole list (empty picker = the user's "AccA couldn't show/drag them in"). Move ACC's current switch into
+        // the title so the full list ALWAYS renders.
+        val titleTxt = getString(R.string.verified_switch_all_title) +
+            (accLine?.let { "\n(now: ${it.substringAfterLast('/').substringBefore(' ')})" } ?: "")
+        MaterialDialog(this@AccConfigEditorActivity).show {
+            title(text = titleTxt)
+            listItems(items = labels) { _, index, _ ->
+                val pick = all[index]
+                applyVerifiedSpec(pick.switch, pick.conf == "verified")
             }
         }
     }
@@ -939,10 +1085,10 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                                     // accept an untested entry. Mirrors the Apply&Lock plug guard. Refuse the save
                                     // here (BEFORE showing the spinner / opening the try-finally that dismisses the
                                     // Add-new dialog) so the user keeps their typed values and can plug-in + retry.
-                                    val charging = try { Acc.instance.isBatteryCharging() }
+                                    val charging = try { Acc.instance.isChargerPlugged() }
                                     catch (ex: Exception)
                                     {
-                                        LogExt().e(javaClass.simpleName, "isBatteryCharging() failed: $ex")
+                                        LogExt().e(javaClass.simpleName, "isChargerPlugged() failed: $ex")
                                         false
                                     }
                                     if (!charging)
@@ -961,7 +1107,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                                     {
                                         var success = true
 
-                                        if (Acc.instance.isBatteryCharging())
+                                        if (Acc.instance.isChargerPlugged())
                                         { //If battery is charging the switch is tested
                                             if (Acc.instance.testChargingSwitch(switch) != 0)
                                             {

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-test dialog body: the explainer + the two scan-mode choices as full-width buttons.
+     A custom view (not message+listItems, which material-dialogs renders as either/or) so the
+     explainer AND the Quick/Deep choice always show together, on any screen width. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingLeft="24dp"
+    android:paddingRight="24dp"
+    android:paddingTop="2dp"
+    android:paddingBottom="4dp">
+
+    <TextView
+        android:id="@+id/dlg_sf_explainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="18dp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="14sp" />
+
+    <Button
+        android:id="@+id/dlg_sf_quick"
+        style="@style/Widget.AppCompat.Button.Colored"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/find_switch_mode_quick"
+        android:textColor="@color/color_surface" />
+
+    <Button
+        android:id="@+id/dlg_sf_deep"
+        style="@style/Widget.AppCompat.Button.Colored"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/find_switch_mode_deep"
+        android:textColor="@color/color_surface" />
+
+</LinearLayout>

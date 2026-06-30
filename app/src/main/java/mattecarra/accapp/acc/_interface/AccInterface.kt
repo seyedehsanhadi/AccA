@@ -33,6 +33,25 @@ interface AccInterface {
 
     suspend fun isBatteryCharging(): Boolean
 
+    /**
+     * "Is the charger physically connected?" -- the correct gate for the live switch-test, unlike
+     * [isBatteryCharging] which is false whenever ACC is HOLDING the battery at the cap (status Idle/
+     * Discharging) with the cable still in (the user-reported "I plugged in but it still says plug in").
+     * Reads `present`/`online` (which stay 1 when an input-cut switch zeroes charging) plus dumpsys
+     * 'powered'. Default impl works on every handler.
+     */
+    suspend fun isChargerPlugged(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val out = Shell.su(
+                "cat /sys/class/power_supply/usb/present /sys/class/power_supply/usb/online " +
+                "/sys/class/power_supply/ac/online /sys/class/power_supply/dc/online " +
+                "/sys/class/power_supply/main*/online 2>/dev/null; dumpsys battery 2>/dev/null"
+            ).exec().out
+            out.any { it.trim() == "1" } ||
+            out.any { Regex("(AC|USB|Wireless|Dock) powered:\\s*true").containsMatchIn(it) }
+        } catch (ex: Exception) { false }
+    }
+
     suspend fun isAccdRunning(): Boolean
 
     suspend fun abcStartDaemon(): Boolean

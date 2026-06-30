@@ -88,6 +88,11 @@ class ImportProfilesActivity : AppCompatActivity() {
                 val result = jsonAdapter.fromJson(pasteData) ?: emptyList<ProfileEntry>()
 
                 for (entry: ProfileEntry in result) {
+                    // Parity with ConfigConverter.toConfigTemperature: a profile exported before the
+                    // shutdown_temp field existed imports with shutdown=0, which validateConfig would
+                    // reject. Restore ACC's default so an imported legacy profile stays saveable.
+                    if (entry.profile.accConfig.configTemperature.shutdown <= 0)
+                        entry.profile.accConfig.configTemperature.shutdown = 55
                     mAdapter.addEntry(entry)
                 }
 

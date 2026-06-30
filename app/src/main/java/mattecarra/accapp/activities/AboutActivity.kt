@@ -109,4 +109,11 @@ class AboutActivity : AppCompatActivity() {
     fun squabbiWebsiteOnClick(view: View) {
         openUrl("https://squabbi.com/")
     }
+
+    fun hadiGitHubOnClick(view: View) {
+        openUrl("https://github.com/seyedehsanhadi")
+    }
+    fun hadiWebsiteOnClick(view: View) {
+        openUrl("https://seyedehsanhadi.github.io/")
+    }
 }

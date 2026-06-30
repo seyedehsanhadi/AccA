@@ -57,6 +57,7 @@
         <activity
             android:name=".activities.SwitchFinderActivity"
             android:label="@string/find_switch_title"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
             android:parentActivityName=".activities.AccConfigEditorActivity">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"

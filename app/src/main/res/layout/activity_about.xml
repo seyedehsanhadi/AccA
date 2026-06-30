@@ -373,6 +373,68 @@
                         </LinearLayout>
                     </RelativeLayout>
 
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/about_profile_margin">
+
+                        <ImageView
+                            android:id="@+id/about_hadi_logo_iv"
+                            android:layout_width="72dp"
+                            android:layout_height="72dp"
+                            android:layout_marginEnd="@dimen/about_profile_margin"
+                            android:layout_marginRight="@dimen/about_profile_margin"
+                            android:contentDescription="@string/about_role_hadi"
+                            android:src="@drawable/ic_amps_logo" />
+
+                        <TextView
+                            android:id="@+id/about_hadi_name_tv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_toEndOf="@id/about_hadi_logo_iv"
+                            android:layout_toRightOf="@id/about_hadi_logo_iv"
+                            android:text="Seyed Ehsan Hadi"
+                            android:textAppearance="@style/TextAppearance.MaterialComponents.Headline6" />
+
+                        <TextView
+                            android:id="@+id/about_hadi_role_tv"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_below="@id/about_hadi_name_tv"
+                            android:layout_toEndOf="@id/about_hadi_logo_iv"
+                            android:layout_toRightOf="@id/about_hadi_logo_iv"
+                            android:text="@string/about_role_hadi" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_below="@id/about_hadi_role_tv"
+                            android:layout_marginTop="@dimen/card_margin"
+                            android:layout_toEndOf="@id/about_hadi_logo_iv"
+                            android:layout_toRightOf="@id/about_hadi_logo_iv"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:onClick="hadiGitHubOnClick"
+                                android:text="@string/about_github"
+                                app:icon="@drawable/ic_github_mark" />
+
+                            <com.google.android.material.button.MaterialButton
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="@dimen/card_margin"
+                                android:layout_marginLeft="@dimen/card_margin"
+                                android:ellipsize="end"
+                                android:onClick="hadiWebsiteOnClick"
+                                android:text="@string/about_website" />
+                        </LinearLayout>
+                    </RelativeLayout>
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

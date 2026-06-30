@@ -23,14 +23,24 @@ import com.topjohnwu.superuser.Shell
  *   ok=1                                   (sentinel — MUST be the last line; proves a complete write)
  */
 sealed class VerifiedSwitch {
+    /** One working switch the tester reported -- the recommended pick OR an alternative (for the list). */
+    data class Alt(
+        val switch: String, val klass: String, val conf: String,
+        val resume: String, val latch: Boolean, val note: String, val stability: String = ""
+    )
+
     /** Freshly verified on THIS device. Safe to offer one-tap (still live-tested before the pin). */
     data class Verified(
-        val switch: String, val klass: String, val conf: String, val device: String, val soc: String
+        val switch: String, val klass: String, val conf: String, val device: String, val soc: String,
+        val alts: List<Alt> = emptyList(), val accCurrentSwitch: String? = null, val accCurrentClass: String? = null,
+        val recStability: String = "", val recLatch: Boolean = false
     ) : VerifiedSwitch()
 
     /** Pump / low-confidence hold. Offer only as a suggestion; MUST live-test, never auto-pin. */
     data class NeedsTest(
-        val switch: String, val klass: String, val conf: String, val device: String, val soc: String
+        val switch: String, val klass: String, val conf: String, val device: String, val soc: String,
+        val alts: List<Alt> = emptyList(), val accCurrentSwitch: String? = null, val accCurrentClass: String? = null,
+        val recStability: String = "", val recLatch: Boolean = false
     ) : VerifiedSwitch()
 
     /** Artifact is present but was produced on a different device — ignore it. */
@@ -38,6 +48,10 @@ sealed class VerifiedSwitch {
 
     /** The tester ran but found no pinnable switch — make NO change to the user's config. */
     object NoSwitch : VerifiedSwitch()
+
+    /** Precondition not met (battery too high/low, or too hot): the tester stopped before changing
+     *  anything. Show the reason so the user can fix it and retry — this is NOT a "no switch" result. */
+    data class Precondition(val reason: String) : VerifiedSwitch()
 
     /** No artifact, unreadable, incomplete, or the node no longer exists — nothing to offer. */
     object None : VerifiedSwitch()
@@ -55,6 +69,10 @@ sealed class VerifiedSwitch {
                 val i = line.indexOf('=')
                 if (i > 0) kv[line.substring(0, i).trim()] = line.substring(i + 1).trim()
             }
+
+            // Precondition stop (battery/thermal): written atomically with ok=0 and a reason. Check it
+            // BEFORE the ok=1 sentinel so the user sees WHY it stopped instead of a generic "no switch".
+            if (kv["result"] == "precondition") return Precondition(kv["reason"].orEmpty())
 
             // Sentinel + schema: a complete write ends with ok=1; reject a truncated/partial file.
             if (kv["ok"] != "1" || kv["schema"] != "1") return None
@@ -79,8 +97,33 @@ sealed class VerifiedSwitch {
 
             val klass = kv["class"].orEmpty()
             val conf = kv["conf"].orEmpty()
-            return if (conf == "verified") Verified(sw, klass, conf, device, soc)
-            else NeedsTest(sw, klass, conf, device, soc)
+            val alts = parseAlts(kv)
+            val accSw = kv["acc_current_switch"]?.takeIf { it.isNotBlank() }
+            val accCls = kv["acc_current_class"]?.takeIf { it.isNotBlank() }
+            val recStab = kv["rec_stability"].orEmpty()
+            val recLat = kv["rec_latch"] == "yes"
+            return if (conf == "verified") Verified(sw, klass, conf, device, soc, alts, accSw, accCls, recStab, recLat)
+            else NeedsTest(sw, klass, conf, device, soc, alts, accSw, accCls, recStab, recLat)
+        }
+
+        /** Parse the additive alt1..altN_* rows the tester writes (every OTHER working switch,
+         *  reliability-ranked). Probe alt{i}_switch until the first gap -- do NOT trust alt_count,
+         *  so a missing/short count can never silently drop present rows. */
+        private fun parseAlts(kv: Map<String, String>): List<Alt> {
+            val out = ArrayList<Alt>()
+            var i = 1
+            while (i <= 256) {
+                val sw = kv["alt${i}_switch"]?.takeIf { it.isNotBlank() } ?: break
+                out.add(
+                    Alt(
+                        sw, kv["alt${i}_class"].orEmpty(), kv["alt${i}_conf"].orEmpty(),
+                        kv["alt${i}_resume"].orEmpty(), kv["alt${i}_latch"] == "yes", kv["alt${i}_note"].orEmpty(),
+                        kv["alt${i}_stability"].orEmpty()
+                    )
+                )
+                i++
+            }
+            return out
         }
 
         @WorkerThread
