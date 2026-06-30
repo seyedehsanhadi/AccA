@@ -35,25 +35,21 @@ jobs:
           distribution: temurin
           java-version: '11'
 
-      # No dedicated release keystore is committed, so sign with a debug key.
-      # This feeds the existing ACCA_KEYSTORE_* hooks in app/build.gradle; to ship
-      # a Play-Store build later, set those four as repo secrets instead.
-      - name: Generate debug keystore
+      # Decode the project release keystore from a repo secret so every build
+      # is signed with the same key and users can always update in place.
+      # Secrets: ACCA_KEYSTORE_BASE64, ACCA_KEYSTORE_PASSWORD, ACCA_KEY_ALIAS, ACCA_KEY_PASSWORD.
+      - name: Decode release keystore
+        env:
+          ACCA_KEYSTORE_BASE64: ${{ secrets.ACCA_KEYSTORE_BASE64 }}
         run: |
-          mkdir -p "$HOME/.android"
-          keytool -genkeypair \
-            -dname "CN=AccA, O=AccA, C=US" \
-            -alias androiddebugkey \
-            -keystore "$HOME/.android/debug.keystore" \
-            -storepass android -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000
+          echo "$ACCA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/acca-release.jks"
 
       - name: Build release APK
         env:
-          ACCA_KEYSTORE_LOCATION: /home/runner/.android/debug.keystore
-          ACCA_KEYSTORE_PASSWORD: android
-          ACCA_KEY_ALIAS: androiddebugkey
-          ACCA_KEY_PASSWORD: android
+          ACCA_KEYSTORE_LOCATION: ${{ runner.temp }}/acca-release.jks
+          ACCA_KEYSTORE_PASSWORD: ${{ secrets.ACCA_KEYSTORE_PASSWORD }}
+          ACCA_KEY_ALIAS: ${{ secrets.ACCA_KEY_ALIAS }}
+          ACCA_KEY_PASSWORD: ${{ secrets.ACCA_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
@@ -84,7 +80,7 @@ jobs:
           if [ ! -s release_notes.md ]; then
             echo "AccA $GITHUB_REF_NAME" > release_notes.md
           fi
-          printf '\n---\nAPK below is built by GitHub Actions and signed with a debug key. It installs on its own, but will not update over a copy of AccA signed with a different key.\n' >> release_notes.md
+          printf '\n---\nAPK below is built by GitHub Actions and signed with the project release key, so it updates cleanly over any AccA release from this fork.\n' >> release_notes.md
           cat release_notes.md
 
       - name: Publish GitHub Release
