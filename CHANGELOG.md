@@ -2,6 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc1] - 2026-07-02
+
+Release candidate driven by two field reports (Pixel 4a 5G boot films, KernelSU-Next DJS logs).
+
+### 🛠️ Fixed
+- **One honest battery status.** The dashboard now says "Draining to N%" while ACC or the firmware lowers the battery to your limit (some kernels report "Charging" the whole time - the 4a 5G film showed 10 minutes of it), "Bypass" (plugged in, battery idle) and "Standby" (unplugged). A missed status read no longer flips the card to a different format for one tick (the reported "Not Charging - Unknown" flicker).
+- **DJS on KernelSU / KernelSU Next.** The bundled DJS no longer touches /sbin off Magisk, its daemon waits for boot AND decrypted storage before starting and runs in the global namespace (field report: boots-but-internal-storage-missing + slow), and app-driven installs of both DJS and ACC are relabeled the way KernelSU expects.
+
+### 🔄 Changed
+- Bundled ACC engine 6.5.1-rc1: Pixel 4a / 4a 5G / 5 class native-limit pair management with a fuel-gauge-verified hold (see the ACC changelog).
+
 ## [2.0.0] - 2026-06-30
 
 🎉 Major release: **AMPS**, the universal switch finder, is built in; maintained by seyedehsanhadi; release builds are now signed with a stable key so the app updates in place, and the app tells you (and shows the changelog) when a new version is published.
