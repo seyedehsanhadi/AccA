@@ -4,9 +4,10 @@ Notable changes to this fork. Format follows [Keep a Changelog](https://keepacha
 
 ## [2.0.1-rc4] - 2026-07-02
 
-The KernelSU-Next tester confirmed DJS boots cleanly on rc3, then found two Scheduler bugs.
+The KernelSU-Next tester confirmed DJS boots cleanly on rc3, then found two Scheduler bugs; a pre-release tester also caught the update link.
 
 ### 🛠️ Fixed
+- **"Get update" opens the build you were told about.** It used to open /releases/latest, which is always the newest STABLE - so a pre-release tester who tapped the update notification landed on the wrong (older) build. It now opens the exact release from the notification: the AccA app update goes straight to that version's APK download, and the ACC module update opens that release's page with its flashable zip. "Get ACC" when the module is missing still points at the latest stable, as it should.
 - **Boot schedules now save and appear.** A boot (or apply-on-boot) schedule carries a "wait for ACC, then apply" prefix before its id marker; the list parser was anchored to the marker at the very start of the line, so it silently dropped every boot schedule - you saved one and nothing showed up ("the save button doesn't work"). The parser now finds the id anywhere in the command, still anchored on the trailing ';' so ids never collide (1 vs 10).
 - **Run-once schedules disappear after they fire.** DJS deletes a run-once job from its own config when it runs, but the app only re-read that list on cold start, so a fired one lingered in the UI. The Schedules screen now refreshes when you open it and every 30s while it is open, so a spent run-once drops off on its own.
 

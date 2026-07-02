@@ -557,7 +557,8 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                     title(R.string.app_update_title)
                     message(text = getString(R.string.app_update_message, latest, current) + whatsNew(info.notes))
                     positiveButton(R.string.app_update_get) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACCA_RELEASE_URL)))
+                        val target = info.apkUrl?.takeIf { it.isNotBlank() } ?: info.pageUrl
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
                     }
                     negativeButton(android.R.string.cancel)
                 }
@@ -583,7 +584,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                     title(R.string.acc_update_title)
                     message(text = getString(R.string.acc_update_message) + whatsNew(info.notes))
                     positiveButton(R.string.app_update_get) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.pageUrl)))
                     }
                     negativeButton(android.R.string.cancel)
                 }
