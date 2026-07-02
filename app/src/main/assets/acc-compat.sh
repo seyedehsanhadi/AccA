@@ -534,11 +534,13 @@ restore(){
     [ "${ACC_WAS:-0}" = 1 ] && for c in /data/adb/vr25/acc/acca /dev/.vr25/acc/acca acca acc; do command -v "$c" >/dev/null 2>&1 && { acc_to "$c" -D restart >/dev/null 2>&1 || acc_to "$c" --daemon restart >/dev/null 2>&1 || acc_to "$c" -D start >/dev/null 2>&1; break; }; done
     [ "${DJS_WAS:-0}" = 1 ] && for _dc in "${DJS_BIN:-}" /data/adb/vr25/djs/djs /dev/.vr25/djs/djs djs; do [ -n "$_dc" ] && command -v "$_dc" >/dev/null 2>&1 && { acc_to "$_dc" --daemon start >/dev/null 2>&1 || acc_to "$_dc" start >/dev/null 2>&1 || acc_to "$_dc" --daemon restart >/dev/null 2>&1; break; }; done
     if [ "$fail" -gt 0 ]; then
-      log "  ! $fail node(s) did not read back to original:${rbfails} -- charging re-asserted; REBOOT if it still looks stuck."
       _swbn="${SUGGEST%% *}"; _swbn="${_swbn##*/}"
       case " $rbfails " in
-        *" $_swbn("*) [ -f "$ART" ] && [ -n "$_swbn" ] && { sed -i 's/^conf=verified$/conf=needs-test/' "$ART" 2>/dev/null; log "  ! recommended switch ($_swbn) restore unclean -> verified downgraded to needs-test (AccA re-tests before locking)"; } ;;
-        *) [ -f "$ART" ] && log "  ! unclean node(s) are firmware-volatile actuators, NOT the recommended switch ($_swbn) -- artifact left verified" ;;
+        *" $_swbn("*)
+          log "  ! $fail node(s) did not read back to original:${rbfails} -- charging re-asserted; REBOOT if it still looks stuck."
+          [ -f "$ART" ] && [ -n "$_swbn" ] && { sed -i 's/^conf=verified$/conf=needs-test/' "$ART" 2>/dev/null; log "  ! recommended switch ($_swbn) restore unclean -> verified downgraded to needs-test (AccA re-tests before locking)"; } ;;
+        *)
+          log "  note: $fail firmware-volatile node(s) kept the charger's own values:${rbfails} -- these actuators follow the charge state (normal, harmless); the recommended switch restored clean, artifact left verified." ;;
       esac
     fi
     if plugged 2>/dev/null; then
@@ -2318,7 +2320,7 @@ vmax="$(rd "$BATT/uevent" | sed -n 's/^POWER_SUPPLY_VOLTAGE_MAX=//p' | sed -n '1
 log "  current reporting: $UNIT, charging reads $([ "$CHGDIR" = p ] && echo POSITIVE || echo NEGATIVE) (confidence $SIGN_CONF)$([ "$CUR_FROZEN" = 1 ] && echo "  -- SENSOR FROZEN at $RAW; proof done BLIND via status/charge_type/voltage")"
 [ -n "$VOLTF" ] && log "  voltage: $(vmv) mV now (baseline V0=${V0}mV, noise +/-${VNOISE}mV, blind cut-threshold ${VDROP}mV)"
 log "  verification method: $([ "$BLINDV" = 1 ] && echo "BLIND (charging-state + charge_type + voltage)" || echo "current delta (sensor live)")"
-log "  battery now: ${CAP}%  $(( $(batt_temp) / 10 )).$(( $(batt_temp) % 10 ))C  status=$(read_st)"
+log "  battery now: $(rd $BATT/capacity | sed -n '1p' | pclean)% (started ${CAP}%)  $(( $(batt_temp) / 10 )).$(( $(batt_temp) % 10 ))C  status=$(read_st)"
 log "  control classes found on this phone:"
 log "    native %-limit : $([ -n "$CFG_LEVEL" ] && echo "YES ($CFG_LEVEL)" || { [ -n "$LEVELOK" ] && echo "accepts values (enforcement unproven this run)" || echo no; })"
 log "    bypass (idle)  : $([ -n "$BYPASS" ] && echo "YES -- true battery idle, lowest wear" || echo "not proven")"
@@ -2394,7 +2396,7 @@ log "ACC=${ACCV:-no}"
 log "SENSOR=${CURF:-none}"
 log "UNITS=$UNIT SIGN=$CHGDIR CONF=$SIGN_CONF BASE=$RAW"
 log "SYSFS_STATUS=$ST ANDROID_STATUS=${AST:-na}"
-log "BATT_TEMP=$(batt_temp) (0.1C units)  CAPACITY=${CAP}%"
+log "BATT_TEMP=$(batt_temp) (0.1C units)  CAPACITY=${CAP}% (end $(rd $BATT/capacity | sed -n '1p' | pclean)%)"
 log "IDLE_MODE=$([ -n "$BYPASS" ] && echo yes || echo no)   (bypass / battery-idle charging support)"
 log "ACTIVE=$ACTIVE SKIPALL=$SKIPALL"
 log "CUR_USABLE=$CUR_USABLE CUR_FROZEN=$CUR_FROZEN BLIND=$BLINDV PROOF=$PROOF"
@@ -2515,7 +2517,8 @@ log "+----------------------------------------------------"
 log "|  CHARGER / SPEED"
 log "|  source=$_src  charge_type=${_ct:-?}  status=${_stt:-?}"
 log "|  input:   Imax=${_imax}mA  Iin=${_iin}mA  Vbus=${_vbus}mV"
-log "|  battery: I=${_ib}mA  V=${_vb}mV  (~$((_ib*_vb/1000))mW)   IC cap (CCC)=${_ccc}mA"
+_cccd="${_ccc}mA"; [ "$_ccc" -gt 0 ] 2>/dev/null || _cccd="n/a"
+log "|  battery: I=${_ib}mA  V=${_vb}mV  (~$((_ib*_vb/1000))mW)   IC cap (CCC)=${_cccd}"
 if [ "$_src" = none ]; then
   log "|  -> not plugged / no input supply reports online"
 elif [ "$_imax" -gt 0 ] 2>/dev/null && [ "$_imax" -le 510 ] 2>/dev/null; then
