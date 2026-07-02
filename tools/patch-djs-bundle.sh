@@ -15,11 +15,30 @@ cat > "$D/djs/service.sh" <<'EOF'
 #!/system/bin/sh
 B=${0%/*}
 D=${DJS_DATA_DIR:-/data/adb/vr25/djs-data}
+M=${DJS_MOD_DIR:-/data/adb/modules/djs}
+MG=${DJS_MAGISK_DIR:-/data/adb/magisk}
 mkdir -p "$D/logs" 2>/dev/null
-if command -v setsid > /dev/null 2>&1; then
-  setsid sh "$B/djs-boot.sh" < /dev/null >> "$D/logs/boot.log" 2>&1 &
+mk="$D/.boot-attempt"
+bid=${DJS_BOOT_ID:-$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)}
+if [ -n "$bid" ] && [ -f "$mk" ] && [ ".$(cat "$mk" 2>/dev/null)" != ".$bid" ]; then
+  rm -f "$mk" 2>/dev/null
+  touch "$M/disable" 2>/dev/null
+  echo "$(date 2>/dev/null) watchdog(service): previous boot did not complete with djs enabled, module self-disabled (re-enable to retry once)" >> "$D/logs/boot-watchdog.log" 2>/dev/null
+  exit 0
+fi
+[ -n "$bid" ] && echo "$bid" > "$mk" 2>/dev/null
+if [ ! -d "$MG" ] && command -v nsenter > /dev/null 2>&1; then
+  if command -v setsid > /dev/null 2>&1; then
+    setsid nsenter -t 1 -m -- sh "$B/djs-boot.sh" < /dev/null >> "$D/logs/boot.log" 2>&1 &
+  else
+    nsenter -t 1 -m -- sh "$B/djs-boot.sh" < /dev/null >> "$D/logs/boot.log" 2>&1 &
+  fi
 else
-  sh "$B/djs-boot.sh" < /dev/null >> "$D/logs/boot.log" 2>&1 &
+  if command -v setsid > /dev/null 2>&1; then
+    setsid sh "$B/djs-boot.sh" < /dev/null >> "$D/logs/boot.log" 2>&1 &
+  else
+    sh "$B/djs-boot.sh" < /dev/null >> "$D/logs/boot.log" 2>&1 &
+  fi
 fi
 exit 0
 EOF
@@ -29,11 +48,16 @@ cat > "$D/djs/djs-boot.sh" <<'EOF'
 D=${DJS_DATA_DIR:-/data/adb/vr25/djs-data}
 M=${DJS_MOD_DIR:-/data/adb/modules/djs}
 H=${DJS_HOME:-/data/adb/vr25/djs}
-S=${DJS_STORAGE:-/storage/emulated/0/Android}
+S=${DJS_STORAGE:-/data/media/0/Android}
+SW=${DJS_STORAGE_WATCH:-/storage/emulated/0/Android}
 MG=${DJS_MAGISK_DIR:-/data/adb/magisk}
+V=${DJS_DEV_DIR:-/dev/.vr25/djs}
 N=${DJS_GATE_TRIES:-120}
 P=${DJS_GATE_STEP:-5}
 W=${DJS_POST_SLEEP:-60}
+K=${DJS_START_WAIT:-30}
+E=${DJS_SETTLE:-10}
+bid=${DJS_BOOT_ID:-$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)}
 log() { echo "$(date '+%m-%d %H:%M:%S' 2>/dev/null) $*"; }
 log "gate: waiting for boot_completed + user storage"
 i=0
@@ -43,8 +67,7 @@ while :; do
   i=$((i+1))
   if [ "$i" -ge "$N" ]; then
     if [ ".$bc" = .1 ]; then
-      rm -f "$D/.boot-attempt" 2>/dev/null
-      log "gate timeout: system booted but user storage never became visible, djsd not started this boot"
+      log "gate timeout: system booted but user storage never became visible, djsd not started, marker kept so the watchdog can self-disable"
     else
       log "gate timeout: boot_completed never reached, djsd not started, watchdog decides next boot"
     fi
@@ -52,20 +75,49 @@ while :; do
   fi
   sleep "$P"
 done
+L="$D/.gate-${bid:-x}"
+if ! mkdir "$L" 2>/dev/null; then
+  log "another starter already owns this boot, exiting"
+  exit 0
+fi
+for o in "$D"/.gate-*; do [ "$o" = "$L" ] || rm -rf "$o" 2>/dev/null; done
+sleep "$E"
 rm -f "$D/.boot-attempt" 2>/dev/null
 log "gate passed: boot complete, user storage up"
-if [ -d "$MG" ]; then
-  sh "$H/djs.sh" > /dev/null 2>&1
-  log "djsd started (magisk)"
-elif command -v nsenter > /dev/null 2>&1; then
-  nsenter -t 1 -m -- sh "$H/djs.sh" > /dev/null 2>&1
-  log "djsd started (init mount namespace)"
-else
+how=
+start_djs() {
+  if [ -d "$MG" ]; then
+    how=magisk
+    sh "$H/djs.sh" >> "$D/logs/djs-start.log" 2>&1 &
+  elif command -v nsenter > /dev/null 2>&1; then
+    how="init mount namespace"
+    nsenter -t 1 -m -- sh "$H/djs.sh" >> "$D/logs/djs-start.log" 2>&1 &
+  fi
+}
+wait_djs() {
+  j=0
+  while :; do
+    [ -e "$V/djsc" ] && return 0
+    [ "$j" -ge "$K" ] && return 1
+    sleep 1; j=$((j+1))
+  done
+}
+start_djs
+if [ -z "$how" ]; then
   log "nsenter unavailable on this root solution, djsd not started (fail-safe)"
   exit 0
 fi
+if ! wait_djs; then
+  log "daemon not up after ${K}s, retry"
+  start_djs
+  if ! wait_djs; then
+    log "djs.sh ran but the daemon did not come up within ${K}s after a retry, see logs/djs-start.log"
+    exit 0
+  fi
+fi
+log "djsd started ($how)"
 sleep "$W"
-if [ ! -d "$S" ]; then
+if [ ! -d "$SW" ]; then
   sh "$H/djs-stop.sh" > /dev/null 2>&1
   touch "$M/disable" 2>/dev/null
   log "user storage disappeared after djsd start: djsd stopped, module self-disabled"
@@ -78,12 +130,15 @@ cat > "$D/djs/post-fs-data.sh" <<'EOF'
 D=${DJS_DATA_DIR:-/data/adb/vr25/djs-data}
 M=${DJS_MOD_DIR:-/data/adb/modules/djs}
 mkdir -p "$D/logs" 2>/dev/null
-if [ -f "$D/.boot-attempt" ]; then
-  rm -f "$D/.boot-attempt" 2>/dev/null
+mk="$D/.boot-attempt"
+bid=${DJS_BOOT_ID:-$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)}
+[ -n "$bid" ] || exit 0
+if [ -f "$mk" ] && [ ".$(cat "$mk" 2>/dev/null)" != ".$bid" ]; then
+  rm -f "$mk" 2>/dev/null
   touch "$M/disable" 2>/dev/null
   echo "$(date 2>/dev/null) watchdog: previous boot did not complete with djs enabled, module self-disabled (re-enable to retry once)" >> "$D/logs/boot-watchdog.log" 2>/dev/null
 else
-  touch "$D/.boot-attempt" 2>/dev/null
+  echo "$bid" > "$mk" 2>/dev/null
 fi
 exit 0
 EOF
@@ -109,8 +164,33 @@ EOF
   grep -q 'in inner)' "$D/install.sh" || { echo "ERROR: cleanup splice failed"; exit 1; }
 fi
 
-sed -i 's/^versionCode=202108260$/versionCode=202108261/' "$D/module.prop"
-grep -q 'versionCode=202108261' "$D/module.prop" || { echo "ERROR: module.prop bump failed"; exit 1; }
+if ! grep -q 'realMagisk' "$D/install.sh"; then
+  awk '
+    { print }
+    index($0, "&& magisk=true") { print "[ -d /data/adb/magisk ] && realMagisk=true || realMagisk=false" }
+  ' "$D/install.sh" > "$T/i1"
+  awk '
+    index($0, "! $magisk || {") && !done {
+      getline nxt
+      if (index(nxt, "symlink executables")) { print "! $realMagisk || {"; print nxt; done=1; next }
+      print; print nxt; next
+    }
+    { print }
+  ' "$T/i1" > "$T/i2"
+  awk '
+    { print }
+    index($0, "cp $srcDir/module.prop $installDir/") {
+      print "case $installDir in /data/adb/modules*) $realMagisk || touch $installDir/skip_mount;; esac"
+    }
+  ' "$T/i2" > "$T/i3"
+  mv "$T/i3" "$D/install.sh"
+  grep -q 'realMagisk=true' "$D/install.sh" || { echo "ERROR: realMagisk insert failed"; exit 1; }
+  grep -q 'skip_mount' "$D/install.sh" || { echo "ERROR: skip_mount insert failed"; exit 1; }
+  grep -q '! $realMagisk || {' "$D/install.sh" || { echo "ERROR: symlink gate failed"; exit 1; }
+fi
+
+sed -i 's/^versionCode=2021082[0-9][0-9]$/versionCode=202108262/' "$D/module.prop"
+grep -q 'versionCode=202108262' "$D/module.prop" || { echo "ERROR: module.prop bump failed"; exit 1; }
 
 sh -n "$D/djs/service.sh" && sh -n "$D/djs/djs-boot.sh" && sh -n "$D/djs/post-fs-data.sh" && sh -n "$D/djs/djs.sh" && sh -n "$D/install.sh"
 

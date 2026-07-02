@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc3] - 2026-07-02
+
+Third candidate, from the KernelSU-Next tester's rc2 logs. Those logs proved two things: the daemon never even started at his boots yet internal storage still went missing (so the daemon is innocent), and his ROM never ran the module's early-boot watchdog stage. The common factor in every broken boot is the module being mounted at all.
+
+### 🛠️ Fixed
+- **DJS no longer mounts anything off Magisk.** On KernelSU / KernelSU Next / APatch the module is installed with skip_mount and without the /system/bin command symlinks, so susfs/hybrid-mount setups have nothing of DJS to digest at boot. Schedules are unaffected: AccA talks to the daemon through its runtime path, which needs no mount.
+- **Watchdog moved where it provably runs.** rc2's watchdog lived in an early-boot stage this tester's ROM never executed. It now also runs in the boot stage that his logs prove does run, using a per-boot id so the two stages can share one marker without false alarms. A boot where internal storage never comes up now counts as a failed boot too, so DJS self-disables instead of silently retrying forever.
+- **The whole gate runs in init's namespace off Magisk** (not just the daemon start), so its storage checks see the same filesystem the user does.
+- **One starter per boot.** The module's boot script and AccA's boot receiver both used to start DJS, and the daemon's own startup sweep let the racers kill each other's daemon (caught on the Mi A3: the daemon was dead after every boot). A per-boot lock now lets exactly one starter through.
+- **Namespace-proof boot detection.** The gate now waits on the storage backing store (/data/media), which every mount namespace can see, instead of the FUSE path that an app-context root shell never sees; the FUSE path is still what the self-disable watchdog checks after the daemon starts, since that is what the user experiences.
+- **Honest daemon verification.** "djsd started" is only logged after the daemon's runtime link actually appears (30s window, one retry); otherwise the log says it did not come up and the daemon's own output is kept in logs/djs-start.log. rc2 could log nothing when the start hung.
+
 ## [2.0.1-rc2] - 2026-07-02
 
 Second candidate. A KernelSU-Next tester confirmed rc1's DJS fix was not enough (stuck first boot, then slow + internal storage missing), so the boot path was redesigned around one rule: nothing DJS does may ever hold up or wedge a boot.

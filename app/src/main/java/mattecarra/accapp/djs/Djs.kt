@@ -82,7 +82,7 @@ data class DjsInstallOutcome(
 )
 
 object Djs {
-    const val bundledVersion = 202108261
+    const val bundledVersion = 202108262
 
     /*
     * This method returns the name of the package with a compatible AccInterface
