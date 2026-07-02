@@ -25,10 +25,6 @@ object GithubUtils {
         })
     }
 
-    // Newest published release for a repo. GitHub returns releases newest-first, so the first
-    // non-draft entry (honouring the pre-release opt-in) is the latest candidate. Whether it is
-    // actually an upgrade is decided by the caller's version guard, so this never has to reason
-    // about tag schemes that differ between the app (semver) and the module (date + channel).
     private fun fetchNewestRelease(repo: String, includePreReleases: Boolean): JsonObject? {
         val arr = JsonParser
             .parseString(URL("https://api.github.com/repos/seyedehsanhadi/$repo/releases?per_page=30").readText())

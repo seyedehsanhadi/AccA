@@ -29,15 +29,12 @@ class VersionCompareTest {
         assertTrue(older("2.0", "2.0.1"))
     }
 
-    // THE BUG: an RC tester on 2.0.1-rc1 must NOT be told stable 2.0.0 is "available"
-    // (that was a downgrade prompt caused by the old latest == current equality check).
     @Test
     fun stableIsNeverOfferedAsDowngradeToAnRcTester() {
         assertFalse(newer("2.0.0", "2.0.1-rc1"))
         assertTrue(older("2.0.0", "2.0.1-rc1"))
     }
 
-    // Opted-in path: a stable user is offered the newer RC.
     @Test
     fun rcIsNewerThanThePrecedingStable() {
         assertTrue(newer("2.0.1-rc1", "2.0.0"))
@@ -50,14 +47,12 @@ class VersionCompareTest {
         assertTrue(same("v2.0.1-rc1", "2.0.1-rc1"))
     }
 
-    // A pre-release ranks BELOW its own final release (semver rule).
     @Test
     fun finalReleaseOutranksItsPrerelease() {
         assertTrue(newer("2.0.1", "2.0.1-rc1"))
         assertTrue(older("2.0.1-rc1", "2.0.1"))
     }
 
-    // Release-candidate progression, including natural (not lexical) numeric ordering.
     @Test
     fun rcProgressionUsesNaturalNumberOrder() {
         assertTrue(newer("2.0.1-rc2", "2.0.1-rc1"))
@@ -80,7 +75,6 @@ class VersionCompareTest {
         assertTrue(newer("2.0.2+abc", "2.0.1+def"))
     }
 
-    // Never crash and never report a bogus "newer" for empty/garbage input.
     @Test
     fun blankAndGarbageAreSafe() {
         assertTrue(same("", ""))
@@ -89,7 +83,6 @@ class VersionCompareTest {
         assertFalse(newer("2.0.0", "2.0.0"))
     }
 
-    // compare must be a total order: sign(compare(a,b)) == -sign(compare(b,a)).
     @Test
     fun comparatorIsAntisymmetric() {
         val pairs = listOf(
