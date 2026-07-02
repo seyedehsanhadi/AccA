@@ -544,16 +544,18 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     private fun checkAppUpdate() {
         launch {
             try {
-                val info = GithubUtils.getLatestAccaReleaseInfo() ?: return@launch
+                val includePre = Preferences(this@MainActivity).includePreReleases
+                val info = GithubUtils.getLatestAccaReleaseInfo(includePre) ?: return@launch
                 val latest = info.version.trim().trimStart('v', 'V')
                 val current = try {
                     packageManager.getPackageInfo(packageName, 0).versionName ?: ""
                 } catch (e: Exception) { "" }
-                if (latest.isBlank() || current.isBlank() || latest == current) return@launch
+                if (latest.isBlank() || current.isBlank()) return@launch
+                if (!VersionCompare.isNewer(latest, current)) return@launch
                 if (isFinishing || isDestroyed) return@launch
                 MaterialDialog(this@MainActivity).show {
                     title(R.string.app_update_title)
-                    message(text = getString(R.string.app_update_message, latest) + whatsNew(info.notes))
+                    message(text = getString(R.string.app_update_message, latest, current) + whatsNew(info.notes))
                     positiveButton(R.string.app_update_get) {
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACCA_RELEASE_URL)))
                     }
@@ -572,14 +574,14 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     private fun checkAccUpdate() {
         launch {
             try {
-                val latest = GithubUtils.getLatestAccVersionCode() ?: return@launch
+                val includePre = Preferences(this@MainActivity).includePreReleases
+                val info = GithubUtils.getLatestAccUpdateInfo(includePre) ?: return@launch
                 val installed = try { Acc.instance.version } catch (e: Exception) { 0 }
-                if (installed <= 0 || latest <= installed) return@launch
-                val notes = GithubUtils.getLatestAccReleaseNotes()
+                if (installed <= 0 || info.versionCode <= installed) return@launch
                 if (isFinishing || isDestroyed) return@launch
                 MaterialDialog(this@MainActivity).show {
                     title(R.string.acc_update_title)
-                    message(text = getString(R.string.acc_update_message) + whatsNew(notes))
+                    message(text = getString(R.string.acc_update_message) + whatsNew(info.notes))
                     positiveButton(R.string.app_update_get) {
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
                     }

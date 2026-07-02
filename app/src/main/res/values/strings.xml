@@ -458,11 +458,14 @@
 
     <string name="about_role_hadi">Fork maintainer - AMPS engine, AccA 2.0</string>
     <string name="app_update_title">Update available</string>
-    <string name="app_update_message">AccA %1$s is available on GitHub. Update to get the latest fixes.</string>
+    <string name="app_update_message">AccA %1$s is available on GitHub (you have %2$s). Update to get the latest fixes.</string>
     <string name="app_update_get">Get update</string>
     <string name="acc_update_title">ACC update available</string>
     <string name="acc_update_message">A newer ACC module is available on GitHub. Open the release to download and flash it.</string>
     <string name="update_whats_new">What\'s new:</string>
+    <string name="updates_pref_category">Updates</string>
+    <string name="include_pre_releases_title">Include pre-releases</string>
+    <string name="include_pre_releases_summary">Also notify me about beta and release-candidate builds. Off keeps you on stable releases only.</string>
     <string name="status_draining_to">Draining to %1$d%%</string>
     <string name="status_bypass">Bypass</string>
     <string name="status_standby">Standby</string>

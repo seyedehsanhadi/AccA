@@ -77,6 +77,17 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        android:title="@string/updates_pref_category"
+        app:iconSpaceReserved="false">
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="include_pre_releases"
+            android:summary="@string/include_pre_releases_summary"
+            android:title="@string/include_pre_releases_title"
+            app:iconSpaceReserved="false"></CheckBoxPreference>
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/experimental_pref_title"
         app:iconSpaceReserved="false">
 

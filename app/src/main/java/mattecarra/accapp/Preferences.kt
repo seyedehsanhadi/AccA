@@ -8,6 +8,7 @@ import mattecarra.accapp.utils.Constants.ACC_VERSION
 import mattecarra.accapp.utils.Constants.CURRENT_INPUT_UNIT_OF_MEASURE
 import mattecarra.accapp.utils.Constants.CURRENT_OUTPUT_UNIT_OF_MEASURE
 import mattecarra.accapp.utils.Constants.DJS_ENABLED
+import mattecarra.accapp.utils.Constants.INCLUDE_PRE_RELEASES
 import mattecarra.accapp.utils.Constants.TEMPERATURE_OUTPUT_UNIT_OF_MEASURE
 import mattecarra.accapp.utils.Constants.THEME
 import mattecarra.accapp.utils.Constants.VOLTAGE_INPUT_UNIT_OF_MEASURE
@@ -137,6 +138,14 @@ class Preferences(private val context: Context)
         set(value) {
             val editor = sharedPrefs.edit()
             editor.putString("LAST_COMMIT", value)
+            editor.apply()
+        }
+
+    var includePreReleases: Boolean
+        get() = sharedPrefs.getBoolean(INCLUDE_PRE_RELEASES, false)
+        set(value) {
+            val editor = sharedPrefs.edit()
+            editor.putBoolean(INCLUDE_PRE_RELEASES, value)
             editor.apply()
         }
 

@@ -6,7 +6,11 @@ Notable changes to this fork. Format follows [Keep a Changelog](https://keepacha
 
 Release candidate driven by two field reports (Pixel 4a 5G boot films, KernelSU-Next DJS logs).
 
+### ✨ Added
+- **Include pre-releases (Settings > Updates).** Off by default. Turn it on to be notified about beta and release-candidate builds of AccA; leave it off to stay on stable releases only. ACC module candidates are offered the same way once one ships with a higher version code.
+
 ### 🛠️ Fixed
+- **Update prompts are version-aware.** The check now compares versions properly instead of by plain string match, so a release-candidate tester is no longer told an older stable build is "available" (that was an accidental downgrade prompt); the message also shows the version you are on. Stable users still only see stable releases.
 - **One honest battery status.** The dashboard now says "Draining to N%" while ACC or the firmware lowers the battery to your limit (some kernels report "Charging" the whole time - the 4a 5G film showed 10 minutes of it), "Bypass" (plugged in, battery idle) and "Standby" (unplugged). A missed status read no longer flips the card to a different format for one tick (the reported "Not Charging - Unknown" flicker).
 - **DJS on KernelSU / KernelSU Next.** The bundled DJS no longer touches /sbin off Magisk, its daemon waits for boot AND decrypted storage before starting and runs in the global namespace (field report: boots-but-internal-storage-missing + slow), and app-driven installs of both DJS and ACC are relabeled the way KernelSU expects.
 

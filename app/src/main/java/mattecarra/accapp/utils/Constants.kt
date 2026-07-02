@@ -26,6 +26,7 @@ object Constants {
     val THEME = "theme"
     val ACC_VERSION = "acc_version"
     val DJS_ENABLED = "djs_enabled"
+    val INCLUDE_PRE_RELEASES = "include_pre_releases"
 
     // ACC is no longer auto-installed by AccA; users flash the module themselves.
     val ACC_RELEASE_URL = "https://github.com/seyedehsanhadi/acc/releases/latest"
