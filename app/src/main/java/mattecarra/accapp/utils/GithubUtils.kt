@@ -103,16 +103,17 @@ object GithubUtils {
         }
     }
 
-    suspend fun listAccVersions(): List<String> = withContext(Dispatchers.IO) {
+    suspend fun listAccReleaseTags(includePreReleases: Boolean): List<String> = withContext(Dispatchers.IO) {
         try {
             JsonParser
-                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/acc/tags").readText())
+                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/acc/releases?per_page=30").readText())
                 .asJsonArray
-                // Each element may lack "name" or be malformed; map null-safely and
-                // drop bad entries instead of throwing on .asString.
-                .mapNotNull { runCatching { it.asJsonObject["name"].asString }.getOrNull() }
+                .mapNotNull { runCatching { it.asJsonObject }.getOrNull() }
+                .filterNot { runCatching { it.get("draft").asBoolean }.getOrDefault(false) }
+                .filter { includePreReleases || !runCatching { it.get("prerelease").asBoolean }.getOrDefault(false) }
+                .mapNotNull { runCatching { it.get("tag_name").asString }.getOrNull() }
         } catch (e: Exception) {
-            LogExt().e("GithubUtils", "listAccVersions failed: $e")
+            LogExt().e("GithubUtils", "listAccReleaseTags failed: $e")
             emptyList()
         }
     }

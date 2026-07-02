@@ -118,8 +118,6 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
 
                                         when(res?.code) {
                                             0 -> {
-                                                if(version == "master" || version == "dev")
-                                                    preferences.lastUpdateCheck = System.currentTimeMillis() / 1000
                                                 preferences.lastCommit = GithubUtils.getLatestAccCommit(version)
                                                 preferences.accVersion = version
                                             }
@@ -187,7 +185,8 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                             // Not installed yet: show the install dialog (Main thread).
                             if (!isAdded || activity?.isFinishing != false) return@launch
 
-                            MaterialDialog(context).show {
+                            val showInstall = {
+                                MaterialDialog(context).show {
                                 title(R.string.installing_djs)
                                 cancelOnTouchOutside(false)
                                 onKeyCodeBackPressed { false }
@@ -218,6 +217,22 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                                 }
 
                                 })
+                                }
+                            }
+
+                            val onMagisk = try {
+                                withContext(Dispatchers.IO) { Shell.su("test -d /data/adb/magisk").exec().isSuccess }
+                            } catch (e: Exception) { true }
+
+                            if (onMagisk) {
+                                showInstall()
+                            } else {
+                                MaterialDialog(context).show {
+                                    title(R.string.djs_ksu_warning_title)
+                                    message(R.string.djs_ksu_warning_message)
+                                    positiveButton(R.string.djs_ksu_warning_continue) { showInstall() }
+                                    negativeButton(android.R.string.cancel)
+                                }
                             }
                         }
 

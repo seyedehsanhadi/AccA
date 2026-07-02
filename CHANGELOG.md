@@ -2,15 +2,27 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc2] - 2026-07-02
+
+Second candidate. A KernelSU-Next tester confirmed rc1's DJS fix was not enough (stuck first boot, then slow + internal storage missing), so the boot path was redesigned around one rule: nothing DJS does may ever hold up or wedge a boot.
+
+### 🛠️ Fixed
+- **DJS boot path rebuilt (KernelSU / KernelSU Next / APatch).** The module's boot script now returns instantly (the old one could hold the root manager's script stage for up to 10 minutes); the actual start waits for full boot AND visible internal storage in a fully detached helper; off Magisk the daemon starts strictly inside init's mount namespace or not at all (no more wrong-namespace fallback, which was the storage-missing mechanism); and the install-time cleanup hook no longer loops inside the boot stage either.
+- **Boot watchdog.** DJS arms a marker early in boot and clears it once the boot completes. If a boot ever fails with DJS enabled, DJS disables itself on the next boot, so at most one bad boot is possible. If internal storage disappears right after the daemon starts, DJS stops itself and self-disables too. Everything is logged to /data/adb/vr25/djs-data/logs for bug reports.
+- **KernelSU install warning.** Enabling DJS on KernelSU/APatch now explains the experimental status and the watchdog before installing.
+
+### ✨ Added
+- **Include pre-releases (Settings > Updates).** Off by default. Turn it on to be notified about beta and release-candidate builds of AccA; leave it off to stay on stable releases only. ACC module candidates are offered the same way once one ships with a higher version code.
+- **Update prompts are version-aware.** The check now compares versions properly instead of by plain string match, so a release-candidate tester is no longer told an older stable build is "available" (that was an accidental downgrade prompt); the message also shows the version you are on. Stable users still only see stable releases.
+
+### 🔄 Changed
+- **ACC version picker is release-driven.** The install-specific-version list now shows this fork's published GitHub releases (newest first, as GitHub orders them) instead of raw git tags, and honours the new "Include pre-releases" setting: off shows stable releases only, on adds release candidates. The dead Master/Develop branch entries (they pointed at a branch this fork does not have) are gone.
+
 ## [2.0.1-rc1] - 2026-07-02
 
 Release candidate driven by two field reports (Pixel 4a 5G boot films, KernelSU-Next DJS logs).
 
-### ✨ Added
-- **Include pre-releases (Settings > Updates).** Off by default. Turn it on to be notified about beta and release-candidate builds of AccA; leave it off to stay on stable releases only. ACC module candidates are offered the same way once one ships with a higher version code.
-
 ### 🛠️ Fixed
-- **Update prompts are version-aware.** The check now compares versions properly instead of by plain string match, so a release-candidate tester is no longer told an older stable build is "available" (that was an accidental downgrade prompt); the message also shows the version you are on. Stable users still only see stable releases.
 - **One honest battery status.** The dashboard now says "Draining to N%" while ACC or the firmware lowers the battery to your limit (some kernels report "Charging" the whole time - the 4a 5G film showed 10 minutes of it), "Bypass" (plugged in, battery idle) and "Standby" (unplugged). A missed status read no longer flips the card to a different format for one tick (the reported "Not Charging - Unknown" flicker).
 - **DJS on KernelSU / KernelSU Next.** The bundled DJS no longer touches /sbin off Magisk, its daemon waits for boot AND decrypted storage before starting and runs in the global namespace (field report: boots-but-internal-storage-missing + slow), and app-driven installs of both DJS and ACC are relabeled the way KernelSU expects.
 

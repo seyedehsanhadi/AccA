@@ -7,6 +7,7 @@ import androidx.annotation.CheckResult
 import androidx.core.content.FileProvider
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.list.listItemsSingleChoice
+import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.utils.GithubUtils
@@ -55,7 +56,7 @@ import java.io.File
     {
         val options = context.resources.getStringArray(R.array.acc_version_options).toMutableList()
         val optionValues = context.resources.getStringArray(R.array.acc_version_option_values).toMutableList()
-        options.addAll(GithubUtils.listAccVersions())
+        options.addAll(GithubUtils.listAccReleaseTags(Preferences(context).includePreReleases))
 
         return listItemsSingleChoice(
             items = options,

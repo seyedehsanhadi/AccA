@@ -374,8 +374,6 @@
 
     <string-array name="acc_version_options">
         <item>Bundled</item>
-        <item>Master</item>
-        <item>Develop</item>
     </string-array>
 
     <string-array name="acca_debug_options">
@@ -466,6 +464,9 @@
     <string name="updates_pref_category">Updates</string>
     <string name="include_pre_releases_title">Include pre-releases</string>
     <string name="include_pre_releases_summary">Also notify me about beta and release-candidate builds. Off keeps you on stable releases only.</string>
+    <string name="djs_ksu_warning_title">KernelSU / APatch detected</string>
+    <string name="djs_ksu_warning_message">DJS boot support is experimental on KernelSU and APatch. A boot watchdog is built in: if the next boot does not complete, DJS disables itself so the phone recovers on the following boot. If internal storage ever goes missing after enabling DJS, reboot once and share the log from /data/adb/vr25/djs-data/logs.</string>
+    <string name="djs_ksu_warning_continue">Install anyway</string>
     <string name="status_draining_to">Draining to %1$d%%</string>
     <string name="status_bypass">Bypass</string>
     <string name="status_standby">Standby</string>
