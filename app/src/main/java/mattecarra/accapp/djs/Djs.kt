@@ -186,6 +186,14 @@ object Djs {
             if (res.code == 3)
                 return@withContext DjsInstallOutcome(success = false, busyboxMissing = true, result = res)
 
+            // KernelSU/APatch: the installer raw-copies into /data/adb/modules; ksud-installed
+            // modules are relabeled system_file. Mirror that (no-op under Magisk and on ROMs
+            // whose type transition already labels correctly) so the module dir always looks
+            // exactly like a manager-installed one to the boot-time module pass.
+            try {
+                Shell.su("[ -d /data/adb/magisk ] || { chcon -R u:object_r:system_file:s0 /data/adb/modules/djs 2>/dev/null; chmod 0755 /data/adb/modules/djs; }").exec()
+            } catch (_: java.lang.Exception) {}
+
             // service.sh is fire-and-forget (`(djs.sh &) &`); the /dev/.vr25/djs/* runtime
             // symlinks (incl. djs-version) are created ASYNCHRONOUSLY by the backgrounded daemon.
             // The installer also early-exits 0 on an equal/newer already-installed version WITHOUT

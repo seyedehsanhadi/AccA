@@ -161,6 +161,10 @@ object Acc {
 
             val res = Shell.su("sh ${installShFile.absolutePath} acc").exec()
 
+            try {
+                Shell.su("[ -d /data/adb/magisk ] || { chcon -R u:object_r:system_file:s0 /data/adb/modules/acc 2>/dev/null; chmod 0755 /data/adb/modules/acc; }").exec()
+            } catch (_: java.lang.Exception) {}
+
             val version = getAccVersion() ?: throw java.lang.Exception("ACC installation failed")
 
             createAccInstance()
