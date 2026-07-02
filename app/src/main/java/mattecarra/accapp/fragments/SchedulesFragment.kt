@@ -7,6 +7,9 @@ import android.view.ViewGroup
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import androidx.recyclerview.widget.LinearLayoutManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import mattecarra.accapp.activities.MainActivity
 import mattecarra.accapp.adapters.OnScheduleClickListener
 import mattecarra.accapp.adapters.ScheduleProfileListAdapter
@@ -19,6 +22,7 @@ import mattecarra.accapp.viewmodel.SchedulesViewModel
 class SchedulesFragment : ScopedFragment(), OnScheduleClickListener {
     private lateinit var viewModel: SchedulesViewModel
     private lateinit var adapter: ScheduleProfileListAdapter
+    private var pollJob: Job? = null
     // Nullable backing field released in onDestroyView to avoid leaking the view hierarchy.
     private var _binding : SchedulesFragmentBinding? = null
     private val binding get() = _binding!!
@@ -69,6 +73,27 @@ class SchedulesFragment : ScopedFragment(), OnScheduleClickListener {
                 adapter.setList(schedules)
             })
         }
+    }
+
+    override fun onResume()
+    {
+        super.onResume()
+        if (!::viewModel.isInitialized) return
+        viewModel.refresh()
+        pollJob?.cancel()
+        pollJob = launch {
+            while (true) {
+                delay(30000)
+                viewModel.refresh()
+            }
+        }
+    }
+
+    override fun onPause()
+    {
+        pollJob?.cancel()
+        pollJob = null
+        super.onPause()
     }
 
     override fun onScheduleProfileClick(schedule: Schedule) {

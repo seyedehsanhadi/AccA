@@ -10,7 +10,11 @@ import mattecarra.accapp.utils.LogExt
 
 class DjsHandler: DjsInterface {
     val SCHEDULE = """^\s*(//)?([0-9]{4}|boot) (.*)""".toRegex(RegexOption.MULTILINE)
-    val ID_REGEX = """^: accaScheduleId(\d*)""".toRegex()
+    // Not anchored: boot/on-boot schedules carry the daemon-wait prefix ("until [ -x ... ]; sleep 8; ")
+    // BEFORE the id marker, and the anchored version silently dropped them from list() - the saved
+    // schedule never appeared, which read as "the save button does not work". The trailing ';' keeps
+    // id 1 from matching id 10/100 (same guarantee deleteById relies on).
+    val ID_REGEX = """: accaScheduleId(\d+);""".toRegex()
     val EXECUTE_ONCE_MATCH_REGEX = """: --delete""".toPattern()
     val EXECUTE_ON_BOOT_MATCH_REGEX = """: --boot""".toPattern()
 

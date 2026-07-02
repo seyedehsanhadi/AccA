@@ -30,6 +30,14 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // The daemon deletes a fired run-once schedule from its config on its own; without a
+    // re-read the UI keeps showing it forever (field report: "the runonce task will not
+    // delete itself"). The fragment calls this on every resume so the list always reflects
+    // what DJS actually holds.
+    fun refresh() = viewModelScope.launch {
+        refreshSchedules()
+    }
+
     // DJS is the source of truth: every DB mutation happens only AFTER the corresponding djsc
     // op succeeds, and everything is wrapped so a DJS/shell failure can never silently kill the
     // coroutine (frozen list) or leave the DB and DJS diverged with orphan entries.

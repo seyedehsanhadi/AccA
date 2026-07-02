@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc4] - 2026-07-02
+
+The KernelSU-Next tester confirmed DJS boots cleanly on rc3, then found two Scheduler bugs.
+
+### 🛠️ Fixed
+- **Boot schedules now save and appear.** A boot (or apply-on-boot) schedule carries a "wait for ACC, then apply" prefix before its id marker; the list parser was anchored to the marker at the very start of the line, so it silently dropped every boot schedule - you saved one and nothing showed up ("the save button doesn't work"). The parser now finds the id anywhere in the command, still anchored on the trailing ';' so ids never collide (1 vs 10).
+- **Run-once schedules disappear after they fire.** DJS deletes a run-once job from its own config when it runs, but the app only re-read that list on cold start, so a fired one lingered in the UI. The Schedules screen now refreshes when you open it and every 30s while it is open, so a spent run-once drops off on its own.
+
 ## [2.0.1-rc3] - 2026-07-02
 
 Third candidate, from the KernelSU-Next tester's rc2 logs. Those logs proved two things: the daemon never even started at his boots yet internal storage still went missing (so the daemon is innocent), and his ROM never ran the module's early-boot watchdog stage. The common factor in every broken boot is the module being mounted at all.
