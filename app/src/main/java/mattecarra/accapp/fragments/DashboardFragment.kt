@@ -23,6 +23,7 @@ import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.databinding.DashboardFragmentBinding
 import mattecarra.accapp.databinding.EditChargingLimitOnceDialogBinding
+import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.DashboardValues
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ScopedFragment
@@ -54,6 +55,13 @@ class DashboardFragment : ScopedFragment()
     private lateinit var configViewModel: SharedViewModel
     private lateinit var preferences: Preferences
     private var mIsDaemonRunning: Boolean? = null
+
+    // D1 (6.5.1/2.0.1): last good structured state + consecutive-miss counter. One shell
+    // hiccup used to flip the card to the legacy "Status--ChargeType" grammar for a tick
+    // (the field-reported "Not Charging--Unknown" flicker). Re-render the last good state
+    // for up to two missed ticks; only a SUSTAINED miss falls back to the legacy formatter.
+    private var mLastState: AccState? = null
+    private var mStateNullStreak: Int = 0
 
     // B12 charging-health warning: count consecutive polls where charging looks broken.
     // The card only appears once the condition is SUSTAINED (>= 2 ticks, ~4s) so a single
@@ -106,25 +114,18 @@ class DashboardFragment : ScopedFragment()
             val state = dash.state
             if (state != null)
             {
-                // measuredClass is the real measured behaviour (charging/discharging/cut/bypass);
-                // status is the kernel label. Show measuredClass when present, else status.
-                val label = state.measuredClass.ifBlank { state.status }
-                    .replaceFirstChar { c -> if (c.isLowerCase()) c.titlecase() else c.toString() }
-                binding.dashBatteryStatusTextView.text = label
-
-                val charging = state.measuredClass.equals("charging", true) ||
-                        (state.measuredClass.isBlank() && state.status.equals("Charging", true))
-                binding.dashBatteryChargingSpeedTextView.text =
-                    if (charging) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
-
-                binding.dashChargingSpeedTextView.text =
-                    formatCurrentFromState(state.signedCurrentMilliAmps())
-
-                // Manual-lock badge (rc8 userLocked): ACC will not auto-replace a user-pinned switch.
-                binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
+                mLastState = state
+                mStateNullStreak = 0
+                renderStateCard(state)
+            }
+            else if (mStateNullStreak < 2 && mLastState != null)
+            {
+                mStateNullStreak++
+                renderStateCard(mLastState!!)
             }
             else
             {
+                mStateNullStreak++
                 binding.dashBatteryStatusTextView.text = getString(R.string.info_status_extended, dash.batteryInfo.status, dash.batteryInfo.chargeType)
 
                 binding.dashBatteryChargingSpeedTextView.text = if (dash.batteryInfo.isCharging()) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
@@ -366,6 +367,45 @@ class DashboardFragment : ScopedFragment()
      * on battery can never trip the card. Everything is best-effort: if the config is not
      * loaded yet we do not warn.
      */
+    /**
+     * One formatter for the structured-state card (D1). measuredClass is the real measured
+     * behaviour; status is the kernel label (which LIES on some devices - the bramble film
+     * showed "Charging" through 10 minutes of measured drain). The label speaks the canonical
+     * vocabulary: Bypass (plugged, battery idle), Standby (unplugged), Draining [to N%].
+     */
+    private fun statusLabel(state: AccState): String
+    {
+        val mc = state.measuredClass.lowercase()
+        if (state.nativeEnabled && state.nativeStopLevel in 1..99 &&
+            state.capacityPct > state.nativeStopLevel && (mc == "discharging" || mc == "drain"))
+            return getString(R.string.status_draining_to, state.nativeStopLevel)
+        return when (mc)
+        {
+            "bypass" -> getString(R.string.status_bypass)
+            "standby", "idle" -> getString(R.string.status_standby)
+            "drain" -> getString(R.string.status_draining)
+            "" -> state.status
+            else -> mc.replaceFirstChar { c -> c.titlecase() }
+        }
+    }
+
+    private fun renderStateCard(state: AccState)
+    {
+        binding.dashBatteryStatusTextView.text = statusLabel(state)
+        binding.dashBatteryStatusTextView.contentDescription = getString(R.string.status_hint)
+
+        val charging = state.measuredClass.equals("charging", true) ||
+                (state.measuredClass.isBlank() && state.status.equals("Charging", true))
+        binding.dashBatteryChargingSpeedTextView.text =
+            if (charging) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
+
+        binding.dashChargingSpeedTextView.text =
+            formatCurrentFromState(state.signedCurrentMilliAmps())
+
+        // Manual-lock badge (rc8 userLocked): ACC will not auto-replace a user-pinned switch.
+        binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
+    }
+
     private fun evaluateHealthWarning(dash: DashboardValues)
     {
         if (_binding == null || !isAdded) return

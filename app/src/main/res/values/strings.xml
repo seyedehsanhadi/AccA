@@ -463,6 +463,11 @@
     <string name="acc_update_title">ACC update available</string>
     <string name="acc_update_message">A newer ACC module is available on GitHub. Open the release to download and flash it.</string>
     <string name="update_whats_new">What\'s new:</string>
+    <string name="status_draining_to">Draining to %1$d%%</string>
+    <string name="status_bypass">Bypass</string>
+    <string name="status_standby">Standby</string>
+    <string name="status_draining">Draining</string>
+    <string name="status_hint">Bypass = plugged in, battery resting. Standby = unplugged. Draining = ACC or the firmware is lowering the battery to your limit. A few hundred mA still counts as charging or draining, not Bypass.</string>
     <string name="about_attributes">Attributes</string>
     <string name="about_attrib_telegram_icon">Telegram icon made by Pixel perfect from www.flaticon.com</string>
 

@@ -37,7 +37,9 @@ data class AccState(
     val polarity: String,
     val userLocked: Boolean,
     val measuredClass: String,
-    val accVersionCode: Int?
+    val accVersionCode: Int?,
+    val nativeEnabled: Boolean,
+    val nativeStopLevel: Int
 ) {
 
     /**
@@ -67,6 +69,7 @@ data class AccState(
                 val sensing = root.optJSONObject("sensing") ?: JSONObject()
                 val sw = root.optJSONObject("switch") ?: JSONObject()
                 val acc = root.optJSONObject("acc") ?: JSONObject()
+                val native = root.optJSONObject("native") ?: JSONObject()
 
                 AccState(
                     schemaVersion = schema,
@@ -82,7 +85,10 @@ data class AccState(
                     measuredClass = sw.optString("measuredClass", ""),
                     // versionCode is emitted as a string ("202505229"); accept either and
                     // fall back to null so an absent/garbage value never aborts the parse.
-                    accVersionCode = acc.optString("versionCode", "").toIntOrNull()
+                    accVersionCode = acc.optString("versionCode", "").toIntOrNull(),
+                    // native firmware %-limit block (Pixel-class); absent on other devices.
+                    nativeEnabled = native.optBoolean("enabled", false),
+                    nativeStopLevel = native.optInt("stopLevel", -1)
                 )
             } catch (e: Exception) {
                 null
