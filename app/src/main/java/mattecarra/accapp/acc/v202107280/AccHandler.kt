@@ -49,7 +49,7 @@ open class AccHandler(override val version: Int) : AccInterface {
 
     val SWITCH = """^\s*charging_switch=((?:(?!#).)*)""".toRegex(RegexOption.MULTILINE)
     val AUTOMATIC_SWITCH_DISABLED = """^(.*) --\s*""".toRegex(RegexOption.MULTILINE)
-    val PRIORITIZE_BATTERY_IDLE = """^\s*prioritize_batt_idle_mode=(true|false)""".toRegex(RegexOption.MULTILINE)
+    val PRIORITIZE_BATTERY_IDLE = """^\s*prioritize_batt_idle_mode=(\S+)""".toRegex(RegexOption.MULTILINE)
 
     @WorkerThread
     fun parseConfig(config: String): AccConfig {
@@ -386,7 +386,8 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override fun isPrioritizeBatteryIdleMode(config: String): Boolean {
-        return PRIORITIZE_BATTERY_IDLE.find(config)?.destructured?.component1()?.toBoolean() ?: true
+        val v = PRIORITIZE_BATTERY_IDLE.find(config)?.destructured?.component1()?.trim()
+        return v == null || v == "true"
     }
 
     override suspend fun setChargingLimitForOneCharge(limit: Int): Boolean = withContext(Dispatchers.IO) {

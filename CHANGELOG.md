@@ -9,6 +9,10 @@ Follow-up to the current-limit fix: the value stuck, but the Charging Power Cont
 ### 🛠️ Fixed
 - **Charging Power Control switch tracks current, not just voltage.** The section's on/off switch was wired only to the voltage limit, and the per-profile current-enable flag was never actually written, so a current-only limit left the switch reflecting "voltage is off" - it reverted off on reopen even though the current value was saved. The switch now reflects either limit, the dialog updates both enables when you set them, and turning the section off clears both limits. Verified on device: set a current-only limit, reopen, the switch stays on and the value shows; turn it off and the limit clears.
 - **Section switches show the real state on the live-config editor.** On Custom Settings the config loads asynchronously, so the enable switches were being read once from defaults before the values arrived and never refreshed - the same reason the power switch looked off. The editor now re-publishes the derived switch states after the config loads, so Power Control (and the other derived switches) reflect what is actually set.
+- **"Prioritize battery idle mode" stays off when you turn it off.** ACC records this switch as `no` when disabled (a stronger "off" than `false`), but the app only recognised `true`/`false`, so `no` fell through to the default and the switch sprang back on. It now reads `no` as off. Found by a full round-trip audit of every setting.
+
+### 🔍 Audited
+- **Every setting round-tripped on-device.** Each field the app writes was set through the app's exact command and read back through `acca --set --print`: capacity (shutdown/resume/pause/cooldown), temperature (cooldown/max/resume/shutdown), cooldown ratio, current limit, voltage limit, apply-on-boot, apply-on-plug, reset-stats on pause/unplug, prioritize-idle, and the charging switch with its manual lock - all 18 checks pass. The two mismatches found (the power switch and prioritize-idle) are the only ones, and both are fixed here.
 
 ## [2.0.1-rc4] - 2026-07-02
 
