@@ -113,6 +113,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         {
             if (!viewModel.enables.eCoolDown) viewModel.coolDown = null
             if (!viewModel.enables.eVoltage) viewModel.voltageLimit = AccConfig.ConfigVoltage(null, null)
+            if (!viewModel.enables.eCurrMax) viewModel.currentMaxLimit = null
             if (!viewModel.enables.eRunOnBoot) viewModel.onBoot = null
             if (!viewModel.enables.eRunOnPlug) viewModel.onPlug = null
         }
@@ -236,7 +237,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         viewModel.observeEnables(this, Observer
         {
             content.capacitySwitchEnabled.isChecked = it.eCapacity
-            content.voltcontrolSwitchEnabled.isChecked = it.eVoltage
+            content.voltcontrolSwitchEnabled.isChecked = it.eVoltage || it.eCurrMax
             content.tempSwitchEnabled.isChecked = it.eTemperature
             content.cooldownSwitchEnabled.isChecked = it.eCoolDown
             content.applyOnBootSwitchEnabled.isChecked = it.eRunOnBoot
@@ -394,21 +395,18 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
         if (accConfigOnly) // FIX Checks and Visibility if loaded ONLY ACC Config
         {
-            content.capacitySwitchEnabled.visibility = View.GONE  // can't disabled
+            content.capacitySwitchEnabled.visibility = View.GONE
             content.tempSwitchEnabled.visibility = View.GONE
 
-            viewModel.enables.eVoltage =
-                (viewModel.voltageLimit.controlFile != null || viewModel.voltageLimit.max != null)
-
-            viewModel.enables.eCapacity = true
-            viewModel.enables.eTemperature = true
-            viewModel.enables.eCoolDown = viewModel.coolDown != null
-            // Derive the toggles from the actual config, like the sections above.
-            // apply_on_boot / apply_on_plug are optional command hooks; ACC ships
-            // them empty. Forcing the switches ON made the editor show them enabled
-            // with an empty value. Reflect "is a command set" instead.
-            viewModel.enables.eRunOnBoot = !viewModel.onBoot.isNullOrBlank()
-            viewModel.enables.eRunOnPlug = !viewModel.onPlug.isNullOrBlank()
+            viewModel.enables = viewModel.enables.copy(
+                eCapacity = true,
+                eTemperature = true,
+                eVoltage = viewModel.voltageLimit.controlFile != null || viewModel.voltageLimit.max != null,
+                eCurrMax = viewModel.currentMaxLimit != null,
+                eCoolDown = viewModel.coolDown != null,
+                eRunOnBoot = !viewModel.onBoot.isNullOrBlank(),
+                eRunOnPlug = !viewModel.onPlug.isNullOrBlank()
+            )
         }
 
         // Wire the Apply & Lock button once; the card itself stays hidden until detect()
@@ -891,7 +889,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
             content.voltcontrolSwitchEnabled ->
             {
-                viewModel.enables = viewModel.enables.copy(eVoltage = p1)
+                viewModel.enables = viewModel.enables.copy(eVoltage = p1, eCurrMax = p1)
                 content.editVoltageLimit.isEnabled = p1
             }
 
@@ -1223,6 +1221,11 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 }
 
                 viewModel.currentMaxLimit = if (currentMaxEnabled) currentMax else null
+
+                viewModel.enables = viewModel.enables.copy(
+                    eVoltage = voltageMaxEnabled && voltageMax != null,
+                    eCurrMax = currentMaxEnabled && currentMax != null
+                )
             }
             negativeButton(android.R.string.cancel)
         }

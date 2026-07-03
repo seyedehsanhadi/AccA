@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc5] - 2026-07-03
+
+Follow-up to the current-limit fix: the value stuck, but the Charging Power Control switch reverted off (4a 5G field report).
+
+### 🛠️ Fixed
+- **Charging Power Control switch tracks current, not just voltage.** The section's on/off switch was wired only to the voltage limit, and the per-profile current-enable flag was never actually written, so a current-only limit left the switch reflecting "voltage is off" - it reverted off on reopen even though the current value was saved. The switch now reflects either limit, the dialog updates both enables when you set them, and turning the section off clears both limits. Verified on device: set a current-only limit, reopen, the switch stays on and the value shows; turn it off and the limit clears.
+- **Section switches show the real state on the live-config editor.** On Custom Settings the config loads asynchronously, so the enable switches were being read once from defaults before the values arrived and never refreshed - the same reason the power switch looked off. The editor now re-publishes the derived switch states after the config loads, so Power Control (and the other derived switches) reflect what is actually set.
+
 ## [2.0.1-rc4] - 2026-07-02
 
 The KernelSU-Next tester confirmed DJS boots cleanly on rc3, then found two Scheduler bugs; a pre-release tester also caught the update link.
