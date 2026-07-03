@@ -146,6 +146,7 @@ class LogViewerActivity : ScopedAppActivity()
             echo "@@VERSION"; $acca -v 2>/dev/null
             echo "@@KERNEL";  uname -a 2>/dev/null
             echo "@@DAEMON";  ( $acca -D >/dev/null 2>&1 && echo "running" || echo "stopped" )
+            echo "@@CURSW";   sed -n 's/^chargingSwitch=//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null; { [ -f /data/adb/vr25/acc-data/.user-locked ] && echo "pinned by user (Apply and Lock / manual): yes" || echo "pinned by user (Apply and Lock / manual): no"; }
             echo "@@BATTERY"; $acca -i 2>/dev/null
             echo "@@CONFIG";  $acca -sp 2>/dev/null
             echo "@@SWITCH";  $acca -s s: 2>/dev/null
@@ -158,8 +159,12 @@ class LogViewerActivity : ScopedAppActivity()
 
         sb.append(section(out, "@@VERSION", "@@KERNEL", "ACC version"))
         sb.append(section(out, "@@KERNEL", "@@DAEMON", "Kernel"))
-        sb.append(section(out, "@@DAEMON", "@@BATTERY", "Daemon"))
-        sb.append(section(out, "@@BATTERY", "@@CONFIG", "Battery"))
+        sb.append(section(out, "@@DAEMON", "@@CURSW", "Daemon"))
+        // The bare */online tail of `acca -i` reads like a switch tuple (e.g. "sm7250_bms/online 1")
+        // and got field-reported as "Diagnostics shows my old charging switch". Surface the real,
+        // current switch from the config in its own section and label the Battery dump for what it is.
+        sb.append(section(out, "@@CURSW", "@@BATTERY", "Charging switch (current, from ACC config)"))
+        sb.append(section(out, "@@BATTERY", "@@CONFIG", "Battery (kernel power-supply readout; */online lines are supply status, not the switch)"))
         sb.append(section(out, "@@CONFIG", "@@SWITCH", "Config"))
         sb.append(section(out, "@@SWITCH", "@@SWITCHTEST", "Charging switches (available)"))
         sb.append(section(out, "@@SWITCHTEST", "@@LOGTAIL", "Switch test results (which method works on this phone)"))

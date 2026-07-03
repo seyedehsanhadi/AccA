@@ -199,9 +199,6 @@
         \nLütfen /data/adb/acc-data/logs/ klasörünü-dosyalarını geliştiricilerle paylaşmayı düşünün.
     </string>
     <string name="prioritize_battery_idle">Pil boşta moduna öncelik verin</string>
-    <string name="test_battery_idle">Pil boşta modunu test edin</string>
-    <string name="test_battery_idle_supported_result">Kullandığınız kernel pil boşta modunu destekliyor.</string>
-    <string name="test_battery_idle_unsupported_result">Kullandığınız kernel pil boşta modunu desteklemiyor.</string>
     <string name="schedule_profile_edit_current">Mevcut yapılandırayı düzenle</string>
     <string name="schedule_profile_keep_current">Mevcut yapılandırmayı koru</string>
     <string name="schedule_type">Zamanlama türü</string>

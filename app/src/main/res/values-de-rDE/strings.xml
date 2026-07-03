@@ -219,9 +219,6 @@
         \nBitte archiviere und teile /data/adb/acc-data/logs/ mit den Entwicklern.
     </string>
     <string name="prioritize_battery_idle">Akku-Leerlaufmodus vorziehen</string>
-    <string name="test_battery_idle">Akku-Leerlaufmodus testen</string>
-    <string name="test_battery_idle_supported_result">Dieser Kernel unterstützt den Akku-Leerlaufmodus.</string>
-    <string name="test_battery_idle_unsupported_result">Dieser Kernel unterstützt keinen Akku-Leerlaufmodus.</string>
     <string name="schedule_profile_edit_current">Aktuelle Konfiguration bearbeiten</string>
     <string name="schedule_profile_keep_current">Aktuelle Konfiguration beibehalten</string>
     <string name="schedule_type">Zeitplantyp</string>

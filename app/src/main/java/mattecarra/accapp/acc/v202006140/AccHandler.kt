@@ -299,15 +299,6 @@ open class AccHandler(override val version: Int) : AccInterface {
         Shell.su("(acc -f $limit &) &").exec().isSuccess
     }
 
-    val BATTERY_IDLE_SUPPORTED = """^\s*-\s*battIdleMode=true""".toPattern(Pattern.MULTILINE)
-    override suspend fun isBatteryIdleSupported(): Pair<Int, Boolean> = withContext(Dispatchers.IO) {
-        val res = Shell.su("/dev/acca -t --").exec()
-        Pair(
-            res.code,
-            BATTERY_IDLE_SUPPORTED.matcher(res.out.joinToString("\n")).find()
-        )
-    }
-
     //Update config part:
 
     /**

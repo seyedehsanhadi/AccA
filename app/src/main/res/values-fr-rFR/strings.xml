@@ -182,7 +182,6 @@
     <string name="djs_installation_failed_log">Fichier journal de l\'échec de l\'installation du DJS</string>
     <string name="select_different_version">Changer la version ACC</string>
     <string name="prioritize_battery_idle">Prioriser le mode de veille de la batterie</string>
-    <string name="test_battery_idle">Tester le mode de veille de la batterie</string>
     <string name="schedule_profile_edit_current">Modifier la configuration actuelle</string>
     <string name="schedule_profile_keep_current">Garder la configuration actuelle</string>
     <string name="schedule_type">Type de planification</string>

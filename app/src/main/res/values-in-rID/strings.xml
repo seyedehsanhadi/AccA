@@ -202,9 +202,6 @@ atau --> github.com/MatteCarra/AccA/issues.    </string>
          \nSilakan pertimbangkan pengarsipan dan berbagi /data/adb/acc-data/log/ dengan devs.
     </string>
     <string name="prioritize_battery_idle">Prioritaskan mode siaga baterai</string>
-    <string name="test_battery_idle">Uji mode siaga baterai</string>
-    <string name="test_battery_idle_supported_result">Kernel mendukung mode siaga baterai.</string>
-    <string name="test_battery_idle_unsupported_result">Kernel tidak mendukung mode siaga baterai.</string>
     <string name="schedule_profile_edit_current">Edit konfigurasi saat ini</string>
     <string name="schedule_profile_keep_current">Pertahankan konfigurasi saat ini</string>
     <string name="schedule_type">Jenis jadwal</string>

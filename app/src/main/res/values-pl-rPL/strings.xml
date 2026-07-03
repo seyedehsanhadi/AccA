@@ -199,9 +199,6 @@ Wersja Bundled jest testowana pod kątem działania z aplikacją AccA, dlatego j
         \nRozważ archiwizację i udostępnianie /data/adb/acc-data/logs/ z develeporami.
     </string>
     <string name="prioritize_battery_idle">Spriorytetyzuj tryb bezczynności baterii</string>
-    <string name="test_battery_idle">Przetestuj tryb bezczynności baterii</string>
-    <string name="test_battery_idle_supported_result">Kernel obsługuje tryb bezczynności baterii.</string>
-    <string name="test_battery_idle_unsupported_result">Kernel nie obsługuje trybu bezczynności baterii.</string>
     <string name="schedule_profile_edit_current">Edytuj obecną konfigurację</string>
     <string name="schedule_profile_keep_current">Zachowaj obecną konfigurację</string>
     <string name="schedule_type">Typ harmonogramu</string>

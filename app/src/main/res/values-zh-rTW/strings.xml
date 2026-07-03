@@ -202,9 +202,6 @@
         \n請考慮將 /data/adb/acc-data/logs/ 壓縮為一個檔案後傳送給開發者。
     </string>
     <string name="prioritize_battery_idle">優先使用電池 idle mode</string>
-    <string name="test_battery_idle">測試電池 idle mode</string>
-    <string name="test_battery_idle_supported_result">手機內核支援電池 idle mode。</string>
-    <string name="test_battery_idle_unsupported_result">手機內核不支援電池 idle mode.</string>
     <string name="schedule_profile_edit_current">編輯當前文件</string>
     <string name="schedule_profile_keep_current">保留當前設定</string>
     <string name="schedule_type">排程類型</string>

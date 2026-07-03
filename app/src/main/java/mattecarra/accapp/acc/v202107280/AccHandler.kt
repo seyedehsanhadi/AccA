@@ -399,9 +399,6 @@ open class AccHandler(override val version: Int) : AccInterface {
         Shell.su("(/dev/.vr25/acc/acca -f $limit &)").exec().isSuccess
     }
 
-    // Structural, case-insensitive match so a reworded ACC probe line doesn't
-    // silently disable the prioritize-idle toggle (ACC output has changed before).
-    val BATTERY_IDLE_SUPPORTED = """(?i)batt.?idle.?mode\s*[=:]?\s*true""".toPattern(Pattern.MULTILINE)
     /**
      * SAFETY: `acc -t` STOPS the charge-control daemon while it tests switches,
      * so the configured stop level is NOT enforced during a test, and if the
@@ -423,20 +420,6 @@ open class AccHandler(override val version: Int) : AccInterface {
         } catch (e: Exception) {
             // Last resort: attempt a restart so charging never stays uncontrolled.
             try { Shell.su("/dev/.vr25/acc/acca -D restart").exec() } catch (_: Exception) {}
-        }
-    }
-
-    override suspend fun isBatteryIdleSupported(): Pair<Int, Boolean> = withContext(Dispatchers.IO) {
-        try {
-            // `timeout` (toybox) hard-bounds the test so it can never wedge the
-            // root shell and block other commands (-D, -v, diagnostics).
-            val res = Shell.su("timeout 60 /dev/.vr25/acc/acca -t --").exec()
-            Pair(
-                res.code,
-                BATTERY_IDLE_SUPPORTED.matcher(res.out.joinToString("\n")).find()
-            )
-        } finally {
-            ensureDaemonRunning()
         }
     }
 

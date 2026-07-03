@@ -205,9 +205,6 @@
         \n请考虑将 /data/adb/acc-data/logs/ 打包并分享给开发者。
     </string>
     <string name="prioritize_battery_idle">电池闲置模式优先</string>
-    <string name="test_battery_idle">测试电池闲置模式</string>
-    <string name="test_battery_idle_supported_result">内核支持电池闲置模式。</string>
-    <string name="test_battery_idle_unsupported_result">内核不支持电池闲置模式。</string>
     <string name="schedule_profile_edit_current">编辑当前配置</string>
     <string name="schedule_profile_keep_current">保持当前配置</string>
     <string name="schedule_type">计划类型</string>

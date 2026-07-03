@@ -811,83 +811,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
     //-------------------------------------------------------------------------------------
 
-    fun onBatteryIdleTestButtonClick(v: View)
-    {
-        launch {
-            val dialog = MaterialDialog(this@AccConfigEditorActivity).show {
-                title(R.string.test_battery_idle)
-                progress(R.string.wait)
-            }
-
-            val charging = try { Acc.instance.getBatteryInfo().isCharging() } catch (e: Exception) { false }
-            if (!charging)
-            {
-                if (dialog.isShowing) dialog.cancel()
-                if (!isFinishing && !isDestroyed) MaterialDialog(this@AccConfigEditorActivity).show {
-                    title(R.string.test_battery_idle)
-                    message(R.string.plug_battery_to_test)
-                    positiveButton(R.string.retry) { onBatteryIdleTestButtonClick(v) }
-                    negativeButton(android.R.string.cancel)
-                }
-                return@launch
-            }
-
-            val exitCode: Int
-            val supported: Boolean
-            try
-            {
-                val result = Acc.instance.isBatteryIdleSupported()
-                exitCode = result.first
-                supported = result.second
-            }
-            catch (ex: Exception)
-            {
-                ex.printStackTrace()
-                LogExt().e(javaClass.simpleName, "isBatteryIdleSupported() failed: $ex")
-                if (dialog.isShowing) dialog.cancel()
-                return@launch
-            }
-
-            if (dialog.isShowing)
-            {
-                dialog.cancel()
-
-                if (exitCode == 2)
-                { //battery is not charging -> can not test
-                    MaterialDialog(this@AccConfigEditorActivity).show {
-                        title(R.string.test_battery_idle)
-                        message(R.string.plug_battery_to_test)
-                        positiveButton(R.string.retry) {
-                            onBatteryIdleTestButtonClick(v)
-                        }
-                        negativeButton(android.R.string.cancel)
-                    }
-                }
-                else
-                {
-                    if (!supported) viewModel.prioritizeBatteryIdleMode = false
-                    content.batteryPrioritizeIdleSwitchEnabled.isEnabled = supported
-
-                    MaterialDialog(this@AccConfigEditorActivity).show {
-                        title(R.string.test_battery_idle)
-
-                        if (!supported)
-                        {
-                            content.batteryPrioritizeIdleSwitchEnabled.isChecked = false
-                            message(R.string.test_battery_idle_unsupported_result)
-                        }
-                        else
-                        {
-                            message(R.string.test_battery_idle_supported_result)
-                        }
-                        positiveButton(android.R.string.ok)
-                    }
-                }
-
-            }
-        }
-    }
-
     override fun onCheckedChanged(p0: CompoundButton?, p1: Boolean)
     {
         when (p0)
@@ -910,7 +833,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             {
                 viewModel.prioritizeBatteryIdleMode = p1
                 viewModel.profile.accConfig.prioritizeBatteryIdleMode = p1
-                content.batteryIdleTestButton.isEnabled = p1
             }
 
             content.tempSwitchEnabled ->
@@ -1040,9 +962,9 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     @SuppressLint("CheckResult")
     fun editChargingSwitchOnClick(v: View)
     {
-        val automaticString = getString(R.string.automatic)
+        val automaticString = getString(R.string.automatic_dialog_label)
         val addNewChargingSwitchString = getString(R.string.add_charging_switch)
-        val initialSwitch = viewModel.chargeSwitch
+        val initialSwitch = viewModel.chargeSwitch?.removeSuffix(" --")?.trim()?.ifBlank { null }
 
         MaterialDialog(this).show {
             title(R.string.edit_charging_switch)
@@ -1061,10 +983,17 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     return@launch
                 }
 
+                // An Apply&Lock (AMPS) pin stores the switch as a full /sys path that `acca -s s:`
+                // may not list, so the dialog used to open with NOTHING selected and the present
+                // switch invisible. If the current switch is not in the list, show it on top.
+                val knownSwitches = existingSwitches.toMutableList()
+                if (initialSwitch != null && knownSwitches.none { it.trim() == initialSwitch })
+                    knownSwitches.add(0, initialSwitch)
+
                 var chargingSwitches = listOf(
                     automaticString,
                     addNewChargingSwitchString,
-                    *existingSwitches
+                    *knownSwitches.toTypedArray()
                 )
 
                 var currentIndex = chargingSwitches.indexOf(initialSwitch ?: automaticString)

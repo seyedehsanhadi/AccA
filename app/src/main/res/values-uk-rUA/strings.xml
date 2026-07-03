@@ -191,9 +191,6 @@
         \nБудь ласка, розгляньте можливість архівування та обміну /data/adb/acc-data/logs/ з розробниками.
     </string>
     <string name="prioritize_battery_idle">Пріоритет режиму очікування батареї</string>
-    <string name="test_battery_idle">Тест режиму очікування батареї</string>
-    <string name="test_battery_idle_supported_result">Ядро підтримує режим очікування батареї.</string>
-    <string name="test_battery_idle_unsupported_result">Ядро не підтримує режим очікування батареї.</string>
     <string name="schedule_profile_edit_current">Редагувати поточну конфігурацію</string>
     <string name="schedule_profile_keep_current">Зберегти поточну конфігурацію</string>
     <string name="schedule_type">Тип розкладу</string>

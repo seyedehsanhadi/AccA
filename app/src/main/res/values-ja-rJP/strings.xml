@@ -185,9 +185,6 @@
         \n開発に /data/adb/acc-data/logs/ をアーカイブし, 共有することを検討してください.
     </string>
     <string name="prioritize_battery_idle">バッテリーアイドルモード優先</string>
-    <string name="test_battery_idle">バッテリーアイドルモードテスト</string>
-    <string name="test_battery_idle_supported_result">カーネルはバッテリーアイドルモードをサポートしています.</string>
-    <string name="test_battery_idle_unsupported_result">カーネルはバッテリーアイドルモードをサポートしていません.</string>
     <string name="schedule_profile_edit_current">現在の設定を編集</string>
     <string name="schedule_profile_keep_current">現在の設定を保持</string>
     <string name="schedule_type">スケジュールタイプ</string>

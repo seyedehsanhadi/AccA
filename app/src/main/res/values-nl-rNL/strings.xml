@@ -204,9 +204,6 @@
         \nOverweeg om /data/adb/acc-data/logs/ te delen met de devs.
     </string>
     <string name="prioritize_battery_idle">Prioriteer batterij inactieve modus</string>
-    <string name="test_battery_idle">Test batterij inactieve modus</string>
-    <string name="test_battery_idle_supported_result">Uw kernel ondersteunt batterij inactieve modus.</string>
-    <string name="test_battery_idle_unsupported_result">Uw kernel ondersteunt geen batterij inactieve modus.</string>
     <string name="schedule_profile_edit_current">Bewerk huidige configuratie</string>
     <string name="schedule_profile_keep_current">Huidige configuratie behouden</string>
     <string name="schedule_type">Schema type</string>

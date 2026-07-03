@@ -189,9 +189,6 @@ Nếu đơn vị được phát hiện không chính xác, bạn có thể đặ
     <string name="installation_failed_non_bundled">Việc cài đặt các biến thể ACC khác nhau không thành công.
         \nVui lòng xem xét và chia sẻ /data/adb/acc-data/logs/ với các nhà phát triển.    </string>
     <string name="prioritize_battery_idle">Ưu tiên chế độ không sử dụng pin</string>
-    <string name="test_battery_idle">Kiểm tra chế độ không sử dụng pin</string>
-    <string name="test_battery_idle_supported_result">Kernel của bạn hỗ trợ chế độ không sử dụng pin.</string>
-    <string name="test_battery_idle_unsupported_result">Kernel của bạn không hỗ trợ chế độ không sử dụng pin.</string>
     <string name="schedule_profile_edit_current">Chỉnh sửa cấu hình hiện tại</string>
     <string name="schedule_profile_keep_current">Giữ cấu hình hiện tại</string>
     <string name="schedule_type">Loại lịch trình</string>

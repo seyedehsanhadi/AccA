@@ -205,9 +205,6 @@
         \nPor favor, considera compartir /data/adb/acc-data/logs/ con los desarrolladores.
     </string>
     <string name="prioritize_battery_idle">Priorizar modo inactivo de batería</string>
-    <string name="test_battery_idle">Probar modo inactivo de batería</string>
-    <string name="test_battery_idle_supported_result">El kernel soporta el modo inactivo de la batería.</string>
-    <string name="test_battery_idle_unsupported_result">El kernel no soporta el modo inactivo de la batería.</string>
     <string name="schedule_profile_edit_current">Editar configuración actual</string>
     <string name="schedule_profile_keep_current">Mantener configuración actual</string>
     <string name="schedule_type">Tipo de programación</string>

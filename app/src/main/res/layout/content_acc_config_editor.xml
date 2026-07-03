@@ -488,18 +488,6 @@
 
                 </LinearLayout>
 
-                <Button
-                    android:id="@+id/battery_idle_test_button"
-                    style="@style/Widget.AppCompat.Button.Colored"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center_horizontal"
-                    android:layout_marginTop="@dimen/card_content_padding"
-                    android:onClick="onBatteryIdleTestButtonClick"
-                    android:text="@string/test_battery_idle"
-                    android:textColor="@color/color_surface"
-                    tools:visibility="gone" />
-
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>

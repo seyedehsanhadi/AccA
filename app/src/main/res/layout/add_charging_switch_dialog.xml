@@ -11,6 +11,14 @@
         android:layout_marginRight="32dp">
 
         <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/add_charging_switch_help"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="13sp" />
+
+        <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/charging_switch_label"
@@ -22,7 +30,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="6dp"
-            android:hint="@string/charging_switch_label"
+            android:hint="@string/charging_switch_node_hint"
             android:inputType="text" />
 
 
@@ -39,7 +47,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="6dp"
-            android:hint="@string/charging_switch_on_value_label"
+            android:hint="@string/charging_switch_on_value_hint"
             android:inputType="number" />
 
 
@@ -55,7 +63,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_margin="6dp"
-            android:hint="@string/charging_switch_off_value_label"
+            android:hint="@string/charging_switch_off_value_hint"
             android:inputType="number" />
 
     </LinearLayout>
