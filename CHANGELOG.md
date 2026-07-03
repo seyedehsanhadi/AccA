@@ -2,6 +2,18 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc6] - 2026-07-03
+
+Whole-app audit pass (the reporter asked for a fine-tooth comb after years of neglect). Six real bugs fixed; the ACC-interface layer round-tripped clean.
+
+### 🛠️ Fixed
+- **Schedules can no longer be wiped by a database rebuild.** The schedule list refresh treated any DJS entry with no matching local database row as garbage and deleted it from DJS. If the local database was ever rebuilt (a downgrade to an older build, or a failed upgrade migration), every schedule survived in DJS but lost its database row, so the very next refresh - which now runs every time you open the tab and every 30s - silently deleted all of them. A DJS entry without a database row is now recovered (shown as "Recovered schedule", still firing) instead of deleted. Verified on device.
+- **Battery-idle test no longer hangs ~60s and falsely reports "unsupported" when unplugged.** The test needs the charger connected; it now checks that first and prompts you to plug in, instead of blocking on the daemon and then disabling the Prioritize-battery-idle switch.
+- **Dashboard STOP** uses ACC's canonical `acca -D stop` (matches every other code path) instead of a fragile alias.
+- **The Miscellaneous card's restore (↺)** now reverts both reset-stats switches (on-pause was left unchanged).
+- **The seeded "CoolDown Temp after 40%" script** used ACC's years-old `max_temp_pause=90` (renamed to `resume_temp`, and it's °C not seconds) on fresh installs; corrected to `resume_temp=40`.
+- **Reopening after installing DJS or reinstalling ACC** no longer stacks a duplicate config/apply observer (double error dialogs) or re-hits the GitHub update API.
+
 ## [2.0.1-rc5] - 2026-07-03
 
 Follow-up to the current-limit fix: the value stuck, but the Charging Power Control switch reverted off (4a 5G field report).

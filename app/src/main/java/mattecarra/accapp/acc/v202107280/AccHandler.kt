@@ -336,7 +336,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     override fun getAccRestartDaemon(): String =  "/dev/.vr25/acc/acca -D restart"
 
     override suspend fun abcStopDaemon(): Boolean = withContext(Dispatchers.IO) {
-        Shell.su("/dev/.vr25/acc/accd.").exec().isSuccess
+        Shell.su("/dev/.vr25/acc/acca -D stop").exec().isSuccess
     }
 
     //Charging switches

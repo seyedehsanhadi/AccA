@@ -82,7 +82,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
             override fun migrate(database: SupportSQLiteDatabase)
             {
                 // Tested!
-                database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"CoolDown Temp after 40%\", \"temperature=(cooldown_temp max_temp max_temp_pause shutdown_temp)\", \"acca -s cooldown_temp=40 max_temp=45 max_temp_pause=90\", \"\", 0);");
+                database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"CoolDown Temp after 40%\", \"temperature=(cooldown_temp max_temp resume_temp shutdown_temp)\", \"acca -s cooldown_temp=40 max_temp=45 resume_temp=40\", \"\", 0);");
                 database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Charge to 90%\", \"capacity=(shutdown_capacity cooldown_capacity resume_capacity pause_capacity capacity_freeze2)\", \"acca -s shutdown_capacity=10 resume_capacity=85 pause_capacity=90\", \"\", 0);");
                 database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Reset current Config\", \"-s|--set r|--reset Restore default config\", \"acca -s r\", \"\", 0);");
                 database.execSQL("INSERT INTO scripts_table (scName, scDescription, scBody, scOutput, scExitCode) VALUES (\"Print current config\", \"-s|--set e.g., acc -s\", \"acca -s\", \"\", 0);");

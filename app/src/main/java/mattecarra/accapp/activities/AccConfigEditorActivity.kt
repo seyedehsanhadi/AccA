@@ -819,6 +819,19 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 progress(R.string.wait)
             }
 
+            val charging = try { Acc.instance.getBatteryInfo().isCharging() } catch (e: Exception) { false }
+            if (!charging)
+            {
+                if (dialog.isShowing) dialog.cancel()
+                if (!isFinishing && !isDestroyed) MaterialDialog(this@AccConfigEditorActivity).show {
+                    title(R.string.test_battery_idle)
+                    message(R.string.plug_battery_to_test)
+                    positiveButton(R.string.retry) { onBatteryIdleTestButtonClick(v) }
+                    negativeButton(android.R.string.cancel)
+                }
+                return@launch
+            }
+
             val exitCode: Int
             val supported: Boolean
             try
@@ -1293,5 +1306,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     fun onMiscRestore(v: View)
     {
         viewModel.resetBSOnUnplug = initConfig.configResetUnplugged
+        viewModel.resetBSOnPause = initConfig.configResetBsOnPause
     }
 }

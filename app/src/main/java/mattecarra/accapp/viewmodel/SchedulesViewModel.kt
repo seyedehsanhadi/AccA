@@ -49,12 +49,9 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
                         withContext(Dispatchers.IO) {
                             async {
                                 val scheduleProfile = getScheduleProfileById(djsSchedule.scheduleProfileId)
-                                if (scheduleProfile != null)
-                                    Schedule(djsSchedule.isEnabled, djsSchedule.time, djsSchedule.executeOnce, djsSchedule.executeOnBoot, scheduleProfile)
-                                else {
-                                    try { Djs.instance.deleteById(djsSchedule.scheduleProfileId) } catch (e: Exception) {}
-                                    null
-                                }
+                                    ?: ScheduleProfile(djsSchedule.scheduleProfileId, "Recovered schedule", AccConfig())
+                                        .also { rec -> try { insertScheduleProfile(rec) } catch (e: Exception) {} }
+                                Schedule(djsSchedule.isEnabled, djsSchedule.time, djsSchedule.executeOnce, djsSchedule.executeOnBoot, scheduleProfile)
                             }
                         }
                     }.mapNotNull { it.await() }

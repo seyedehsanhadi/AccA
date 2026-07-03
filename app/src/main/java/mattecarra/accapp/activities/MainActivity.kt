@@ -80,8 +80,11 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         _sharedViewModel = ViewModelProvider(this).get(SharedViewModel::class.java)
         _profilesViewModel = ViewModelProvider(this).get(ProfilesViewModel::class.java)
         _schedulesViewModel = ViewModelProvider(this).get(SchedulesViewModel::class.java)
+        val firstInit = !isUiInitialized
         isUiInitialized = true   // ViewModels exist -> nav/menu handlers are safe now
 
+        if (firstInit)
+        {
         checkAppUpdate()
         checkAccUpdate()
 
@@ -120,6 +123,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             if (failed == true)
                 Toast.makeText(this, getString(R.string.error_occurred), Toast.LENGTH_LONG).show()
         })
+        }
 
         // Set Bottom Navigation Bar Item Selected Listener
         binding.mainBottomNav.setOnNavigationItemSelectedListener(this)
