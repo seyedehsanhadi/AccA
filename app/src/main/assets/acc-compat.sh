@@ -3,7 +3,7 @@
 # AMPS - Adaptive Multi-device Probe & Selector.
 # Root-only universal charge-control switch finder: probes any device, leak-verifies
 # bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.1.0
+V=7.1.1
 # Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
@@ -164,11 +164,18 @@ _lblof(){ printf '%s' "$1" | cut -d'|' -f1; }
 _clsof(){ printf '%s' "$1" | cut -d'|' -f2; }
 # Finalist stress verdict (pure): from firmware-override count / hammer count / capacity delta while
 # the level pick is engaged, decide LEAK (charged while held) > REARM (firmware kept overriding) > CLEAN.
-fstress_verdict(){ _fov="${1:-0}"; _fn="${2:-0}"; _fcapd="${3:-0}"
+fstress_verdict(){ _fov="${1:-0}"; _fn="${2:-0}"; _fcapd="${3:-0}"; _fcls="${4:-}"
   case "$_fov" in ''|*[!0-9]*) _fov=0;; esac
   case "$_fn" in ''|*[!0-9]*) _fn=0;; esac
   case "$_fcapd" in ''|*[!0-9-]*) _fcapd=0;; esac
   [ "$_fcapd" -gt 0 ] 2>/dev/null && { printf LEAK; return; }
+  # A native %-limit is firmware-managed: the charger driver rewrites the level node's value while
+  # still holding the battery flat (a Pixel churns charge_stop_level 74->100 under its own Adaptive
+  # Charging), so a high node-override count is NOT a re-arm for a level node -- only actually
+  # charging past the limit (LEAK, above) demotes one. LAYER 5 already proved enforcement with a
+  # current anchor. The override -> REARM heuristic is for cut/drain/bypass, where a firmware
+  # rewrite of the OFF value does resume charging.
+  [ "$_fcls" = native-level ] && { printf CLEAN; return; }
   { [ "$_fov" -ge 3 ] 2>/dev/null && [ "$(( _fov * 3 ))" -ge "$_fn" ] 2>/dev/null; } && { printf REARM; return; }
   printf CLEAN; }
 # Thermal-level node check (pure): a node whose _max sibling is a tiny integer (1..10) is the kernel's
@@ -188,7 +195,7 @@ fstress_thermal(){ case "${1:-}" in ''|*[!0-9]*) return 1;; esac
 # is SKIPPED rather than hammered: stressing the wrong node once read ccl's _max against
 # input_suspend and demoted the best switch. Args: $1=winner label, $2="node on off" cfg line.
 finalist_stress(){
-  _fs_lbl="$1"; _fs_cfg="$2"
+  _fs_lbl="$1"; _fs_cfg="$2"; _fs_cls="${3:-}"
   [ -n "$_fs_lbl" ] && [ -n "$_fs_cfg" ] && [ "${STRESS_FINALIST:-1}" = 1 ] \
     && [ "${ACC_DEFER:-0}" = 0 ] && [ "$CAP" -ge 12 ] 2>/dev/null && [ "$CAP" -lt 96 ] 2>/dev/null && ! over || return 0
   case " ${_FS_SEEN:-} " in *" $_fs_lbl "*) return 0;; esac
@@ -212,8 +219,10 @@ finalist_stress(){
   done
   _fs_c1="$(san "$(read1 "$BATT/capacity")")"; _fs_capd=$(( _fs_c1 - _fs_c0 ))
   [ -n "$_fs_orig" ] && wr "$_fs_node" "$_fs_orig"; recover_online 8 >/dev/null 2>&1
-  _fs_v="$(fstress_verdict "$_fs_ov" "$_fs_i" "$_fs_capd")"
-  log "  $_fs_lbl: hammered ${_fs_i}x -> firmware overrode ${_fs_ov}/${_fs_i}, capacity ${_fs_capd}% -> $_fs_v"
+  _fs_v="$(fstress_verdict "$_fs_ov" "$_fs_i" "$_fs_capd" "$_fs_cls")"
+  _fs_note=; [ "$_fs_cls" = native-level ] && [ "$_fs_ov" -ge 3 ] 2>/dev/null \
+    && _fs_note=" (level node -- firmware manages the value; the battery held flat, so this is not a re-arm)"
+  log "  $_fs_lbl: hammered ${_fs_i}x -> firmware overrode ${_fs_ov}/${_fs_i}, capacity ${_fs_capd}% -> $_fs_v$_fs_note"
   if [ "$_fs_v" = CLEAN ] && fstress_thermal "$(read1 "${_fs_node}_max")"; then
     _fs_v="THERMAL-LEVEL (${_fs_node##*/}_max=$(read1 "${_fs_node}_max"): firmware-owned thermal levels, re-arms when the thermal engine is active even though the hammer read clean on this cool run)"
     log "  $_fs_lbl: $_fs_v"
@@ -399,6 +408,10 @@ selftest(){ _sp=0; _sf=0
   _ck fs_rearm_min   "$(fstress_verdict 3 12 0)"    CLEAN
   _ck fs_leak_flat   "$(fstress_verdict 0 12 1)"    LEAK
   _ck fs_leak_over   "$(fstress_verdict 12 12 2)"   LEAK
+  _ck fs_lvl_churn   "$(fstress_verdict 12 12 0 native-level)" CLEAN
+  _ck fs_lvl_leak    "$(fstress_verdict 12 12 1 native-level)" LEAK
+  _ck fs_lvl_qtr     "$(fstress_verdict 4 12 0 native-level)"  CLEAN
+  _ck fs_cut_rearm   "$(fstress_verdict 12 12 0 cut)"          REARM
   _ck fs_leak_neg    "$(fstress_verdict 0 12 -1)"   CLEAN
   _ck fs_bad_input   "$(fstress_verdict x y z)"     CLEAN
   _ck ft_a3_ccl      "$(fstress_thermal 6 && echo T || echo F)"    T
@@ -2411,7 +2424,7 @@ _fsr=0
 while [ "$_fsr" -lt 2 ] && [ -n "$RECO_LBL" ] && [ "$RECO_LATCH" = 0 ]; do
   case "$RECO_CLS" in native-level|cut|bypass|drain) ;; *) break;; esac
   _fs_sug="${SUGGEST%%" ("*}"
-  if finalist_stress "$RECO_LBL" "$_fs_sug"; then break; fi
+  if finalist_stress "$RECO_LBL" "$_fs_sug" "$RECO_CLS"; then break; fi
   _fsr=$(( _fsr + 1 ))
   compute_reco
 done
