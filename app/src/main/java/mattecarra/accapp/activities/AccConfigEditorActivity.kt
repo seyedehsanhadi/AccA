@@ -52,6 +52,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     private lateinit var mUndoMenuItem: MenuItem
     private lateinit var mPreferences: Preferences
     private lateinit var initConfig: AccConfig
+    private var initEnables: mattecarra.accapp.models.ProfileEnables? = null
     private var accConfigOnly: Boolean = false
 
     // Cached verified-switch artifact (read once on screen load). Used to populate the
@@ -224,12 +225,27 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
         initUi()
 
+        // Snapshot the enable states AFTER initUi (which derives them from the loaded config) so
+        // recomputeDirty() can tell a real change from a transient toggle that was reverted.
+        initEnables = viewModel.enables
+
         viewModel.clearHistory()
 
         // On the async (no-extra) path, onCreateOptionsMenu already ran BEFORE viewModel was
         // initialised, so the undo item was disabled and its observer never wired. Rebuild the
         // menu now that viewModel exists so undo works on the edit-current-config path too.
         invalidateOptionsMenu()
+    }
+
+    // unsavedChanges is a one-way latch (any setter flips it true), so a transient toggle that is
+    // reverted - e.g. enabling Apply on Boot then cancelling the command dialog - left a phantom
+    // "unsaved changes?" prompt on exit. After such a revert, recompute the flag against the load
+    // snapshot: dirty only if a config value or an enable state actually differs from load.
+    private fun recomputeDirty()
+    {
+        if (::viewModel.isInitialized && ::initConfig.isInitialized)
+            viewModel.unsavedChanges =
+                viewModel.profile.accConfig != initConfig || viewModel.enables != initEnables
     }
 
     private fun initUi()
@@ -956,7 +972,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             neutralButton(text = "clear", click = { viewModel.onBoot = null }  )
             // Re-sync the switch to the real content on any close (save / cancel / clear) so an
             // empty result flips it off at once instead of appearing to stick until the next open.
-            onDismiss { content.applyOnBootSwitchEnabled.isChecked = !viewModel.onBoot.isNullOrBlank() }
+            onDismiss { content.applyOnBootSwitchEnabled.isChecked = !viewModel.onBoot.isNullOrBlank(); recomputeDirty() }
         }
     }
 
@@ -974,7 +990,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             positiveButton(R.string.save)
             negativeButton(android.R.string.cancel)
             neutralButton(text = "clear", click = { viewModel.onPlug = null }  )
-            onDismiss { content.onPluggedSwitchEnabled.isChecked = !viewModel.onPlug.isNullOrBlank() }
+            onDismiss { content.onPluggedSwitchEnabled.isChecked = !viewModel.onPlug.isNullOrBlank(); recomputeDirty() }
         }
     }
 

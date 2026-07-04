@@ -106,7 +106,7 @@
 
     <!-- Exit On Boot Card Strings -->
     <string name="title_exit_on_boot">Stop daemon after applying settings</string>
-    <string name="description_exit_on_boot">This is used for writing to control files on boot.</string>
+    <string name="description_exit_on_boot">Runs your own shell command(s) once at each boot, e.g. to write a control file. It does NOT re-apply your charge limits, ACC does that automatically. Leave empty unless you need a custom boot command.</string>
     <string name="label_on_boot">apply_on_boot:</string>
 
     <!-- ACC installation -->
@@ -433,7 +433,7 @@
     <string name="cue_AccVoltControl_pref_summary">Enable send \"acca -set —voltage\" command</string>
 
     <string name="allow_custom_scripts_pref_title">Allow custom shell scripts</string>
-    <string name="allow_custom_scripts_pref_summary">When off, only the bundled acca quick-actions can run. Required to add or edit script bodies.</string>
+    <string name="allow_custom_scripts_pref_summary">When off, you can run, copy and rename existing scripts but can\'t add new ones or edit their commands. Turn on to write your own (a script body runs arbitrary root commands).</string>
 
     <string-array name="theme_option_options">
         <item>Light</item>
