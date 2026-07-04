@@ -2,6 +2,11 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc7] - 2026-07-04
+
+### 🛠️ Fixed
+- **The Apply on Boot / Apply on Plug switches no longer silently revert.** Both switches derive their on-state from whether the config field actually holds a command, so turning one on without entering a command wrote an empty value and the switch flipped back off the next time you opened the editor (field report: "Is the Apply on Boot toggle not supposed to stick?"). Enabling the switch now opens the command editor straight away, so "on" always means a command is set; leaving it empty or cancelling flips the switch off immediately instead of on the next open, and turning it off clears the command. Load-time state is unaffected. Same class of fix as the Charging Power Control switch in rc5, applied to the two command-backed toggles.
+
 ## [2.0.1-rc6] - 2026-07-03
 
 Whole-app audit pass (the reporter asked for a fine-tooth comb after years of neglect), plus charging-switch editor and Diagnostics follow-ups. The ACC-interface layer round-tripped clean.
