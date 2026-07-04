@@ -3,7 +3,7 @@
 # AMPS - Adaptive Multi-device Probe & Selector.
 # Root-only universal charge-control switch finder: probes any device, leak-verifies
 # bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.1.1
+V=7.1.2
 # Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
@@ -168,14 +168,17 @@ fstress_verdict(){ _fov="${1:-0}"; _fn="${2:-0}"; _fcapd="${3:-0}"; _fcls="${4:-
   case "$_fov" in ''|*[!0-9]*) _fov=0;; esac
   case "$_fn" in ''|*[!0-9]*) _fn=0;; esac
   case "$_fcapd" in ''|*[!0-9-]*) _fcapd=0;; esac
-  [ "$_fcapd" -gt 0 ] 2>/dev/null && { printf LEAK; return; }
-  # A native %-limit is firmware-managed: the charger driver rewrites the level node's value while
-  # still holding the battery flat (a Pixel churns charge_stop_level 74->100 under its own Adaptive
-  # Charging), so a high node-override count is NOT a re-arm for a level node -- only actually
-  # charging past the limit (LEAK, above) demotes one. LAYER 5 already proved enforcement with a
-  # current anchor. The override -> REARM heuristic is for cut/drain/bypass, where a firmware
-  # rewrite of the OFF value does resume charging.
+  # A native %-limit is exempt from BOTH hammer signals, and the class check must come FIRST:
+  # - node-override count: the charger driver rewrites the level node's value while still holding
+  #   the battery flat (a Pixel churns charge_stop_level 74->100 under its own Adaptive Charging),
+  #   so churn is not a re-arm for a level node.
+  # - capacity delta: over a ~12s hammer even a fully broken switch gains <0.5% real charge, so a
+  #   +1% reading is SOC-display rounding (gdf 59.95 -> 60), not a leak -- v7.1.1 fixed REARM but
+  #   the capd>0 LEAK gate ran first and demoted the same verified Pixel limit on that noise.
+  # LAYER 5 already proved enforcement with a current anchor over a longer hold; nothing the
+  # hammer can measure supersedes that for this class.
   [ "$_fcls" = native-level ] && { printf CLEAN; return; }
+  [ "$_fcapd" -gt 0 ] 2>/dev/null && { printf LEAK; return; }
   { [ "$_fov" -ge 3 ] 2>/dev/null && [ "$(( _fov * 3 ))" -ge "$_fn" ] 2>/dev/null; } && { printf REARM; return; }
   printf CLEAN; }
 # Thermal-level node check (pure): a node whose _max sibling is a tiny integer (1..10) is the kernel's
@@ -198,6 +201,17 @@ finalist_stress(){
   _fs_lbl="$1"; _fs_cfg="$2"; _fs_cls="${3:-}"
   [ -n "$_fs_lbl" ] && [ -n "$_fs_cfg" ] && [ "${STRESS_FINALIST:-1}" = 1 ] \
     && [ "${ACC_DEFER:-0}" = 0 ] && [ "$CAP" -ge 12 ] 2>/dev/null && [ "$CAP" -lt 96 ] 2>/dev/null && ! over || return 0
+  # A native %-limit is never hammered: LAYER 5's engage test already proved enforcement with a
+  # current anchor over a 24s hold, and neither hammer signal is valid for this class (the firmware
+  # manages the node's value, and %-rounding fakes a leak inside a 12s window). Hammering it only
+  # produced noise verdicts (v7.1.0 REARM, v7.1.1 LEAK) that demoted a verified Pixel limit to a
+  # battery-draining cut. Confirm it outright.
+  if [ "$_fs_cls" = native-level ]; then
+    log ""
+    log "==== FINALIST STRESS-TEST (re-hammer the winning pick to catch an intermittent re-arm) ===="
+    log "  $_fs_lbl: native %-limit -- enforcement already proven by the engage test (current anchor, 24s hold); the hammer's signals do not apply to a firmware-managed level node. CONFIRMED."
+    return 0
+  fi
   case " ${_FS_SEEN:-} " in *" $_fs_lbl "*) return 0;; esac
   _FS_SEEN="${_FS_SEEN:-} $_fs_lbl"
   set -- $_fs_cfg
@@ -220,9 +234,7 @@ finalist_stress(){
   _fs_c1="$(san "$(read1 "$BATT/capacity")")"; _fs_capd=$(( _fs_c1 - _fs_c0 ))
   [ -n "$_fs_orig" ] && wr "$_fs_node" "$_fs_orig"; recover_online 8 >/dev/null 2>&1
   _fs_v="$(fstress_verdict "$_fs_ov" "$_fs_i" "$_fs_capd" "$_fs_cls")"
-  _fs_note=; [ "$_fs_cls" = native-level ] && [ "$_fs_ov" -ge 3 ] 2>/dev/null \
-    && _fs_note=" (level node -- firmware manages the value; the battery held flat, so this is not a re-arm)"
-  log "  $_fs_lbl: hammered ${_fs_i}x -> firmware overrode ${_fs_ov}/${_fs_i}, capacity ${_fs_capd}% -> $_fs_v$_fs_note"
+  log "  $_fs_lbl: hammered ${_fs_i}x -> firmware overrode ${_fs_ov}/${_fs_i}, capacity ${_fs_capd}% -> $_fs_v"
   if [ "$_fs_v" = CLEAN ] && fstress_thermal "$(read1 "${_fs_node}_max")"; then
     _fs_v="THERMAL-LEVEL (${_fs_node##*/}_max=$(read1 "${_fs_node}_max"): firmware-owned thermal levels, re-arms when the thermal engine is active even though the hammer read clean on this cool run)"
     log "  $_fs_lbl: $_fs_v"
@@ -409,9 +421,11 @@ selftest(){ _sp=0; _sf=0
   _ck fs_leak_flat   "$(fstress_verdict 0 12 1)"    LEAK
   _ck fs_leak_over   "$(fstress_verdict 12 12 2)"   LEAK
   _ck fs_lvl_churn   "$(fstress_verdict 12 12 0 native-level)" CLEAN
-  _ck fs_lvl_leak    "$(fstress_verdict 12 12 1 native-level)" LEAK
+  _ck fs_lvl_capd1   "$(fstress_verdict 12 12 1 native-level)" CLEAN
+  _ck fs_lvl_capd5   "$(fstress_verdict 12 12 5 native-level)" CLEAN
   _ck fs_lvl_qtr     "$(fstress_verdict 4 12 0 native-level)"  CLEAN
   _ck fs_cut_rearm   "$(fstress_verdict 12 12 0 cut)"          REARM
+  _ck fs_cut_leak    "$(fstress_verdict 0 12 1 cut)"           LEAK
   _ck fs_leak_neg    "$(fstress_verdict 0 12 -1)"   CLEAN
   _ck fs_bad_input   "$(fstress_verdict x y z)"     CLEAN
   _ck ft_a3_ccl      "$(fstress_thermal 6 && echo T || echo F)"    T
