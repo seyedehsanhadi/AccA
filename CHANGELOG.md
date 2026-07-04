@@ -2,6 +2,11 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc9] - 2026-07-04
+
+### 🛠️ Fixed
+- **Find my switch (AMPS 7.1.2): the native firmware charge limit really does stay recommended now.** rc8 stopped it being demoted as "re-arming", but the leak check then demoted it on a +1% battery reading - which over the ~12-second stress window is percentage rounding, not real charging (even a fully broken switch gains under 0.5% in that time). A verified native %-limit is no longer stress-hammered at all; its enforcement was already proven by the longer engage test with a live current reading. Pixel field report, third round - this closes it.
+
 ## [2.0.1-rc8] - 2026-07-04
 
 ### 🛠️ Fixed
