@@ -3,7 +3,7 @@
 # AMPS - Adaptive Multi-device Probe & Selector.
 # Root-only universal charge-control switch finder: probes any device, leak-verifies
 # bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.0.0
+V=7.1.0
 # Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
@@ -162,6 +162,73 @@ reco_pick(){
 
 _lblof(){ printf '%s' "$1" | cut -d'|' -f1; }
 _clsof(){ printf '%s' "$1" | cut -d'|' -f2; }
+# Finalist stress verdict (pure): from firmware-override count / hammer count / capacity delta while
+# the level pick is engaged, decide LEAK (charged while held) > REARM (firmware kept overriding) > CLEAN.
+fstress_verdict(){ _fov="${1:-0}"; _fn="${2:-0}"; _fcapd="${3:-0}"
+  case "$_fov" in ''|*[!0-9]*) _fov=0;; esac
+  case "$_fn" in ''|*[!0-9]*) _fn=0;; esac
+  case "$_fcapd" in ''|*[!0-9-]*) _fcapd=0;; esac
+  [ "$_fcapd" -gt 0 ] 2>/dev/null && { printf LEAK; return; }
+  { [ "$_fov" -ge 3 ] 2>/dev/null && [ "$(( _fov * 3 ))" -ge "$_fn" ] 2>/dev/null; } && { printf REARM; return; }
+  printf CLEAN; }
+# Thermal-level node check (pure): a node whose _max sibling is a tiny integer (1..10) is the kernel's
+# thermal charge-control interface (levels, not a switch) -- firmware owns it and re-arms it whenever
+# the thermal engine is active, even if a short hammer on a cool phone reads clean.
+fstress_thermal(){ case "${1:-}" in ''|*[!0-9]*) return 1;; esac
+  [ "$1" -ge 1 ] 2>/dev/null && [ "$1" -le 10 ] 2>/dev/null; }
+# Finalist stress-test: the switch that WINS the recommendation can still be an intermittently
+# re-arming firmware node that happened to hold through its short passive window (the Mi A3's
+# charge_control_limit passes as BYPASS one run and re-arms minutes later). Whatever class won
+# (native-level, bypass, cut, drain), re-hammer its OFF value to provoke that re-arm; demote it
+# (STUCKS, so pick_usable skips it on the re-pick) if the firmware overrides the writes or the
+# pack keeps charging while engaged. Demote-only + snapshot-restored, so the worst case is the
+# 2nd-best pick. Every signal here is sensor-independent (node readback, coulomb capacity, _max
+# sibling), so this runs in BLIND sessions too - lying-sensor phones need it most. A cfg whose
+# node does not appear in the label (a class-default fallback from cfg_lookup missing the entry)
+# is SKIPPED rather than hammered: stressing the wrong node once read ccl's _max against
+# input_suspend and demoted the best switch. Args: $1=winner label, $2="node on off" cfg line.
+finalist_stress(){
+  _fs_lbl="$1"; _fs_cfg="$2"
+  [ -n "$_fs_lbl" ] && [ -n "$_fs_cfg" ] && [ "${STRESS_FINALIST:-1}" = 1 ] \
+    && [ "${ACC_DEFER:-0}" = 0 ] && [ "$CAP" -ge 12 ] 2>/dev/null && [ "$CAP" -lt 96 ] 2>/dev/null && ! over || return 0
+  case " ${_FS_SEEN:-} " in *" $_fs_lbl "*) return 0;; esac
+  _FS_SEEN="${_FS_SEEN:-} $_fs_lbl"
+  set -- $_fs_cfg
+  _fs_node="$1"; _fs_ev="${3:-}"
+  [ "$_fs_ev" = pcap ] && { _fs_ev=$(( CAP - 5 )); [ "$_fs_ev" -ge 96 ] 2>/dev/null && _fs_ev=95; }
+  case "$_fs_ev" in ''|*[!0-9-]*) return 0;; esac
+  [ -n "$_fs_node" ] && [ -w "$_fs_node" ] || return 0
+  case "$_fs_lbl" in *"${_fs_node##*/}"*) ;; *) return 0;; esac
+  _fs_orig="$(read1 "$_fs_node")"
+  log ""
+  log "==== FINALIST STRESS-TEST (re-hammer the winning pick to catch an intermittent re-arm) ===="
+  snap_add "$_fs_node"
+  recover_online 8 >/dev/null 2>&1; sleep 2
+  _fs_c0="$(san "$(read1 "$BATT/capacity")")"; _fs_ov=0; _fs_i=0
+  while [ "$_fs_i" -lt "${STRESS_HITS:-12}" ]; do
+    stop_check; wr "$_fs_node" "$_fs_ev"; sleep 1
+    [ "$(read1 "$_fs_node")" != "$_fs_ev" ] && _fs_ov=$(( _fs_ov + 1 ))
+    _fs_i=$(( _fs_i + 1 )); over && break
+  done
+  _fs_c1="$(san "$(read1 "$BATT/capacity")")"; _fs_capd=$(( _fs_c1 - _fs_c0 ))
+  [ -n "$_fs_orig" ] && wr "$_fs_node" "$_fs_orig"; recover_online 8 >/dev/null 2>&1
+  _fs_v="$(fstress_verdict "$_fs_ov" "$_fs_i" "$_fs_capd")"
+  log "  $_fs_lbl: hammered ${_fs_i}x -> firmware overrode ${_fs_ov}/${_fs_i}, capacity ${_fs_capd}% -> $_fs_v"
+  if [ "$_fs_v" = CLEAN ] && fstress_thermal "$(read1 "${_fs_node}_max")"; then
+    _fs_v="THERMAL-LEVEL (${_fs_node##*/}_max=$(read1 "${_fs_node}_max"): firmware-owned thermal levels, re-arms when the thermal engine is active even though the hammer read clean on this cool run)"
+    log "  $_fs_lbl: $_fs_v"
+  fi
+  if [ "$_fs_v" != CLEAN ]; then
+    log "    -> DEMOTED: does not hold under load ($_fs_v). Re-picking from the remaining finalists."
+    REASSERT="$REASSERT|$_fs_lbl"; STUCKS="$STUCKS|$_fs_lbl"; RESUMES="$RESUMES|$_fs_lbl=STUCK"
+    if [ "$_fs_lbl" = "$le_enf" ]; then
+      LEVELOK="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | grep -vxF "$le_enf" 2>/dev/null | sed '/^$/d' | tr '\n' '|')"
+      le_enf=; LVL_BY_ACC=0
+    fi
+    return 1
+  fi
+  log "    -> CONFIRMED: held under load; keeping it as the top pick."
+  return 0; }
 
 note_for(){ case "$1" in
   native-level)   echo "firmware limit -- reliable and no battery cycling when it truly enforces";;
@@ -324,6 +391,24 @@ selftest(){ _sp=0; _sf=0
   _ck lcd_full_p     "$(learn_chgdir Full p 1)"          "p med"
   _ck lcd_disch_p    "$(learn_chgdir Discharging p 1)"   "n high"
   _ck lcd_charging   "$(learn_chgdir Charging p 1)"      "p high"
+  _ck fs_clean       "$(fstress_verdict 0 12 0)"    CLEAN
+  _ck fs_clean_stray "$(fstress_verdict 1 12 0)"    CLEAN
+  _ck fs_clean_short "$(fstress_verdict 2 12 0)"    CLEAN
+  _ck fs_rearm_all   "$(fstress_verdict 12 12 0)"   REARM
+  _ck fs_rearm_qtr   "$(fstress_verdict 4 12 0)"    REARM
+  _ck fs_rearm_min   "$(fstress_verdict 3 12 0)"    CLEAN
+  _ck fs_leak_flat   "$(fstress_verdict 0 12 1)"    LEAK
+  _ck fs_leak_over   "$(fstress_verdict 12 12 2)"   LEAK
+  _ck fs_leak_neg    "$(fstress_verdict 0 12 -1)"   CLEAN
+  _ck fs_bad_input   "$(fstress_verdict x y z)"     CLEAN
+  _ck ft_a3_ccl      "$(fstress_thermal 6 && echo T || echo F)"    T
+  _ck ft_edge_lo     "$(fstress_thermal 1 && echo T || echo F)"    T
+  _ck ft_edge_hi     "$(fstress_thermal 10 && echo T || echo F)"   T
+  _ck ft_pctcap      "$(fstress_thermal 100 && echo T || echo F)"  F
+  _ck ft_above       "$(fstress_thermal 11 && echo T || echo F)"   F
+  _ck ft_zero        "$(fstress_thermal 0 && echo T || echo F)"    F
+  _ck ft_empty       "$(fstress_thermal '' && echo T || echo F)"   F
+  _ck ft_garbage     "$(fstress_thermal x9 && echo T || echo F)"   F
   echo "== self-test: $_sp passed, $_sf failed =="
   [ "$_sf" = 0 ]; }
 
@@ -495,7 +580,7 @@ recover_online(){
 restore(){
   [ "$RESTORED" = 1 ] && return; RESTORED=1
   trap '' INT TERM HUP
-  ( sleep 130; defaults_native 2>/dev/null; sleep 5; kill -9 $$ 2>/dev/null ) & RWDOG=$!
+  ( sleep 130; defaults_native 2>/dev/null; sleep 5; kill -9 $$ 2>/dev/null ) >/dev/null 2>&1 & RWDOG=$!
   if [ "$DID" = 1 ]; then
     log ""; log "===== RESTORING (replaying snapshot to original values) ====="
     defaults_native
@@ -561,13 +646,19 @@ restore(){
     am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$OUT" >/dev/null 2>&1
     am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$OUTDIR" >/dev/null 2>&1
   fi
-  [ -n "${WATCHDOG-}" ] && kill "$WATCHDOG" 2>/dev/null
-  [ -n "${RWDOG-}" ] && kill "$RWDOG" 2>/dev/null
+  # Disarm both watchdogs INCLUDING their forked sleep children: killing only the subshell
+  # leaves its running sleep orphaned with an inherited copy of our stdout, and a pipe reader
+  # (AccA's live log stream) then waits the full sleep (~2 min of frozen UI) before seeing EOF.
+  for _wd in "${WATCHDOG-}" "${RWDOG-}"; do
+    [ -n "$_wd" ] || continue
+    for _wc in $(pgrep -P "$_wd" 2>/dev/null); do kill -9 "$_wc" 2>/dev/null; done
+    kill -9 "$_wd" 2>/dev/null
+  done
 }
 trap restore EXIT
 trap 'restore; trap - EXIT; exit 130' INT TERM HUP
 MYPID=$$
-( i=0; lim=$(( (MAXSEC + 120) / 5 )); while [ $i -lt $lim ]; do sleep 5; kill -0 "$MYPID" 2>/dev/null || exit 0; i=$((i+1)); done; kill -TERM "$MYPID" 2>/dev/null ) &
+( i=0; lim=$(( (MAXSEC + 120) / 5 )); while [ $i -lt $lim ]; do sleep 5; kill -0 "$MYPID" 2>/dev/null || exit 0; i=$((i+1)); done; kill -TERM "$MYPID" 2>/dev/null ) >/dev/null 2>&1 &
 WATCHDOG=$!
 rm -f "$STOPF" 2>/dev/null
 # Runtime guards: cooperative cancel (AccA writes the stop-flag), ACC hold-off, thermal/precondition
@@ -2207,6 +2298,8 @@ pick_usable(){ puf="$BK/pickusable"; printf '%s\n' "$1" | tr '|' '\n' | sed '/^$
 label_path(){ lpp="$1"
   case "$lpp" in
     "fcc-zero "*) lpp="${lpp#fcc-zero }";;
+    "voltage-cap "*) lpp="${lpp#voltage-cap }";;
+    "[ACC] "*) lpp="${lpp#\[ACC\] }";;
     "[NEW] "*) lpp="${lpp#\[NEW\] }";;
     "[NEW:safe] "*) lpp="${lpp#\[NEW:safe\] }";;
     "[GEN:"*|"[LEARN"*) lpp="${lpp#*] }";;
@@ -2262,13 +2355,15 @@ if [ -z "$le_enf" ]; then
     esac
   fi
 fi
-RECO=none; RECO_LATCH=0; RECO_LBL=
+compute_reco(){
+RECO=none; RECO_LATCH=0; RECO_LBL=; RECO_CLS=
 rb="$(pick_usable "$BYPASS")"; rc="$(pick_usable "$CUT")"; rdr="$(pick_usable "$DRAIN")"; rt="$(pick_usable "$THROTTLE")"
 rbh="$(pick_usable "${BYPASS_HELD:-}")"
 _reco="$(reco_pick "$le_enf" "$rbh" "$rc" "$rb" "$rdr" "" "$rt")"
 if [ -n "$_reco" ]; then
   RECO_LBL="$(_lblof "$_reco")"
-  case "$(_clsof "$_reco")" in
+  RECO_CLS="$(_clsof "$_reco")"
+  case "$RECO_CLS" in
     native-level) [ "${LVL_BY_ACC:-0}" = 1 ] && RECO="$RECO_LBL (native level limit, confirmed in use by ACC)" || RECO="$RECO_LBL (native level limit, verified)";;
     cut)          RECO="$RECO_LBL (CUT)";;
     bypass)       RECO="$RECO_LBL (BYPASS)";;
@@ -2310,6 +2405,16 @@ if [ -z "$SUGGEST" ]; then
   elif [ -n "$ACC_FALLBACK" ]; then SUGGEST="$ACC_FALLBACK"
   fi
 fi
+}
+compute_reco
+_fsr=0
+while [ "$_fsr" -lt 2 ] && [ -n "$RECO_LBL" ] && [ "$RECO_LATCH" = 0 ]; do
+  case "$RECO_CLS" in native-level|cut|bypass|drain) ;; *) break;; esac
+  _fs_sug="${SUGGEST%%" ("*}"
+  if finalist_stress "$RECO_LBL" "$_fs_sug"; then break; fi
+  _fsr=$(( _fsr + 1 ))
+  compute_reco
+done
 
 log ""
 log "############ DECODED: WHAT IS GOING ON IN THIS PHONE ############"
