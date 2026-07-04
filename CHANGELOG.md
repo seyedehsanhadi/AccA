@@ -2,6 +2,15 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc8] - 2026-07-04
+
+### 🛠️ Fixed
+- **Find my switch (AMPS 7.1.1) no longer recommends a battery-draining cut on phones with a real firmware charge limit.** On a Pixel it was demoting `charge_stop_level` - the native %-limit it had just *verified* - because the phone's own Adaptive Charging rewrites that node's value, which the stress-test miscounted as the switch "re-arming" even though the battery held flat. A native %-limit is now judged only by whether the battery actually charges past the limit, never by the firmware churning the node. It stays the recommendation, as it should. (Cut/drain switches keep the re-arm check.)
+- **Cancelling the Apply on Boot / Apply on Plug dialog is now a clean no-op.** Enabling the switch and then cancelling the command dialog left a phantom "unsaved changes?" prompt on exit. The editor now re-checks against what you loaded, so a reverted toggle no longer counts as a change.
+
+### 📝 Changed
+- **Clearer descriptions.** "Apply on Boot" now says it runs your own commands at boot and does *not* re-apply your charge config (ACC does that automatically). "Allow custom shell scripts" now describes what it actually gates - adding or editing script bodies - instead of implying only bundled actions can run.
+
 ## [2.0.1-rc7] - 2026-07-04
 
 ### 🛠️ Fixed
