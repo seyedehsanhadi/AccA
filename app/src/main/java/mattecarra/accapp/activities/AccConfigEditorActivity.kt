@@ -717,7 +717,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 "reassert"    -> " · ⚠ unstable (daemon must re-apply)"
                 else          -> ""
             }
-            "$badge — $node\n$cf$latch$stab$star"
+            "$badge - $node\n$cf$latch$stab$star"
         }
         // v6.0: material-dialogs renders message + listItems as EITHER/OR -- a set accLine used to suppress the
         // whole list (empty picker = the user's "AccA couldn't show/drag them in"). Move ACC's current switch into
@@ -856,12 +856,28 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             {
                 viewModel.enables = viewModel.enables.copy(eRunOnBoot = p1)
                 content.tvConfigOnBoot.isEnabled = p1
+                // eRunOnBoot is derived from the apply_on_boot content at load, so turning the
+                // switch on with no command was a silent no-op that reverted on the next open.
+                // On a real user tap, ON opens the editor (so ON always means "has a command")
+                // and OFF clears it; the editor's onDismiss re-syncs the switch to the real
+                // content. Programmatic sets (load / re-sync) have isPressed == false and are
+                // skipped, so they never reopen the dialog or recurse.
+                if (p0?.isPressed == true)
+                {
+                    if (p1) editOnBootOnClick(content.tvConfigOnBoot) else viewModel.onBoot = null
+                }
             }
 
             content.onPluggedSwitchEnabled ->
             {
                 viewModel.enables = viewModel.enables.copy(eRunOnPlug = p1)
                 content.tvConfigOnPlugged.isEnabled = p1
+                // Same content-backed toggle as apply_on_boot: on a user tap, ON opens the editor
+                // and OFF clears; programmatic sets are skipped via isPressed.
+                if (p0?.isPressed == true)
+                {
+                    if (p1) editOnPluggedOnClick(content.tvConfigOnPlugged) else viewModel.onPlug = null
+                }
             }
 
             content.resetStatusUnplugSwitch ->
@@ -938,6 +954,9 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             positiveButton(R.string.save)
             negativeButton(android.R.string.cancel)
             neutralButton(text = "clear", click = { viewModel.onBoot = null }  )
+            // Re-sync the switch to the real content on any close (save / cancel / clear) so an
+            // empty result flips it off at once instead of appearing to stick until the next open.
+            onDismiss { content.applyOnBootSwitchEnabled.isChecked = !viewModel.onBoot.isNullOrBlank() }
         }
     }
 
@@ -955,7 +974,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             positiveButton(R.string.save)
             negativeButton(android.R.string.cancel)
             neutralButton(text = "clear", click = { viewModel.onPlug = null }  )
-
+            onDismiss { content.onPluggedSwitchEnabled.isChecked = !viewModel.onPlug.isNullOrBlank() }
         }
     }
 
