@@ -11,6 +11,8 @@ import com.afollestad.materialdialogs.actions.setActionButtonEnabled
 import com.afollestad.materialdialogs.customview.customView
 import com.afollestad.materialdialogs.customview.getCustomView
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -20,6 +22,22 @@ import mattecarra.accapp.models.AccConfig
 typealias PowerLimitSelectionListener = ((voltageControlFile: String?, voltageLimitEnabled: Boolean,
                                           voltageMax: Int?, currentLimitEnabled: Boolean,
                                           currentMax: Int?) -> Unit)
+
+/**
+ * Names the charger tier from the live input voltage (mV). USB-PD standard PDOs are 5/9/12/15/20 V;
+ * PPS delivers off-nominal values (4.9, 8.9, ...), so classify by band, not exact match. The band
+ * edges sit at the midpoints between tiers. Device-measured on a Pixel 9a: 8975 mV -> "9V fast"
+ * (ratio x1.8), 4650 mV -> "5V standard" (ratio x1.0).
+ */
+fun chargerTierLabel(context: android.content.Context, mv: Int): String = context.getString(
+    when {
+        mv < 7000  -> R.string.charger_tier_5v
+        mv < 10500 -> R.string.charger_tier_9v
+        mv < 13500 -> R.string.charger_tier_12v
+        mv < 17500 -> R.string.charger_tier_15v
+        else       -> R.string.charger_tier_20v
+    }
+)
 
 fun MaterialDialog.powerLimitDialog(
     configVoltage: AccConfig.ConfigVoltage,
@@ -117,6 +135,40 @@ fun MaterialDialog.powerLimitDialog(
     if(Acc.instance.version >= 202002170)
     {
         voltageControlFileLayout.visibility = View.GONE
+
+        // Current-limit explainer. Static text always shows the input-vs-battery relationship
+        // (measured: the limit caps CHARGER-INPUT current, and a 9V charger delivers ~1.8x that
+        // into the battery, a 5V charger ~1x). When ACC reports live input telemetry AND the phone
+        // is charging, replace it with the phone's OWN measured numbers -- naming the detected
+        // charger tier (5V/9V/12V/15V/20V from the live input voltage) so the 5V-vs-9V difference
+        // is explicit. Refreshed every few seconds while the dialog is open, so swapping the charger
+        // updates it live (dynamic). Best-effort; any failure keeps the static note. Loop ends when
+        // the dialog is dismissed (the coroutineScope is the editor activity's, cancelled on finish).
+        val currentMaxHint = binding.currentMaxHintTv
+        val refreshJob = coroutineScope.launch {
+            while (isActive) {
+                val st = try { Acc.instance.getState() } catch (e: Exception) { null }
+                val vin = st?.inputVoltageMv; val iin = st?.inputCurrentMa
+                val vbat = st?.voltageRaw?.let { if (it >= 100000L) (it / 1000L).toInt() else it.toInt() } ?: 0
+                if (st != null && st.plugged && vin != null && vin > 0 && iin != null && iin > 50 && vbat in 3000..4600) {
+                    // battery mA this input delivers now, and the setpoint for a 1000 mA battery target
+                    val ratioX100 = (vin * 84) / vbat            // Vin/Vbat * 0.84 efficiency, x100
+                    val battNow = iin * ratioX100 / 100
+                    val setForTarget = if (ratioX100 > 0) 1000 * 100 / ratioX100 else 550
+                    val ratioStr = String.format("%.1f", ratioX100 / 100.0)
+                    val vinStr = String.format("%.1f", vin / 1000.0)
+                    currentMaxHint.text = context.getString(
+                        R.string.current_max_input_measured,
+                        chargerTierLabel(context, vin), vinStr, ratioStr, iin, battNow, setForTarget
+                    )
+                } else {
+                    // not charging / no telemetry -> keep the static rule visible
+                    currentMaxHint.text = context.getString(R.string.current_max_input_note)
+                }
+                delay(3000)
+            }
+        }
+        setOnDismissListener { refreshJob.cancel() }
 
         //CURRENT MAX SELECTION
         currentMaxEditText.setText(configCurrentMax?.toString() ?: "", TextView.BufferType.EDITABLE)

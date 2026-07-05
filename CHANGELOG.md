@@ -2,6 +2,11 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc11] - 2026-07-05
+
+### ✨ Added
+- **Max current now tells you what your battery actually gets.** On most phones the current limit caps the CHARGER INPUT, not the battery: a 9V fast charger delivers about 1.8x your setting into the battery (it steps 9V down to ~4V), a 5V charger about 1x. The edit-limit dialog now detects your charger (5V / 9V / 12V / 15V / 20V) from the live input voltage and, while charging, shows the measured line: e.g. *"9V fast charger detected (9.0 V in). Your battery gets about x1.8 your setting: 976 mA in now means ~1795 mA into the battery. Set about 543 to put 1000 mA into the battery."* It refreshes every few seconds, so swapping chargers updates it live. Not charging, or on a phone without input sensors, it shows the general rule instead. (Reads ACC's new `--state` input telemetry; device-measured on a Pixel 9a at both 5V and 9V.)
+
 ## [2.0.1-rc10] - 2026-07-05
 
 ### 🔥 Removed

@@ -41,6 +41,37 @@ class AccStateTest {
     }
 
     @Test
+    fun parseState_inputTelemetry_presentAndNormalized() {
+        // rc11 adds "input" (charger-side volts/amps, already mV/mA from the daemon). Real Pixel 9a
+        // numbers from a 9V fast charge with a 1000 mA input limit applied.
+        val json = """
+            {"schemaVersion":1,"battery":{"capacityPct":56,"current_raw":1807000,"voltage_raw":4104000,"temp_deci_c":289,"status":"Charging"},
+             "plugged":true,"input":{"voltageMv":9000,"currentMa":976},"native":{"enabled":true,"stopLevel":80},
+             "sensing":{"currentUnits":"uA","polarity":"normal"},"switch":{"userLocked":false,"measuredClass":"charging"}}
+        """.trimIndent()
+        val s = AccState.parseState(json)!!
+        assertEquals(9000, s.inputVoltageMv)
+        assertEquals(976, s.inputCurrentMa)
+    }
+
+    @Test
+    fun parseState_inputAbsentOrNull_yieldsNull() {
+        // No "input" object at all (old daemon).
+        val noBlock = AccState.parseState(rc12Fixture)!!
+        assertNull("absent input block -> null volts", noBlock.inputVoltageMv)
+        assertNull("absent input block -> null amps", noBlock.inputCurrentMa)
+        // "input" present but JSON null (device with no readable input node) -> null, not 0.
+        val jsonNull = """
+            {"schemaVersion":1,"battery":{"capacityPct":50,"current_raw":0,"voltage_raw":4000000,"temp_deci_c":250,"status":"Charging"},
+             "plugged":true,"input":{"voltageMv":null,"currentMa":null},
+             "sensing":{"currentUnits":"uA","polarity":"normal"},"switch":{"userLocked":false,"measuredClass":"bypass"}}
+        """.trimIndent()
+        val s = AccState.parseState(jsonNull)!!
+        assertNull(s.inputVoltageMv)
+        assertNull(s.inputCurrentMa)
+    }
+
+    @Test
     fun parseState_invertedPolarity_signedCurrentIsNegative() {
         val s = AccState.parseState(rc12Fixture)!!
         // current_raw 300140 uA = 300.14 mA; polarity inverted -> negative (discharging).

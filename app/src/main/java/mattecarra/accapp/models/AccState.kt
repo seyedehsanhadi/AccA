@@ -39,7 +39,9 @@ data class AccState(
     val measuredClass: String,
     val accVersionCode: Int?,
     val nativeEnabled: Boolean,
-    val nativeStopLevel: Int
+    val nativeStopLevel: Int,
+    val inputVoltageMv: Int? = null,
+    val inputCurrentMa: Int? = null
 ) {
 
     /**
@@ -88,7 +90,15 @@ data class AccState(
                     accVersionCode = acc.optString("versionCode", "").toIntOrNull(),
                     // native firmware %-limit block (Pixel-class); absent on other devices.
                     nativeEnabled = native.optBoolean("enabled", false),
-                    nativeStopLevel = native.optInt("stopLevel", -1)
+                    nativeStopLevel = native.optInt("stopLevel", -1),
+                    // charger-INPUT telemetry (rc11+): live input volts/amps, null when the
+                    // device has no readable input nodes or the daemon predates the field.
+                    inputVoltageMv = root.optJSONObject("input")?.let { inp ->
+                        if (inp.isNull("voltageMv")) null else inp.optInt("voltageMv").takeIf { it > 0 }
+                    },
+                    inputCurrentMa = root.optJSONObject("input")?.let { inp ->
+                        if (inp.isNull("currentMa")) null else inp.optInt("currentMa")
+                    }
                 )
             } catch (e: Exception) {
                 null

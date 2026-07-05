@@ -101,6 +101,17 @@
                 android:maxLength="4"
                 android:hint="@string/current_max"
                 android:inputType="number" />
+
+            <TextView
+                android:id="@+id/current_max_hint_tv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:layout_marginLeft="16dp"
+                android:layout_marginTop="6dp"
+                android:textAppearance="?android:textAppearanceSmall"
+                android:textColor="?android:attr/textColorSecondary"
+                android:text="@string/current_max_input_note" />
         </LinearLayout>
 
     </LinearLayout>
