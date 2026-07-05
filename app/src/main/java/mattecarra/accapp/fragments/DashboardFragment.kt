@@ -134,6 +134,8 @@ class DashboardFragment : ScopedFragment()
                 binding.dashChargingSpeedTextView.text = dash.batteryInfo.getCurrentNow(preferences.currentInputUnitOfMeasure, preferences.currentOutputUnitOfMeasure, plus, true)
 
                 binding.dashManualLockTextView.visibility = View.GONE
+                // No --state snapshot -> no input telemetry to show.
+                binding.dashChargerLine.visibility = View.GONE
             }
 
             binding.dashBatteryTemperatureTextView.text = dash.batteryInfo.getTemperature(preferences.temperatureOutputUnitOfMeasure, true)
@@ -404,6 +406,26 @@ class DashboardFragment : ScopedFragment()
 
         // Manual-lock badge (rc8 userLocked): ACC will not auto-replace a user-pinned switch.
         binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
+
+        // Charger line (rc11): while charging with input telemetry, name the detected charger tier
+        // and show the input current + the input->battery ratio, so the 5V-vs-9V difference (why a
+        // 1000 mA current limit delivers ~1800 mA into the battery on a 9V charger) is visible right
+        // here instead of buried in the edit dialog. Hidden when not charging or no telemetry.
+        val vin = state.inputVoltageMv
+        val iin = state.inputCurrentMa
+        val vbat = if (state.voltageRaw >= 100000L) (state.voltageRaw / 1000L).toInt() else state.voltageRaw.toInt()
+        if (charging && vin != null && vin > 0 && iin != null && iin > 50 && vbat in 3000..4600) {
+            val ratioX100 = (vin * 84) / vbat
+            binding.dashChargerTextView.text = getString(
+                R.string.dash_charger_fmt,
+                mattecarra.accapp.dialogs.chargerTierLabel(requireContext(), vin),
+                String.format("%.2f", iin / 1000f),
+                String.format("%.1f", ratioX100 / 100.0)
+            )
+            binding.dashChargerLine.visibility = View.VISIBLE
+        } else {
+            binding.dashChargerLine.visibility = View.GONE
+        }
     }
 
     private fun evaluateHealthWarning(dash: DashboardValues)

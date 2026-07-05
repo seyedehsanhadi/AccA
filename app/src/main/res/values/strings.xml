@@ -500,6 +500,9 @@
     <string name="invalid_current_max">Invalid Max Current Value</string>
     <string name="current_max_input_note">This caps the charger INPUT current. On a fast (9V) charger the battery receives more than this value (about 1.8x, because the charger steps 9V down to ~4V); on a 5V charger it is about equal. To target a battery current on a fast charger, set about 0.55x of it (e.g. set 550 for ~1000 mA into the battery). Plug in while charging to see your charger measured live.</string>
     <string name="current_max_input_measured">%1$s detected (%2$s V in). Your battery gets about %3$sx your setting: %4$d mA in now means ~%5$d mA into the battery. Set about %6$d to put 1000 mA into the battery.</string>
+    <string name="info_charger">Charger:</string>
+    <!-- e.g. "9V fast charger, 2.14 A in (x1.8 to battery)" -->
+    <string name="dash_charger_fmt">%1$s, %2$s A in (x%3$s to battery)</string>
     <string name="charger_tier_5v">5V standard charger</string>
     <string name="charger_tier_9v">9V fast charger</string>
     <string name="charger_tier_12v">12V fast charger</string>

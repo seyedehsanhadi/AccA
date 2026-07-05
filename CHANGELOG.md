@@ -2,6 +2,11 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc12] - 2026-07-05
+
+### ✨ Added
+- **The charger is now shown right on the dashboard.** While charging, the Battery card names your charger and shows the input current and how much reaches the battery, e.g. *"9V fast charger, 2.15 A in (x1.8 to battery)"*. Before, this only appeared inside the Max-current edit dialog (behind the gear, and only if a current limit was set), so most people never saw it. It reads ACC's `--state` input telemetry (rc11) and hides itself when not charging or on phones without input sensors.
+
 ## [2.0.1-rc11] - 2026-07-05
 
 ### ✨ Added

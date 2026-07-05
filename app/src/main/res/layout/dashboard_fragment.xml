@@ -329,6 +329,30 @@
                                 android:text="..." />
                         </LinearLayout>
 
+                        <!-- Charger tier + input (rc11): shown only while charging with input telemetry -->
+                        <LinearLayout
+                            android:id="@+id/dash_charger_line"
+                            android:orientation="horizontal"
+                            android:layout_height="wrap_content"
+                            android:layout_width="match_parent"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:ellipsize="end"
+                                android:text="@string/info_charger"
+                                android:textSize="@dimen/label_text"
+                                android:layout_weight="1"/>
+
+                            <TextView
+                                android:id="@+id/dash_charger_textView"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:gravity="end"
+                                android:text="..." />
+                        </LinearLayout>
+
                         <!-- Manual-lock badge: shown only when the daemon state report sets userLocked -->
                         <TextView
                             android:id="@+id/dash_manualLock_textView"
