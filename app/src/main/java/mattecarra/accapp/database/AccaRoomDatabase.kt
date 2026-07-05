@@ -200,7 +200,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
-        // 2.0.1-rc11: remove the "Test charging switches" quick-action (acca -t). Same danger that
+        // 2.0.1-rc10: remove the "Test charging switches" quick-action (acca -t). Same danger that
         // retired the "Test battery idle mode" button in rc6: it STOPS the daemon and runs for
         // minutes (charging uncontrolled), and a force-close SIGKILLs it before the restore runs,
         // leaving a switch cut (no charge till reboot) or the battery overcharged past the limit

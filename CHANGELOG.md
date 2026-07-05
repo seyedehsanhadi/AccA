@@ -2,10 +2,17 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
-## [2.0.1-rc9] - 2026-07-04
+## [2.0.1-rc10] - 2026-07-05
+
+### 🔥 Removed
+- **The "Test charging switches" quick-action (`acca -t`).** It stops the charge-control daemon and runs for minutes, and if you force-close the app mid-run it is killed before it can restore - leaving a switch cut (no charge until reboot) or the battery charging past your limit (reproduced on a Mi A3). Same danger that retired the "Test battery idle mode" button in rc6. Everything it did is covered, safely, by "Find my charging switch" (which snapshots and restores every change) and the daemon's own switch auto-lock. Removed from new installs and, on upgrade, from your existing script list. The safe diagnostic actions (List switches, Battery info, Show ACC state, etc.) stay.
 
 ### 🛠️ Fixed
-- **Find my switch (AMPS 7.1.2): the native firmware charge limit really does stay recommended now.** rc8 stopped it being demoted as "re-arming", but the leak check then demoted it on a +1% battery reading - which over the ~12-second stress window is percentage rounding, not real charging (even a fully broken switch gains under 0.5% in that time). A verified native %-limit is no longer stress-hammered at all; its enforcement was already proven by the longer engage test with a live current reading. Pixel field report, third round - this closes it.
+- **The dashboard now shows BOTH the voltage limit and the current limit when you set both.** It was only ever showing one of them (usually voltage). They are independent controls, so both rows are shown.
+- **Custom scripts that call `acc`/`acca` past the first command now work on KernelSU/APatch.** The app rewrote only a *leading* `acc`/`acca` to its full path; a multi-command script (e.g. `sleep 2; acc -D restart`) failed with "acca: not found" on roots where acc is not on PATH. The script's PATH now includes the acc directory, so `acc`/`acca` resolve anywhere in the body.
+
+### 🔬 Find my switch (AMPS 7.1.3)
+- From a layer-by-layer audit for device universality: the switch value-gate now accepts capitalized states (Enabled/Disabled/ON) some kernels report; charger-supply detection also recognises adapter/pogo/dock supplies; and on non-Qualcomm SoCs a charger that drops offline mid-test now logs the missing re-kick node for a field report instead of failing silently. No new hardware writes were added.
 
 ## [2.0.1-rc8] - 2026-07-04
 

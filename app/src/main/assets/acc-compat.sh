@@ -3,7 +3,7 @@
 # AMPS - Adaptive Multi-device Probe & Selector.
 # Root-only universal charge-control switch finder: probes any device, leak-verifies
 # bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.1.2
+V=7.1.3
 # Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
@@ -601,7 +601,17 @@ recover_online(){
     done
   done
   [ -w "$BATT/input_suspend" ] && { _rfin="$(read1 "$BATT/input_suspend")"; [ "$_rfin" = 1 ] && wr "$BATT/input_suspend" 0 2>/dev/null; }
-  online_now
+  # Budget exhausted. The re-kick nodes above (apsd_rerun/rerun_aicl) are Qualcomm-specific; on
+  # SoCs without them (MediaTek/Exynos/Unisoc) the only generic lever is the input_suspend pulse.
+  # We deliberately do NOT write vendor-specific re-negotiation nodes here (zero field evidence,
+  # real risk) -- instead leave a breadcrumb so the next field report names the node that works.
+  if ! online_now; then
+    if ! ex "$PSY/usb/apsd_rerun" && ! ex "$BATT/rerun_aicl" && ! ex /sys/class/qcom-battery/apsd_rerun; then
+      log "  [recover] charger still offline and this SoC has no APSD/AICL re-kick node ($(getprop ro.board.platform 2>/dev/null)) -- if replug fixes it, tell us which /sys node your kernel toggles so we can add it"
+    fi
+    return 1
+  fi
+  return 0
 }
 
 restore(){
@@ -742,7 +752,9 @@ proof_available(){
 online_f(){ for o in $PSY/*/online; do ex "$o" || continue
   d="$(basename "$(dirname "$o")")"
   case "$d" in battery|*battery*) continue;; esac
-  case "$d" in usb|*usb*|ac|dc|mains|main-charger|mainchg|pc_port|wireless|smb*|*ucsi*|*chg*|*charger*|*glink*|*tcpm*|*tcpc*|*pd*|*source*|*wls*|*dcin*) printf '%s\n' "$o";; esac; done; }
+  # adapter/pogo/dock: charger-side supplies on some Samsung tablets / docked phones. Read-only
+  # widening -- a missed name only degraded present_now to its status fallback, never broke it.
+  case "$d" in usb|*usb*|ac|dc|mains|main-charger|mainchg|pc_port|wireless|smb*|*ucsi*|*chg*|*charger*|*glink*|*tcpm*|*tcpc*|*pd*|*source*|*wls*|*dcin*|*adapter*|*pogo*|*dock*) printf '%s\n' "$o";; esac; done; }
 online_now(){
   any=0
   for o in $(online_f); do
@@ -764,7 +776,7 @@ present_now(){
     d="$(basename "$(dirname "$i")")"
     case "$d" in battery|*battery*) continue;; esac
     case "$d" in
-      usb|*usb*|ac|dc|mains|main-charger|mainchg|pc_port|wireless|smb*|*ucsi*|*chg*|*charger*|*glink*|*tcpm*|*tcpc*|*pd*|*source*|*wls*|*dcin*) : ;;
+      usb|*usb*|ac|dc|mains|main-charger|mainchg|pc_port|wireless|smb*|*ucsi*|*chg*|*charger*|*glink*|*tcpm*|*tcpc*|*pd*|*source*|*wls*|*dcin*|*adapter*|*pogo*|*dock*) : ;;
       *) continue ;;
     esac
     seen=1
@@ -1260,7 +1272,12 @@ test_switch(){
   printf '%s' "$p" | grep -Eiq "$SUPERDENY_RE" && { log "  [danger-skip] $lbl (never written: protected node family -- fuel-gauge/bms/PD/regulator/thermal)"; return; }
   grep -qxF "$p" "$BK/dead" 2>/dev/null && { log "  [skip dead] $lbl (a prior write to this node was rejected)"; return; }
   cur="$(rd "$p" | sed -n '1p')"
-  case "$cur" in ''|0|1|"0 0"|"0 1"|enabled|disabled|on|off|true|false|[0-9]|[0-9][0-9]|[0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) :;; *) return;; esac
+  # Case-insensitive value gate: some kernels report "Enabled"/"Disabled"/"ON" (capitalized), which
+  # the lowercase-only gate skipped as a non-switch. Compare lowercased; every write still uses the
+  # verbatim $cur/$offv, and the no-stick read-back detector rejects drivers with case-sensitive
+  # stores, so widening the gate can only ADD tested candidates, never corrupt one.
+  _cvg="$(printf '%s' "$cur" | tr 'A-Z' 'a-z')"
+  case "$_cvg" in ''|0|1|"0 0"|"0 1"|enabled|disabled|on|off|true|false|[0-9]|[0-9][0-9]|[0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) :;; *) return;; esac
   [ -w "$p" ] || { log "  [read-only] $lbl"; return; }
   gate || return
   bwi=0
