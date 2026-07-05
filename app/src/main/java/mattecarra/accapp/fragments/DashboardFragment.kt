@@ -135,7 +135,7 @@ class DashboardFragment : ScopedFragment()
 
                 binding.dashManualLockTextView.visibility = View.GONE
                 // No --state snapshot -> no input telemetry to show.
-                binding.dashChargerLine.visibility = View.GONE
+                binding.dashChargerTextView.visibility = View.GONE
             }
 
             binding.dashBatteryTemperatureTextView.text = dash.batteryInfo.getTemperature(preferences.temperatureOutputUnitOfMeasure, true)
@@ -422,9 +422,9 @@ class DashboardFragment : ScopedFragment()
                 String.format("%.2f", iin / 1000f),
                 String.format("%.1f", ratioX100 / 100.0)
             )
-            binding.dashChargerLine.visibility = View.VISIBLE
+            binding.dashChargerTextView.visibility = View.VISIBLE
         } else {
-            binding.dashChargerLine.visibility = View.GONE
+            binding.dashChargerTextView.visibility = View.GONE
         }
     }
 

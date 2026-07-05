@@ -329,29 +329,21 @@
                                 android:text="..." />
                         </LinearLayout>
 
-                        <!-- Charger tier + input (rc11): shown only while charging with input telemetry -->
-                        <LinearLayout
-                            android:id="@+id/dash_charger_line"
-                            android:orientation="horizontal"
-                            android:layout_height="wrap_content"
+                        <!-- Charger tier + input (rc11): a single full-width line (NOT a label:value
+                             row) - the value is a long sentence and a weighted label:value row
+                             squeezed the label to zero and overflowed the narrow text column (over
+                             the capacity circle, and off the right edge). maxLines=2 + ellipsize
+                             keeps it tidy. Shown only while charging with input telemetry. -->
+                        <TextView
+                            android:id="@+id/dash_charger_textView"
                             android:layout_width="match_parent"
-                            android:visibility="gone">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:ellipsize="end"
-                                android:text="@string/info_charger"
-                                android:textSize="@dimen/label_text"
-                                android:layout_weight="1"/>
-
-                            <TextView
-                                android:id="@+id/dash_charger_textView"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:gravity="end"
-                                android:text="..." />
-                        </LinearLayout>
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:ellipsize="end"
+                            android:maxLines="2"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="@dimen/label_text"
+                            android:visibility="gone" />
 
                         <!-- Manual-lock badge: shown only when the daemon state report sets userLocked -->
                         <TextView

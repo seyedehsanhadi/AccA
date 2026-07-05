@@ -2,6 +2,11 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc13] - 2026-07-05
+
+### 🛠️ Fixed
+- **The dashboard charger line no longer overlaps the battery circle or leaves a blank gap.** The rc12 line was a label + value row (like Status/Voltage), but its value is a long sentence, so the label collapsed and the value overflowed the narrow text column - spilling over the capacity circle and off the right edge, with an empty gap before the "Manual lock" badge. It is now a single full-width line (max two lines, ellipsized), the same style as the badge below it.
+
 ## [2.0.1-rc12] - 2026-07-05
 
 ### ✨ Added
