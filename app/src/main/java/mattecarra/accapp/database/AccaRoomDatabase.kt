@@ -290,6 +290,16 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 "", 0)
             )
 
+            // Present on UPGRADED installs (seeded by MIGRATION_9_10) but was missing from a
+            // FRESH install, so new users had one fewer quick-action than upgraders. Added here
+            // to converge the two paths. Safe to run: runScript() bounds `acca -t` with a timeout
+            // and restarts the daemon afterwards.
+            db.scriptsDao().insert(AccaScript(0, "Test charging switches",
+                "-t|--test [file] Test charging switches from a file (default: /dev/.vr25/acc/ch-switches)",
+                "acca -t",
+                "", 0)
+            )
+
             db.scriptsDao().insert(AccaScript(0, "Disable charging",
                 "-d|--disable [#%, #s, #m or #h (optional)]",
                 "acca -d",

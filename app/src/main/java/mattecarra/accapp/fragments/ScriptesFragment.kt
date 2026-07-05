@@ -91,7 +91,7 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
 
         // Gate authoring of arbitrary root shell behind the "Allow custom shell scripts"
         // preference (off by default). When off, hide the FAB so users cannot add new
-        // scripts; the 12 seeded acca quick-actions remain runnable.
+        // scripts; the seeded acca quick-actions remain runnable, copyable and renamable.
         val allowCustomScripts = PreferenceManager.getDefaultSharedPreferences(mContext)
             .getBoolean("pref_allow_custom_scripts", false)
 
@@ -254,14 +254,16 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
         val isTest = script.scBody.contains("-t") || script.scBody.contains("--test")
 
         // A2: `acca`/`acc` are only on PATH via Magisk's system overlay; on KernelSU/APatch the
-        // built-in scripts must use the absolute path the rest of the app already uses, or they fail
-        // with "acca: not found". Rewrite a leading bare command; absolute `sh /data/adb/...` lines
-        // (e.g. the switch scanner) pass through untouched.
-        val body = when {
+        // built-in scripts fail with "acca: not found". Rewrite a leading bare command AND put the
+        // acc dir on PATH so `acc`/`acca` also resolve when they appear mid-line (e.g. a
+        // multi-command user script `sleep 2; acc -D restart`). Absolute `sh /data/adb/...` lines
+        // pass through untouched. PATH is prepended in the executed command, not exported globally.
+        val rewritten = when {
             script.scBody.startsWith("acca ") -> "/dev/.vr25/acc/acca " + script.scBody.substring(5)
             script.scBody.startsWith("acc ")  -> "/dev/.vr25/acc/acca " + script.scBody.substring(4)
             else -> script.scBody
         }
+        val body = "export PATH=/dev/.vr25/acc:\$PATH\n$rewritten"
 
         val sr = if (isTest) {
             val tmp = java.io.File(mContext.cacheDir, "acca_run.sh")
