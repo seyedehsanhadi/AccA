@@ -156,11 +156,12 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
         val volt = (accConfig.configVoltage.controlFile != null || accConfig.configVoltage.max != null)
         val currmax = accConfig.configCurrMax != null
 
-        if ((volt && !currmax) || (!volt && currmax))
-        {
-            binding.itemProfileChargingVoltageTv.isVisible = volt
-            binding.itemProfileCurrentMaxTv.isVisible = currmax
-        }
+        // Unconditional: the old XOR guard skipped the visibility update when BOTH limits were
+        // set, so the rows kept whatever the previous bind showed (usually voltage only) and a
+        // voltage+current config displayed just one of them. The two limits are independent
+        // (CC-phase current cap vs CV-phase voltage cap) and must both be visible.
+        binding.itemProfileChargingVoltageTv.isVisible = volt
+        binding.itemProfileCurrentMaxTv.isVisible = currmax
 
         //-----------------------------------------------
 
