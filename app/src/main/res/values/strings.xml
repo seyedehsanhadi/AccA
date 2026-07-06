@@ -502,6 +502,17 @@
     <string name="current_max_input_measured">%1$s detected (%2$s V in). Your battery gets about %3$sx your setting: %4$d mA in now means ~%5$d mA into the battery. Set about %6$d to put 1000 mA into the battery.</string>
     <!-- e.g. "Charger: 9V fast charger, 2.14 A in (x1.8 to battery)" -->
     <string name="dash_charger_fmt">Charger: %1$s, %2$s A in (x%3$s to battery)</string>
+    <!-- Charge-speed line (physics only: watts = input V x A). e.g. "Fast charge: 19 W (9V fast charger)" -->
+    <string name="charge_class_slow">Slow charge</string>
+    <string name="charge_class_standard">Standard charge</string>
+    <string name="charge_class_fast">Fast charge</string>
+    <string name="charge_class_superfast">Super fast charge</string>
+    <string name="charge_class_hyper">Hyper charge</string>
+    <string name="dash_charge_fmt">%1$s: %2$d W (%3$s), %4$s A in (x%5$s to battery)</string>
+    <string name="dash_charge_fmt_approx">%1$s: ~%2$d W or more (battery side, approx)</string>
+    <string name="charge_reason_user_limit">limited by your Max current</string>
+    <string name="charge_reason_thermal">slowed by heat</string>
+    <string name="charge_reason_taper">topping off, near full</string>
     <string name="charger_tier_5v">5V standard charger</string>
     <string name="charger_tier_9v">9V fast charger</string>
     <string name="charger_tier_12v">12V fast charger</string>

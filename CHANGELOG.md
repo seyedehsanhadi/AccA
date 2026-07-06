@@ -2,6 +2,11 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc14] - 2026-07-05
+
+### ✨ Added
+- **The dashboard now tells you how fast you are charging, and why not faster.** While charging, the Battery card shows a physics-based line like *"Fast charge: 19 W (9.0V), 2.15 A in (x1.8 to battery)"* or *"Slow charge: 2 W (5.1V), 0.50 A in (x1.1 to battery)"*. Watts is measured (input volts times amps), so it is correct on every charger including the vendor-locked 120W+ ones that expose no protocol label. When charging is held back it says why: *limited by your Max current*, *slowed by heat*, or *topping off, near full*. Hidden when not charging, and on phones without input sensors it falls back to a battery-side estimate marked approximate. (Reads ACC's new `--state` charge block; the research behind the wattage bands was independently fact-checked, and it is fully read-only.)
+
 ## [2.0.1-rc13] - 2026-07-05
 
 ### 🛠️ Fixed

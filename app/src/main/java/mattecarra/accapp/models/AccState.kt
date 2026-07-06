@@ -41,7 +41,11 @@ data class AccState(
     val nativeEnabled: Boolean,
     val nativeStopLevel: Int,
     val inputVoltageMv: Int? = null,
-    val inputCurrentMa: Int? = null
+    val inputCurrentMa: Int? = null,
+    val chargeWatts: Int? = null,
+    val chargeClass: String? = null,
+    val chargeReason: String? = null,
+    val chargeApprox: Boolean = false
 ) {
 
     /**
@@ -98,7 +102,15 @@ data class AccState(
                     },
                     inputCurrentMa = root.optJSONObject("input")?.let { inp ->
                         if (inp.isNull("currentMa")) null else inp.optInt("currentMa")
-                    }
+                    },
+                    // charge-speed block (rc12 engine+): physics-only class from input watts.
+                    // Nullable end to end so any older daemon just hides the dashboard line.
+                    chargeWatts = root.optJSONObject("charge")?.let { ch ->
+                        if (ch.isNull("watts")) null else ch.optInt("watts")
+                    },
+                    chargeClass = root.optJSONObject("charge")?.optString("class", "")?.takeIf { it.isNotBlank() },
+                    chargeReason = root.optJSONObject("charge")?.optString("reason", "")?.takeIf { it.isNotBlank() },
+                    chargeApprox = root.optJSONObject("charge")?.optBoolean("approx", false) ?: false
                 )
             } catch (e: Exception) {
                 null

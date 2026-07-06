@@ -407,21 +407,49 @@ class DashboardFragment : ScopedFragment()
         // Manual-lock badge (rc8 userLocked): ACC will not auto-replace a user-pinned switch.
         binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
 
-        // Charger line (rc11): while charging with input telemetry, name the detected charger tier
-        // and show the input current + the input->battery ratio, so the 5V-vs-9V difference (why a
-        // 1000 mA current limit delivers ~1800 mA into the battery on a 9V charger) is visible right
-        // here instead of buried in the edit dialog. Hidden when not charging or no telemetry.
+        // Charge-speed line (physics only: watts = input V x A, classified by band - the one
+        // signal every charging system exposes, incl. vendor-opaque 120W+ ones). Shows class +
+        // measured watts + detected charger tier + input amps + input->battery ratio; appends a
+        // reason when charging is reduced (your ACC limit / heat / topping off). approx=true means
+        // the battery-side fallback (no input sensor): can only under-state, labeled as such.
+        // Hidden when not charging or nothing measurable. Replaces the rc13 charger-only line.
         val vin = state.inputVoltageMv
         val iin = state.inputCurrentMa
         val vbat = if (state.voltageRaw >= 100000L) (state.voltageRaw / 1000L).toInt() else state.voltageRaw.toInt()
-        if (charging && vin != null && vin > 0 && iin != null && iin > 50 && vbat in 3000..4600) {
-            val ratioX100 = (vin * 84) / vbat
-            binding.dashChargerTextView.text = getString(
-                R.string.dash_charger_fmt,
-                mattecarra.accapp.dialogs.chargerTierLabel(requireContext(), vin),
-                String.format("%.2f", iin / 1000f),
-                String.format("%.1f", ratioX100 / 100.0)
-            )
+        val watts = state.chargeWatts
+        val clsRes = when (state.chargeClass) {
+            "slow" -> R.string.charge_class_slow
+            "standard" -> R.string.charge_class_standard
+            "fast" -> R.string.charge_class_fast
+            "superfast" -> R.string.charge_class_superfast
+            "hyper" -> R.string.charge_class_hyper
+            else -> null
+        }
+        val reasonRes = when (state.chargeReason) {
+            "user_limit" -> R.string.charge_reason_user_limit
+            "thermal" -> R.string.charge_reason_thermal
+            "taper" -> R.string.charge_reason_taper
+            else -> null
+        }
+        val line: String? = when {
+            !charging || watts == null || clsRes == null -> null
+            !state.chargeApprox && vin != null && vin > 0 && iin != null && iin > 50 && vbat in 3000..4600 -> {
+                val ratioX100 = (vin * 84) / vbat
+                // compact measured voltage ("5.1V"/"9.0V") not the long "9V fast charger" label,
+                // so the whole line (class + watts + volts + amps + ratio) fits without ellipsis.
+                getString(
+                    R.string.dash_charge_fmt,
+                    getString(clsRes), watts,
+                    String.format("%.1fV", vin / 1000f),
+                    String.format("%.2f", iin / 1000f),
+                    String.format("%.1f", ratioX100 / 100.0)
+                )
+            }
+            else -> getString(R.string.dash_charge_fmt_approx, getString(clsRes), watts)
+        }
+        if (line != null) {
+            binding.dashChargerTextView.text =
+                if (reasonRes != null) "$line, ${getString(reasonRes)}" else line
             binding.dashChargerTextView.visibility = View.VISIBLE
         } else {
             binding.dashChargerTextView.visibility = View.GONE

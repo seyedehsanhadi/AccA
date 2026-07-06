@@ -55,6 +55,47 @@ class AccStateTest {
     }
 
     @Test
+    fun parseState_chargeBlock_presentParsesAllFields() {
+        // rc12-engine charge block: physics-only class. Real Pixel 9a 9V numbers -> 19W fast.
+        val json = """
+            {"schemaVersion":1,"battery":{"capacityPct":58,"current_raw":4508593,"voltage_raw":4251171,"temp_deci_c":384,"status":"Charging"},
+             "plugged":true,"input":{"voltageMv":8950,"currentMa":2148},
+             "charge":{"watts":19,"class":"fast","reason":null,"approx":false},
+             "sensing":{"currentUnits":"uA","polarity":"normal"},"switch":{"userLocked":true,"measuredClass":"charging"}}
+        """.trimIndent()
+        val s = AccState.parseState(json)!!
+        assertEquals(19, s.chargeWatts)
+        assertEquals("fast", s.chargeClass)
+        assertNull("null reason must stay null", s.chargeReason)
+        assertFalse(s.chargeApprox)
+    }
+
+    @Test
+    fun parseState_chargeBlock_reasonAndApprox() {
+        val json = """
+            {"schemaVersion":1,"battery":{"capacityPct":96,"current_raw":400000,"voltage_raw":4400000,"temp_deci_c":300,"status":"Charging"},
+             "plugged":true,"input":{"voltageMv":null,"currentMa":null},
+             "charge":{"watts":2,"class":"slow","reason":"taper","approx":true},
+             "sensing":{"currentUnits":"uA","polarity":"normal"},"switch":{"userLocked":false,"measuredClass":"charging"}}
+        """.trimIndent()
+        val s = AccState.parseState(json)!!
+        assertEquals(2, s.chargeWatts)
+        assertEquals("slow", s.chargeClass)
+        assertEquals("taper", s.chargeReason)
+        assertTrue(s.chargeApprox)
+    }
+
+    @Test
+    fun parseState_chargeBlockAbsent_yieldsNulls() {
+        // Old daemon (pre charge block) -> all null, dashboard line hides.
+        val s = AccState.parseState(rc12Fixture)!!
+        assertNull(s.chargeWatts)
+        assertNull(s.chargeClass)
+        assertNull(s.chargeReason)
+        assertFalse(s.chargeApprox)
+    }
+
+    @Test
     fun parseState_inputAbsentOrNull_yieldsNull() {
         // No "input" object at all (old daemon).
         val noBlock = AccState.parseState(rc12Fixture)!!
