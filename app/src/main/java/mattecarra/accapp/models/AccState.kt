@@ -52,10 +52,27 @@ data class AccState(
      * Signed current in milliamps, normalised the same way the daemon documents it:
      * units (uA -> /1000 for mA) and polarity (inverted -> flip sign). A negative result
      * means discharge, positive means charge — independent of the device's raw convention.
+     *
+     * polarity "unstable" (rc13+) means the raw sign follows the charge PATH on this device
+     * (dual-path PMICs: 5V trickle reads one sign, 9V parallel the other, both charging), so
+     * the raw sign carries no meaning. The daemon then classifies by coulomb slope and reports
+     * it in [measuredClass]; take the magnitude and let the class/status decide the sign.
      */
     fun signedCurrentMilliAmps(): Float {
         val mA = if (currentUnits.equals("uA", ignoreCase = true)) currentRaw / 1000f else currentRaw.toFloat()
-        return if (polarity.equals("inverted", ignoreCase = true)) -mA else mA
+        return when {
+            polarity.equals("inverted", ignoreCase = true) -> -mA
+            polarity.equals("unstable", ignoreCase = true) -> {
+                val mag = kotlin.math.abs(mA)
+                when {
+                    measuredClass.equals("charging", ignoreCase = true) -> mag
+                    measuredClass.equals("drain", ignoreCase = true) ||
+                    measuredClass.equals("discharging", ignoreCase = true) -> -mag
+                    else -> if (status.equals("Charging", ignoreCase = true)) mag else -mag
+                }
+            }
+            else -> mA
+        }
     }
 
     companion object {
