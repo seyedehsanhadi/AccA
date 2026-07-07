@@ -3,13 +3,16 @@ package mattecarra.accapp.fragments
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.preference.CheckBoxPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import com.afollestad.materialdialogs.MaterialDialog
+import com.afollestad.materialdialogs.list.listItems
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.*
 import mattecarra.accapp.Preferences
@@ -81,9 +84,15 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
             context?.let { context ->
                 val preferences = Preferences(context)
 
+                // getAccVersionToStr() is the human-readable release string ("v2025.5.18-6.5.1-rc10
+                // (202505290)") straight from `acc --version` - NOT Acc.instance.version, which is
+                // only the bare numeric versionCode used internally for feature-gating comparisons
+                // (>= 202002170 etc) and reads as a meaningless number to a user.
+                val installedAcc = try { Acc.getAccVersionToStr().trim() } catch (e: Exception) { "" }
                 MaterialDialog(context)
                     .show {
-                        title(R.string.acc_version_picker_title)
+                        title(text = getString(R.string.acc_version_picker_title) +
+                            if (installedAcc.isNotBlank()) "  (installed: $installedAcc)" else "")
                         message(R.string.acc_version_picker_message)
                         cancelOnTouchOutside(false)
                         launch {
@@ -255,6 +264,84 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
         if(Acc.instance.version >= 202002290) {
             findPreference<Preference>("current_measure_unit")?.isEnabled = false
             findPreference<Preference>("voltage_measure_unit")?.isEnabled = false
+        }
+
+        // Status-bar charge meter (rc15): start/stop the read-only meter service to match the
+        // toggle, and re-render on a display/active change. On Android 13+ enabling it needs the
+        // POST_NOTIFICATIONS runtime grant, or the ongoing notification is silently suppressed.
+        findPreference<CheckBoxPreference>("charge_meter_enabled")?.setOnPreferenceChangeListener { _, v ->
+            val enable = v as Boolean
+            context?.let { ctx ->
+                // POST_NOTIFICATIONS is API 33 (TIRAMISU); referenced by raw value + string so this
+                // still compiles against compileSdk 31.
+                val postNotif = "android.permission.POST_NOTIFICATIONS"
+                if (enable && Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(ctx, postNotif)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    try { requestPermissions(arrayOf(postNotif), 4712) } catch (_: Exception) {}
+                }
+                // The pref value is written after this listener returns true; post the sync so it
+                // reads the new value.
+                view?.post { mattecarra.accapp.services.ChargeMeterService.sync(ctx) }
+                    ?: mattecarra.accapp.services.ChargeMeterService.sync(ctx)
+            }
+            true
+        }
+        val meterResync = Preference.OnPreferenceChangeListener { _, _ ->
+            context?.let { ctx -> view?.post { mattecarra.accapp.services.ChargeMeterService.sync(ctx) } }
+            true
+        }
+        findPreference<ListPreference>("charge_meter_display")?.onPreferenceChangeListener = meterResync
+        findPreference<ListPreference>("charge_meter_style")?.onPreferenceChangeListener = meterResync
+        findPreference<ListPreference>("charge_meter_battery_source")?.onPreferenceChangeListener = meterResync
+
+        // "Check for updates" is AccA-only. ACC already surfaces its own update via module.prop's
+        // updateJson, which Magisk/KernelSU show natively in their Modules list - no duplicate
+        // nagging needed here. This lists every AccA release straight from GitHub in GitHub's own
+        // (newest-first) order; tapping one downloads its APK directly.
+        findPreference<Preference>("check_updates")?.onPreferenceClickListener = Preference.OnPreferenceClickListener {
+            val ctx = context ?: return@OnPreferenceClickListener true
+            val includePre = Preferences(ctx).includePreReleases
+            val progress = MaterialDialog(ctx).show {
+                title(R.string.check_updates_title)
+                message(R.string.check_updates_checking)
+                cancelOnTouchOutside(false)
+            }
+            launch {
+                val releases = GithubUtils.listAccaReleases(includePre)
+                try { progress.dismiss() } catch (_: Exception) {}
+                if (!isAdded || activity?.isFinishing != false) return@launch
+
+                if (releases.isEmpty()) {
+                    MaterialDialog(ctx).show {
+                        title(R.string.check_updates_title)
+                        message(R.string.check_updates_none)
+                        positiveButton(android.R.string.ok)
+                    }
+                    return@launch
+                }
+
+                val installed = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "" } catch (e: Exception) { "" }
+                fun norm(s: String) = s.trim().trimStart('v', 'V')
+                val labels = releases.map {
+                    buildString {
+                        append(it.tag)
+                        if (it.prerelease) append("  (pre-release)")
+                        if (installed.isNotBlank() && norm(it.tag) == norm(installed)) append("  ✓ installed")
+                    }
+                }
+                MaterialDialog(ctx).show {
+                    title(text = getString(R.string.check_updates_title) +
+                        if (installed.isNotBlank()) "  (installed: $installed)" else "")
+                    listItems(items = labels) { _, index, _ ->
+                        val r = releases[index]
+                        val target = r.downloadUrl?.takeIf { it.isNotBlank() } ?: r.pageUrl
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
+                    }
+                    negativeButton(android.R.string.cancel)
+                }
+            }
+            true
         }
     }
 }

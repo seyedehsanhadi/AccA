@@ -19,15 +19,22 @@ class AccBootReceiver: BroadcastReceiver() {
         if (Intent.ACTION_BOOT_COMPLETED == action
             || "android.intent.action.QUICKBOOT_POWERON" == action
             || "com.htc.intent.action.QUICKBOOT_POWERON" == action) {
+            // Restore the status-bar charge meter on the MAIN thread, synchronously, right here in
+            // onReceive: BOOT_COMPLETED is an allowed window to start a foreground service, and
+            // starting it from the background worker thread below can fall outside that window on
+            // Android 12+. It needs no root, so it must not wait on Shell.rootAccess(). sync()
+            // checks enabled + plug + "always" and no-ops otherwise.
+            try { mattecarra.accapp.services.ChargeMeterService.sync(context) } catch (_: Exception) {}
+
             // Shell.rootAccess() and the daemon init below are blocking root calls. Running them
             // directly here would block the main thread during the boot broadcast and ANR.
             // Hand off to a background thread and keep the broadcast alive via goAsync().
             val pendingResult = goAsync()
             Thread {
                 try {
-                    if (Shell.rootAccess()) {
-                        val preferences = Preferences(context)
+                    val preferences = Preferences(context)
 
+                    if (Shell.rootAccess()) {
                         val accInitResult = Acc.initAcc(context.filesDir)
                         Log.d(LOG_TAG, "Acc deamon init. Success=$accInitResult")
 

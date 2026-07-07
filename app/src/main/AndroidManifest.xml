@@ -8,6 +8,8 @@
     <!-- WidgetService falls back to ContextCompat.startForegroundService(); API 26+ requires
          this permission to be declared or the call throws SecurityException. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- rc15 charge meter: post the ongoing meter notification on API 33+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".MainApplication"
@@ -103,6 +105,21 @@
             android:name=".services.WidgetService"
             android:exported="false">
         </service>
+
+        <service
+            android:name=".services.ChargeMeterService"
+            android:exported="false" />
+
+        <receiver
+            android:name=".receivers.ChargeMeterPowerReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name="xml.BatteryInfoWidget"

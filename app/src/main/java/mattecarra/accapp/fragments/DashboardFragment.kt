@@ -211,6 +211,7 @@ class DashboardFragment : ScopedFragment()
                 binding.dashDaemonRestartButton.isEnabled = false
 
                 withContext(Dispatchers.IO) {
+                    context?.let { Preferences(it).accdUserStopped = false }
                     Acc.instance.accRestartDaemon()
                 }
 
@@ -293,6 +294,9 @@ class DashboardFragment : ScopedFragment()
             mViewModel.getDashboardValues().observe(viewLifecycleOwner, observer)
 
             withContext(Dispatchers.IO) {
+                // Remember a DELIBERATE stop: the plug-in daemon guard must not resurrect a daemon
+                // the user chose to stop (and a manual start lifts that choice again).
+                context?.let { Preferences(it).accdUserStopped = stopDaemon }
                 if (stopDaemon) Acc.instance.abcStopDaemon()
                 else Acc.instance.abcStartDaemon()
             }

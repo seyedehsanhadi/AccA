@@ -176,6 +176,7 @@ class BatteryDialogActivity : ScopedAppActivity()
                 try
                 {
                     //isAccdRunning = Acc.instance.isAccdRunning()
+                    Preferences(this@BatteryDialogActivity).accdUserStopped = isAccdRunning
                     if (isAccdRunning) Acc.instance.abcStopDaemon() else Acc.instance.abcStartDaemon()
                     //runOnUiThread( Runnable { updateTextStatusACC() })  // there is no synchronization
                 }

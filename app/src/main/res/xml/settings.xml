@@ -13,6 +13,52 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        android:title="@string/charge_meter_channel"
+        app:iconSpaceReserved="false">
+
+        <CheckBoxPreference
+            android:key="charge_meter_enabled"
+            android:defaultValue="false"
+            android:title="@string/pref_charge_meter_title"
+            android:summary="@string/pref_charge_meter_summary"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:key="charge_meter_style"
+            android:defaultValue="both"
+            android:dependency="charge_meter_enabled"
+            android:entries="@array/charge_meter_style_options"
+            android:entryValues="@array/charge_meter_style_values"
+            android:title="@string/pref_charge_meter_style_title"
+            android:dialogTitle="@string/pref_charge_meter_style_title"
+            android:summary="%s"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:key="charge_meter_display"
+            android:defaultValue="auto"
+            android:dependency="charge_meter_enabled"
+            android:entries="@array/charge_meter_display_options"
+            android:entryValues="@array/charge_meter_display_values"
+            android:title="@string/pref_charge_meter_display_title"
+            android:dialogTitle="@string/pref_charge_meter_display_title"
+            android:summary="%s"
+            app:iconSpaceReserved="false" />
+
+        <ListPreference
+            android:key="charge_meter_battery_source"
+            android:defaultValue="system"
+            android:dependency="charge_meter_enabled"
+            android:entries="@array/charge_meter_battery_source_options"
+            android:entryValues="@array/charge_meter_battery_source_values"
+            android:title="@string/pref_charge_meter_battery_source_title"
+            android:dialogTitle="@string/pref_charge_meter_battery_source_title"
+            android:summary="@string/pref_charge_meter_battery_source_summary"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/units_of_measure"
         app:iconSpaceReserved="false">
 
@@ -79,6 +125,11 @@
     <PreferenceCategory
         android:title="@string/updates_pref_category"
         app:iconSpaceReserved="false">
+        <Preference
+            android:key="check_updates"
+            android:summary="@string/pref_check_updates_summary"
+            android:title="@string/pref_check_updates_title"
+            app:iconSpaceReserved="false" />
         <CheckBoxPreference
             android:defaultValue="false"
             android:key="include_pre_releases"

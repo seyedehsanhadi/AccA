@@ -27,6 +27,12 @@ object Constants {
     val ACC_VERSION = "acc_version"
     val DJS_ENABLED = "djs_enabled"
     val INCLUDE_PRE_RELEASES = "include_pre_releases"
+    // Status-bar charge meter (rc15)
+    val CHARGE_METER_ENABLED = "charge_meter_enabled"
+    val CHARGE_METER_DISPLAY = "charge_meter_display"   // auto | w | ma
+    val CHARGE_METER_STYLE = "charge_meter_style"       // icon | notif | both
+    val CHARGE_METER_BATTERY_SOURCE = "charge_meter_battery_source"   // acc | system
+    val ACCD_USER_STOPPED = "accd_user_stopped"   // deliberate daemon stop; plug guard respects it
 
     // ACC is no longer auto-installed by AccA; users flash the module themselves.
     val ACC_RELEASE_URL = "https://github.com/seyedehsanhadi/acc/releases/latest"

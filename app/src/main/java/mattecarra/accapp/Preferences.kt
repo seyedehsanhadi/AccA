@@ -4,7 +4,12 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.preference.PreferenceManager
 import mattecarra.accapp.djs.Djs
+import mattecarra.accapp.utils.Constants.ACCD_USER_STOPPED
 import mattecarra.accapp.utils.Constants.ACC_VERSION
+import mattecarra.accapp.utils.Constants.CHARGE_METER_BATTERY_SOURCE
+import mattecarra.accapp.utils.Constants.CHARGE_METER_DISPLAY
+import mattecarra.accapp.utils.Constants.CHARGE_METER_ENABLED
+import mattecarra.accapp.utils.Constants.CHARGE_METER_STYLE
 import mattecarra.accapp.utils.Constants.CURRENT_INPUT_UNIT_OF_MEASURE
 import mattecarra.accapp.utils.Constants.CURRENT_OUTPUT_UNIT_OF_MEASURE
 import mattecarra.accapp.utils.Constants.DJS_ENABLED
@@ -169,6 +174,38 @@ class Preferences(private val context: Context)
             editor.putBoolean(DJS_ENABLED, value)
             editor.apply()
         }
+
+    // Status-bar charge meter (rc15). Read-only display; off by default.
+    var chargeMeterEnabled: Boolean
+        get() = sharedPrefs.getBoolean(CHARGE_METER_ENABLED, false)
+        set(value) { sharedPrefs.edit().putBoolean(CHARGE_METER_ENABLED, value).apply() }
+
+    // "auto" | "w" | "ma" - what the status-bar number shows (auto = watts, or mA when tiny).
+    var chargeMeterDisplay: String
+        get() = sharedPrefs.getString(CHARGE_METER_DISPLAY, "auto") ?: "auto"
+        set(value) { sharedPrefs.edit().putString(CHARGE_METER_DISPLAY, value).apply() }
+
+    // "notif" = detailed dashboard notification with a plain static icon; "both" (default) = the
+    // live number in the strip + the detailed notification in the shade. The old "icon" (number
+    // with no shade card) is migrated to "both": Android cannot show a notification icon without
+    // its shade row, and MIUI suppresses the icon too when the row is emptied (device-verified).
+    var chargeMeterStyle: String
+        get() = (sharedPrefs.getString(CHARGE_METER_STYLE, "both") ?: "both").let { if (it == "icon") "both" else it }
+        set(value) { sharedPrefs.edit().putString(CHARGE_METER_STYLE, value).apply() }
+
+    // "system" (default) = the OS battery level - matches the status bar, the original AccA, and
+    // ACC's own default pause logic, with no root needed. "acc" = ACC's capacityPct, which reads
+    // the raw kernel node and reflects Capacity Mask when configured.
+    var chargeMeterBatterySource: String
+        get() = sharedPrefs.getString(CHARGE_METER_BATTERY_SOURCE, "system") ?: "system"
+        set(value) { sharedPrefs.edit().putString(CHARGE_METER_BATTERY_SOURCE, value).apply() }
+
+    // True only when the user DELIBERATELY stopped accd (dashboard toggle, QS tile, widget dialog).
+    // The plug-in daemon guard checks this so it never resurrects a daemon the user turned off;
+    // any manual start/restart clears it.
+    var accdUserStopped: Boolean
+        get() = sharedPrefs.getBoolean(ACCD_USER_STOPPED, false)
+        set(value) { sharedPrefs.edit().putBoolean(ACCD_USER_STOPPED, value).apply() }
 
     companion object { @Volatile private var djsInstalledCache: Boolean? = null }
 }

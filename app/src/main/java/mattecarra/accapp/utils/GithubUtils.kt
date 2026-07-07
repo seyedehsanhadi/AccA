@@ -5,17 +5,29 @@ import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.lang.Exception
+import java.net.HttpURLConnection
 import java.net.URL
 
 data class ReleaseInfo(val version: String, val notes: String, val pageUrl: String, val apkUrl: String?)
 
-data class AccUpdateInfo(val versionCode: Int, val notes: String, val pageUrl: String)
-
 object GithubUtils {
+    // Plain URL(x).readText() sets no timeout, so a dead/slow connection can hang a "check for
+    // updates" tap forever with no error shown - bound every fetch so it always resolves.
+    private const val CONNECT_TIMEOUT_MS = 10_000
+    private const val READ_TIMEOUT_MS = 15_000
+
+    private fun fetchText(urlStr: String): String {
+        val conn = URL(urlStr).openConnection() as HttpURLConnection
+        conn.connectTimeout = CONNECT_TIMEOUT_MS
+        conn.readTimeout = READ_TIMEOUT_MS
+        conn.setRequestProperty("User-Agent", "AccA")
+        return try { conn.inputStream.bufferedReader().use { it.readText() } } finally { conn.disconnect() }
+    }
+
     suspend fun getLatestAccCommit(branch: String = "main"): String? = withContext(Dispatchers.IO) {
         (try {
             JsonParser
-                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/acc/commits/$branch").readText())
+                .parseString(fetchText("https://api.github.com/repos/seyedehsanhadi/acc/commits/$branch"))
                 .asJsonObject.get("sha").asString
         } catch (e: Exception) {
             // Log so a failed update check (no network, API error, rate-limit) is
@@ -27,7 +39,7 @@ object GithubUtils {
 
     private fun fetchNewestRelease(repo: String, includePreReleases: Boolean): JsonObject? {
         val arr = JsonParser
-            .parseString(URL("https://api.github.com/repos/seyedehsanhadi/$repo/releases?per_page=30").readText())
+            .parseString(fetchText("https://api.github.com/repos/seyedehsanhadi/$repo/releases?per_page=30"))
             .asJsonArray
         for (el in arr) {
             val o = runCatching { el.asJsonObject }.getOrNull() ?: continue
@@ -66,7 +78,7 @@ object GithubUtils {
                 if (rel != null) return@withContext releaseInfoFrom("AccA", rel)
             }
             val o = JsonParser
-                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/AccA/releases/latest").readText())
+                .parseString(fetchText("https://api.github.com/repos/seyedehsanhadi/AccA/releases/latest"))
                 .asJsonObject
             releaseInfoFrom("AccA", o)
         } catch (e: Exception) {
@@ -75,43 +87,10 @@ object GithubUtils {
         }
     }
 
-    suspend fun getLatestAccUpdateInfo(includePreReleases: Boolean = false): AccUpdateInfo? = withContext(Dispatchers.IO) {
-        try {
-            if (includePreReleases) {
-                val rel = runCatching { fetchNewestRelease("acc", true) }.getOrNull()
-                if (rel != null) {
-                    val tag = rel.get("tag_name").asString
-                    val notes = runCatching { rel.get("body").asString }.getOrNull().orEmpty()
-                    val vc = runCatching {
-                        JsonParser
-                            .parseString(URL("https://raw.githubusercontent.com/seyedehsanhadi/acc/$tag/module.json").readText())
-                            .asJsonObject.get("versionCode").asInt
-                    }.getOrNull()
-                    if (vc != null) return@withContext AccUpdateInfo(vc, notes, htmlUrl(rel) ?: releasePage("acc", tag))
-                }
-            }
-            val vc = JsonParser
-                .parseString(URL("https://raw.githubusercontent.com/seyedehsanhadi/acc/main/module.json").readText())
-                .asJsonObject.get("versionCode").asInt
-            var page = "https://github.com/seyedehsanhadi/acc/releases/latest"
-            val notes = runCatching {
-                val o = JsonParser
-                    .parseString(URL("https://api.github.com/repos/seyedehsanhadi/acc/releases/latest").readText())
-                    .asJsonObject
-                htmlUrl(o)?.let { page = it }
-                o.get("body").asString
-            }.getOrNull().orEmpty()
-            AccUpdateInfo(vc, notes, page)
-        } catch (e: Exception) {
-            LogExt().e("GithubUtils", "getLatestAccUpdateInfo failed: $e")
-            null
-        }
-    }
-
     suspend fun listAccReleaseTags(includePreReleases: Boolean): List<String> = withContext(Dispatchers.IO) {
         try {
             JsonParser
-                .parseString(URL("https://api.github.com/repos/seyedehsanhadi/acc/releases?per_page=30").readText())
+                .parseString(fetchText("https://api.github.com/repos/seyedehsanhadi/acc/releases?per_page=30"))
                 .asJsonArray
                 .mapNotNull { runCatching { it.asJsonObject }.getOrNull() }
                 .filterNot { runCatching { it.get("draft").asBoolean }.getOrDefault(false) }
@@ -119,6 +98,34 @@ object GithubUtils {
                 .mapNotNull { runCatching { it.get("tag_name").asString }.getOrNull() }
         } catch (e: Exception) {
             LogExt().e("GithubUtils", "listAccReleaseTags failed: $e")
+            emptyList()
+        }
+    }
+
+    data class ReleaseEntry(val tag: String, val prerelease: Boolean, val pageUrl: String, val downloadUrl: String?)
+
+    /** Every AccA release on GitHub, in GitHub's own (newest-first) order - each one downloadable.
+     * ACC is deliberately NOT covered here: it already surfaces its own update via module.prop's
+     * updateJson, which Magisk/KernelSU show natively in their Modules list. */
+    suspend fun listAccaReleases(includePreReleases: Boolean): List<ReleaseEntry> = withContext(Dispatchers.IO) {
+        try {
+            JsonParser
+                .parseString(fetchText("https://api.github.com/repos/seyedehsanhadi/AccA/releases?per_page=30"))
+                .asJsonArray
+                .mapNotNull { runCatching { it.asJsonObject }.getOrNull() }
+                .filterNot { runCatching { it.get("draft").asBoolean }.getOrDefault(false) }
+                .filter { includePreReleases || !runCatching { it.get("prerelease").asBoolean }.getOrDefault(false) }
+                .mapNotNull { o ->
+                    val tag = runCatching { o.get("tag_name").asString }.getOrNull() ?: return@mapNotNull null
+                    ReleaseEntry(
+                        tag = tag,
+                        prerelease = runCatching { o.get("prerelease").asBoolean }.getOrDefault(false),
+                        pageUrl = htmlUrl(o) ?: releasePage("AccA", tag),
+                        downloadUrl = apkAsset(o)
+                    )
+                }
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "listAccaReleases failed: $e")
             emptyList()
         }
     }

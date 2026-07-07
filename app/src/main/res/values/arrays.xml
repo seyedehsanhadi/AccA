@@ -1,6 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!-- Status-bar charge meter (rc15) -->
+    <string-array name="charge_meter_display_options">
+        <item>Auto (watts, or mA when tiny)</item>
+        <item>Watts (W)</item>
+        <item>Current (mA)</item>
+    </string-array>
+    <string-array name="charge_meter_display_values">
+        <item>auto</item>
+        <item>w</item>
+        <item>ma</item>
+    </string-array>
+    <string-array name="charge_meter_style_options">
+        <item>Status-bar number and details</item>
+        <item>Detailed notification only</item>
+    </string-array>
+    <string-array name="charge_meter_style_values">
+        <item>both</item>
+        <item>notif</item>
+    </string-array>
+    <string-array name="charge_meter_battery_source_options">
+        <item>System (Real Level, matches the status bar)</item>
+        <item>ACC (Capacity, reflects Capacity Mask)</item>
+    </string-array>
+    <string-array name="charge_meter_battery_source_values">
+        <item>system</item>
+        <item>acc</item>
+    </string-array>
     <string-array name="current_measure_units_option_values">
         <item>A</item>
         <item>mA</item>

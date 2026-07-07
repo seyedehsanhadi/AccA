@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.utils.LogExt
@@ -75,6 +76,7 @@ class AccdTileService: TileService(), CoroutineScope
                     //TODO add a mutex instead of relaunching the coroutine
                     launch {
                         try {
+                            Preferences(this@AccdTileService).accdUserStopped = true
                             Acc.instance.abcStopDaemon()
                         } catch (e: Exception) {
                             LogExt().e(LOG_TAG, "abcStopDaemon failed: ${e.message}")
@@ -85,6 +87,7 @@ class AccdTileService: TileService(), CoroutineScope
 
                 } else launch {
                     try {
+                        Preferences(this@AccdTileService).accdUserStopped = false
                         Acc.instance.abcStartDaemon()
                     } catch (e: Exception) {
                         LogExt().e(LOG_TAG, "abcStartDaemon failed: ${e.message}")

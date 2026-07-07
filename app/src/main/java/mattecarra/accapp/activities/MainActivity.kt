@@ -86,7 +86,8 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         if (firstInit)
         {
         checkAppUpdate()
-        checkAccUpdate()
+        // No ACC update check here: ACC already surfaces its own update via module.prop's
+        // updateJson, which Magisk/KernelSU show natively in their Modules list.
 
         // Subscribe to viewmodel config and action if config is null
         _sharedViewModel.observeConfig(this, Observer { r ->
@@ -572,31 +573,6 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         }
     }
 
-    /**
-     * Notify when a newer ACC module is published on this fork (versionCode in module.json beats
-     * the installed daemon's), and link to the ACC release page to flash it. Fails silently.
-     */
-    private fun checkAccUpdate() {
-        launch {
-            try {
-                val includePre = Preferences(this@MainActivity).includePreReleases
-                val info = GithubUtils.getLatestAccUpdateInfo(includePre) ?: return@launch
-                val installed = try { Acc.instance.version } catch (e: Exception) { 0 }
-                if (installed <= 0 || info.versionCode <= installed) return@launch
-                if (isFinishing || isDestroyed) return@launch
-                MaterialDialog(this@MainActivity).show {
-                    title(R.string.acc_update_title)
-                    message(text = getString(R.string.acc_update_message) + whatsNew(info.notes))
-                    positiveButton(R.string.app_update_get) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.pageUrl)))
-                    }
-                    negativeButton(android.R.string.cancel)
-                }
-            } catch (e: Exception) {
-                LogExt().e(javaClass.simpleName, "checkAccUpdate failed: ${e.message}")
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?)
     {
@@ -621,6 +597,10 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         //--------------------------------------------------
 
         sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
+
+        // Bring the status-bar charge meter in line with its setting on every launch (starts it if
+        // enabled, stops it if not). Read-only feature; no-op when the toggle is off.
+        mattecarra.accapp.services.ChargeMeterService.sync(this)
 
         //--------------------------------------------------
 
