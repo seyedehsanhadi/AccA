@@ -2,6 +2,21 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc15] - 2026-07-07
+
+### ✨ Added
+- **Status-bar charge meter.** Turn on *Show charging current in the status bar* for a live, edge-to-edge number in the status bar showing the current going into your battery, plus a matching notification line (current, watts, volts, temperature, and the hold level when ACC is holding your limit). It is a foreground service that draws zero battery while the screen is off.
+- **Battery source choice.** A new setting picks which battery reading AccA trusts: the Android *System* percentage (matches the icon in your status bar, the default) or ACC's own *Real Level*. Use Real Level on phones whose framework rounds or smooths the percentage.
+- **Update browser.** *Check for updates* now lists every AccA release published on GitHub, newest first, and downloads the one you tap instead of guessing a single "latest". Both the AccA and ACC update screens show the version you have installed now.
+
+### 🔧 Changed
+- *Show charging current in the status bar* is off by default and, when on, always shows and is bold and large by design; the earlier per-condition toggles for size, weight, unit, sign and on-battery were removed.
+
+### 🐛 Fixed
+- The status-bar meter no longer leaves a lingering on-battery notification row with a Stop button when you only wanted the number.
+- A charge daemon left dead by a force-killed test is revived within about ten seconds of plugging in the charger (pairs with the ACC-side fix in 6.5.1-rc13).
+- Charge vs discharge is read correctly on dual-path PMICs whose current sign flips with the charge mode (understands ACC's new `polarity=unstable`).
+
 ## [2.0.1-rc14] - 2026-07-05
 
 ### ✨ Added
