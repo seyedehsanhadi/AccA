@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
+import mattecarra.accapp.models.chargeStatusWord
 import mattecarra.accapp.activities.MainActivity
 import mattecarra.accapp.utils.LogExt
 
@@ -53,6 +54,7 @@ class ChargeMeterService : Service() {
         // IMPORTANCE_LOW/MIN only show in the shade, never in the strip. New channel id because a
         // channel's importance is immutable once created (the old "_low" one stayed LOW on testers).
         private const val CHANNEL_ID = "acca_charge_meter_bar"
+        private const val CHANNEL_DIM = "acca_charge_meter_dim"
         private const val NOTIF_ID = 4712
         const val ACTION_START = "acca.meter.start"
         // Internal idle-stop: sent by sync() when plug/screen conditions say "don't show right now"
@@ -114,22 +116,36 @@ class ChargeMeterService : Service() {
     // ticks (class/watts change slowly). BatteryManager current is read fresh every tick (free).
     @Volatile private var lastState: mattecarra.accapp.models.AccState? = null
     private var tickCount = 0
+    private var offStreak = 0
+
+    // Rolling median of the last few battery-current magnitudes, so the number is smooth/accurate
+    // instead of a single spiky fuel-gauge sample. Owned solely by this service (one writer, one 3s
+    // cadence) - no shared state, so it cannot suffer the cross-caller corruption a global would.
+    private val curRing = IntArray(5)
+    private var curRingN = 0
+    private var curRingI = 0
+    private fun smoothedAbsMa(sample: Int?): Int? {
+        if (sample != null) {
+            curRing[curRingI] = kotlin.math.abs(sample); curRingI = (curRingI + 1) % curRing.size
+            if (curRingN < curRing.size) curRingN++
+        }
+        if (curRingN == 0) return null
+        return curRing.copyOfRange(0, curRingN).sorted()[curRingN / 2]
+    }
 
     private val tick = object : Runnable {
         override fun run() {
-            // Self-heal on every tick: refresh the plug state from ground truth (for the reading
-            // itself, not for whether the meter shows) and bail out if the master toggle is off.
-            // This is what makes it reliable even after a START_STICKY restart - the tick is the
-            // one thing guaranteed to run while the meter is visible (screen on), so it owns the guard.
             plugged = isPluggedNow(this@ChargeMeterService)
             if (!prefs.chargeMeterEnabled) { stopMeter(); return }
             update(refreshState = (tickCount % ROOT_EVERY == 0))
             tickCount++
-            // ZERO-WAKE design: this is a plain Handler on the main looper - it only fires while
-            // the device is already awake, never via AlarmManager/wakelock, so it cannot wake the
-            // phone or fight doze. Reschedule ONLY while the screen is on; screen-off removes the
-            // callback entirely (see the receiver), so there is no background polling and no drain.
-            if (screenReallyOn()) handler.postDelayed(this, TICK_MS)
+            // Reschedule ALWAYS while the screen is on. Screen-off is stopped by the SCREEN_OFF
+            // receiver; as a backstop for a MISSED SCREEN_OFF broadcast, stop only after TWO
+            // consecutive not-interactive reads. A single transient isInteractive==false can no
+            // longer kill the loop -> the notification can never freeze while the screen is on (the
+            // old bug: one glitchy read stopped ticking permanently until the next SCREEN_ON).
+            if (screenReallyOn()) { offStreak = 0; handler.postDelayed(this, TICK_MS) }
+            else if (++offStreak < 2) handler.postDelayed(this, TICK_MS)
         }
     }
 
@@ -204,19 +220,46 @@ class ChargeMeterService : Service() {
         handler.post(tick)
     }
 
+    private var lastTitle: String? = null
+    private var lastCollapsed: String? = null
+    private var lastBig: String? = null
+    private var lastIconVal: String? = null
+    private var lastIconUnit: String? = null
+    @Volatile private var curChannel = CHANNEL_ID
+
+    // Screen off/on only SWAPS the notification channel (dim = no status-bar strip icon, so it does
+    // not clutter the lock screen / other apps' notifications). It NEVER stops the foreground service.
+    // The old code called stopForeground(DETACH) on screen-off, which made the service background and
+    // therefore killable - the OS (aggressively on MIUI) then killed it and it did not reliably come
+    // back ("acca dies after a while"). Re-posting via startForeground keeps it foreground = survivable.
+    private fun demote() { if (curChannel != CHANNEL_DIM) { curChannel = CHANNEL_DIM; repostForeground() } }
+    private fun promote() { if (curChannel != CHANNEL_ID) { curChannel = CHANNEL_ID; repostForeground() } }
+
+    private fun repostForeground() {
+        if (stopped || !prefs.chargeMeterEnabled) return
+        try {
+            val n = buildNotification(
+                lastTitle ?: getString(R.string.charge_meter_charging),
+                lastCollapsed, lastBig, lastIconVal, lastIconUnit, prefs.chargeMeterStyle, curChannel)
+            // startForeground (not notify) so the service STAYS foreground on the new channel. On
+            // failure we do NOT stopForeground, so it remains foreground on the previous channel -
+            // there is never a window where the service is background and killable.
+            startForeground(NOTIF_ID, n); promoted = true
+        } catch (e: Exception) {
+            try { (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID,
+                buildNotification(lastTitle ?: getString(R.string.charge_meter_charging),
+                    lastCollapsed, lastBig, lastIconVal, lastIconUnit, prefs.chargeMeterStyle, curChannel)) } catch (_: Exception) {}
+        }
+    }
+
     private fun registerStateReceiver() {
         receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
                 when (i?.action) {
-                    // The meter always shows while enabled - a plug change only flips what the
-                    // number reads. Reset the tick counter so the first frame after a plug change
-                    // does a full (root) refresh, not a cached one.
                     Intent.ACTION_POWER_CONNECTED -> { plugged = true; tickCount = 0; scheduleTicks() }
                     Intent.ACTION_POWER_DISCONNECTED -> { plugged = false; tickCount = 0; scheduleTicks() }
-                    // Screen ON re-arms ticking; screen OFF stops ALL work (no poll, no render, no
-                    // root call) - the guarantee that the meter draws zero battery with the screen off.
-                    Intent.ACTION_SCREEN_ON -> { screenOn = true; scheduleTicks() }
-                    Intent.ACTION_SCREEN_OFF -> { screenOn = false; handler.removeCallbacks(tick) }
+                    Intent.ACTION_SCREEN_ON -> { screenOn = true; offStreak = 0; promote(); scheduleTicks() }
+                    Intent.ACTION_SCREEN_OFF -> { screenOn = false; handler.removeCallbacks(tick); demote() }
                 }
             }
         }
@@ -266,11 +309,10 @@ class ChargeMeterService : Service() {
         if (stopped) return
         if (!prefs.chargeMeterEnabled) { stopMeter(); return }
         scope.launch {
-            // Battery current from BatteryManager (microamps, no root). Magnitude for the number;
-            // sign tells charge (into battery) vs discharge (on battery, only shown in "always").
             val curUa = try { bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) } catch (e: Exception) { Long.MIN_VALUE }
             val curMa: Int? = if (curUa == Long.MIN_VALUE) null else (curUa / 1000L).toInt()
-            val maAbs = curMa?.let { kotlin.math.abs(it) }
+            // Median of recent samples, not one raw reading -> smooth + accurate, spikes removed.
+            val maAbs = smoothedAbsMa(curMa)
 
             // Rich watts + class from ACC --state (read-only, root). Only re-read every ROOT_EVERY
             // ticks; reuse the cached value otherwise so we don't spawn a root shell every tick.
@@ -287,20 +329,20 @@ class ChargeMeterService : Service() {
             // Power in tenths of a watt (one-decimal precision so a small charge shows 2.5W, not 0).
             // Prefer measured charger input (V x A); fall back to battery-side (V x A), which is <=
             // input power so it can only under-state. Null when nothing measurable.
-            val wattsX10: Int? = when {
-                vin != null && iin != null && vin > 1000 && kotlin.math.abs(iin) > 30 ->
-                    (vin.toLong() * kotlin.math.abs(iin) / 100000L).toInt()
-                maAbs != null && vbatMv != null && vbatMv > 1000 && maAbs > 30 ->
+            // Battery-side watts ONLY, so the strip's W and the shade's A are always the SAME
+            // measurement and can't disagree. Mixing in charger INPUT watts (wall power) is what
+            // produced "Charging 1.0 W 0.00 A" (1 W into the phone, ~0 into the battery) and the
+            // W<->mA flicker as input-watts crossed the 1 W line. Input V/A still shows in the detail
+            // line below, labelled "in".
+            val wattsX10: Int? =
+                if (maAbs != null && vbatMv != null && vbatMv > 1000 && maAbs > 30)
                     (vbatMv.toLong() * maAbs / 100000L).toInt()
-                else -> null
-            }
+                else null
             fun wattsShade(x10: Int): String =
                 if (x10 >= 100) "${x10 / 10} W" else "${x10 / 10}.${x10 % 10} W"
             fun wattsNum(x10: Int): String =
                 if (x10 >= 100) "${x10 / 10}" else "${x10 / 10}.${x10 % 10}"   // no unit (unit line below)
 
-            // Sign by plug state: "+" charging (into battery), "-" on battery (discharging). Plug
-            // state is unambiguous across OEMs, unlike the raw current sign.
             val sign = if (plugged) "+" else "-"
             val display = prefs.chargeMeterDisplay
             // "acc" (default) = ACC's own reading, which reflects Capacity Mask if the user has one
@@ -347,11 +389,18 @@ class ChargeMeterService : Service() {
             val wStr = wattsX10?.let { "$sign${wattsShade(it)}" }
             val aStr = maAbs?.let { "$sign" + String.format("%.2f A", it / 1000f) }
             val numbers = listOfNotNull(wStr, aStr).joinToString("  ·  ")
-            val classWord = if (!plugged) getString(R.string.charge_meter_on_battery) else getString(when (cls) {
+            val word = chargeStatusWord(plugged, st?.measuredClass)
+            val classWord = if (word == "Charging") getString(when (cls) {
                 "slow" -> R.string.charge_class_slow; "standard" -> R.string.charge_class_standard
                 "fast" -> R.string.charge_class_fast; "superfast" -> R.string.charge_class_superfast
                 "hyper" -> R.string.charge_class_hyper; else -> R.string.charge_meter_charging
-            })
+            }) else when (word) {
+                "Discharging" -> getString(R.string.status_discharging)
+                "Idle" -> getString(R.string.status_idle)
+                "Draining" -> getString(R.string.status_draining)
+                "Bypass" -> getString(R.string.status_bypass)
+                else -> word
+            }
             val title = listOf(classWord, numbers).filter { it.isNotBlank() }.joinToString("  ·  ")
 
             // Detailed dashboard lines (BigText). Charger, then battery, then the ACC limit.
@@ -368,10 +417,13 @@ class ChargeMeterService : Service() {
             val bigText = listOfNotNull(chargerLine, battLine, holdLine).joinToString("\n").ifBlank { null }
             val collapsed = chargerLine ?: battLine
 
-            if (stopped || !prefs.chargeMeterEnabled) return@launch   // toggled off mid-read: no ghost
+            if (stopped || !prefs.chargeMeterEnabled) return@launch
+            lastTitle = title; lastCollapsed = collapsed; lastBig = bigText
+            lastIconVal = iconValue; lastIconUnit = iconUnit
             try {
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.notify(NOTIF_ID, buildNotification(title, collapsed, bigText, iconValue, iconUnit, prefs.chargeMeterStyle))
+                nm.notify(NOTIF_ID, buildNotification(title, collapsed, bigText, iconValue, iconUnit,
+                    prefs.chargeMeterStyle, curChannel))
             } catch (e: Exception) { LogExt().e(javaClass.simpleName, "notify failed: ${e.message}") }
         }
     }
@@ -383,9 +435,6 @@ class ChargeMeterService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-                // DEFAULT importance = the icon reaches the status-bar strip; everything else off so
-                // it stays completely silent (no sound/vibration/light/badge, and no heads-up since
-                // the notification uses setOnlyAlertOnce).
                 val ch = NotificationChannel(CHANNEL_ID, getString(R.string.charge_meter_channel), NotificationManager.IMPORTANCE_DEFAULT)
                 ch.setShowBadge(false)
                 ch.enableVibration(false)
@@ -393,25 +442,29 @@ class ChargeMeterService : Service() {
                 ch.setSound(null, null)
                 nm.createNotificationChannel(ch)
             }
+            if (nm.getNotificationChannel(CHANNEL_DIM) == null) {
+                val dim = NotificationChannel(CHANNEL_DIM, getString(R.string.charge_meter_channel) + " (screen off)", NotificationManager.IMPORTANCE_MIN)
+                dim.setShowBadge(false)
+                dim.enableVibration(false)
+                dim.enableLights(false)
+                dim.setSound(null, null)
+                nm.createNotificationChannel(dim)
+            }
         }
     }
 
     private fun buildNotification(
         title: String, collapsed: String?, bigText: String?,
-        iconValue: String?, iconUnit: String?, style: String
+        iconValue: String?, iconUnit: String?, style: String, channel: String = CHANNEL_ID
     ): Notification {
         val tap = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             else PendingIntent.FLAG_UPDATE_CURRENT
         )
-        // A notification with no title/text at all is suppressed WHOLESALE by some ROMs (MIUI drops
-        // the strip icon along with the empty shade row - device-verified on the Mi A3), and stock
-        // Android never lets an FGS row be removed anyway. So there is no "number only, no
-        // notification" mode on Android: every style keeps a one-line shade row + a Stop action.
-        val b = NotificationCompat.Builder(this, CHANNEL_ID)
+        val b = NotificationCompat.Builder(this, channel)
             .setContentTitle(title)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(if (channel == CHANNEL_DIM) NotificationCompat.PRIORITY_MIN else NotificationCompat.PRIORITY_DEFAULT)
             .setOngoing(true)
             .setShowWhen(false)
             .setOnlyAlertOnce(true)   // updates every 3s must NOT re-alert
@@ -460,7 +513,16 @@ class ChargeMeterService : Service() {
      * as large as the slot physically allows. If the user opts into a unit line, it drops to a
      * two-tier layout (number on top, unit below). White on transparent so the system tints it.
      */
+    private var iconCacheKey: String? = null
+    private var iconCache: IconCompat? = null
+
     private fun numberIcon(value: String, unit: String): IconCompat? {
+        val key = "$value|$unit"
+        if (key == iconCacheKey && iconCache != null) return iconCache
+        return renderIcon(value, unit)?.also { iconCacheKey = key; iconCache = it }
+    }
+
+    private fun renderIcon(value: String, unit: String): IconCompat? {
         return try {
             val size = 96
             val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)

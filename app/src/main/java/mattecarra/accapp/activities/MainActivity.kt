@@ -263,6 +263,15 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             startActivity(Intent(this, LogViewerActivity::class.java))
             true
         }
+        R.id.menu_appbar_rekick -> {
+            Toast.makeText(this, getString(R.string.rekick_fast_charge_running), Toast.LENGTH_SHORT).show()
+            launch {
+                val ok = Acc.rekickFastCharge()
+                if (isFinishing || isDestroyed) return@launch
+                Toast.makeText(this@MainActivity, getString(if (ok) R.string.rekick_fast_charge_done else R.string.error_occurred), Toast.LENGTH_LONG).show()
+            }
+            true
+        }
         R.id.menu_appbar_settings -> {
             SettingsActivity.launch(this)
             true

@@ -2,6 +2,15 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc16] - 2026-07-09
+
+### Added
+- **Re-kick fast charge** (overflow menu). If fast charging dropped for any reason (a loose cable, heat that cleared, another app), tap it to make the charger re-negotiate the fast-charge contract and clear any stray cut. It only ever enables charging, so it can never overcharge or stop charging; ACC re-applies your limit on its next loop.
+
+### Fixed
+- **Charge meter no longer dies or freezes.** Turning the screen off used to detach the meter's notification from the foreground service, which let the system kill it (aggressively on some phones) so it never came back; and a single glitchy "is the screen on?" read could stop updates permanently while the screen was still on. The meter now stays a foreground service (survivable) and only swaps to a quiet, no-status-bar-icon channel when the screen is off, and the screen check is debounced so one bad read can never freeze it.
+- **Consistent charge words + current everywhere.** The status word (Charging / Idle / Bypass / Draining / Discharging) is derived from the same reading shown next to it, so the label can never contradict the number, and the dashboard and the notification use the same word for the same state. The status-bar number is now the median of the last few samples, so a momentary fuel-gauge spike never shows, and the dashboard current line shows watts alongside the amps.
+
 ## [2.0.1-rc15] - 2026-07-07
 
 ### ✨ Added

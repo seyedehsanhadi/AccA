@@ -471,7 +471,9 @@
     <string name="status_bypass">Bypass</string>
     <string name="status_standby">Standby</string>
     <string name="status_draining">Draining</string>
-    <string name="status_hint">Bypass = plugged in, battery resting. Standby = unplugged. Draining = ACC or the firmware is lowering the battery to your limit. A few hundred mA still counts as charging or draining, not Bypass.</string>
+    <string name="status_idle">Idle</string>
+    <string name="status_discharging">Discharging</string>
+    <string name="status_hint">Charging = battery filling. Idle = plugged in, battery resting (held/full). Bypass = plugged in, phone runs on the charger. Standby = unplugged. Draining = battery going down. The number next to it is the real rate.</string>
     <string name="about_attributes">Attributes</string>
     <string name="about_attrib_telegram_icon">Telegram icon made by Pixel perfect from www.flaticon.com</string>
 
@@ -657,5 +659,9 @@
     <!-- 1.1.7 one-shot migration: shown when the daemon's saved charging_switch is missing the
          manual-lock marker on first launch after upgrade and AccA re-writes it. -->
     <string name="relock_v117_done">Charging switch re-locked for safety (1.1.7).</string>
+
+    <string name="rekick_fast_charge">Re-kick fast charge</string>
+    <string name="rekick_fast_charge_running">Re-kicking fast charge...</string>
+    <string name="rekick_fast_charge_done">Fast charge re-kicked. If it did not help, reseat the cable and try again.</string>
 
 </resources>

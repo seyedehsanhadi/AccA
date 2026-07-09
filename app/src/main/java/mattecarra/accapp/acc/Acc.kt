@@ -110,6 +110,26 @@ object Acc {
         }
     }
 
+    // Force the charger to re-negotiate the fast-charge contract (AICL/APSD) and un-latch any
+    // stray cut, so fast charging re-engages after it dropped (bad cable seat, thermal that
+    // cleared, a stray app). ENABLE direction only -- it can never overcharge or stop charging;
+    // ACC re-applies your limit on its next loop, so this is a best-effort boost, not a bypass of
+    // your settings. Crash-safe: a libsu failure returns false, never propagates.
+    suspend fun rekickFastCharge(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Shell.su(
+                "cd /sys/class/power_supply 2>/dev/null || exit 1; " +
+                "for f in */input_suspend */charge_disable */batt_slate_mode */op_disable_charge */disable_charging; do [ -w \"\$f\" ] && echo 0 2>/dev/null > \"\$f\"; done; " +
+                "for f in */charging_enabled */battery_charging_enabled */charge_enabled */charging_enable */enable_charging */enable_charger; do [ -w \"\$f\" ] && echo 1 2>/dev/null > \"\$f\"; done; " +
+                "for f in */apsd_rerun */rerun_aicl; do [ -w \"\$f\" ] && echo 1 2>/dev/null > \"\$f\"; done; " +
+                "[ -w /proc/mtk_battery_cmd/en_power_path ] && echo 1 2>/dev/null > /proc/mtk_battery_cmd/en_power_path; true"
+            ).exec().isSuccess
+        } catch (e: Exception) {
+            LogExt().e(TAG, "rekickFastCharge failed: ${Log.getStackTraceString(e)}")
+            false
+        }
+    }
+
     suspend fun installBundledAccModule(context: Context): Shell.Result?  = withContext(Dispatchers.IO) {
         try {
             val bundleFile = File(context.filesDir, "acc_bundle.tar.gz")

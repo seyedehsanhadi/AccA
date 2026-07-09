@@ -25,6 +25,7 @@ import mattecarra.accapp.databinding.DashboardFragmentBinding
 import mattecarra.accapp.databinding.EditChargingLimitOnceDialogBinding
 import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.DashboardValues
+import mattecarra.accapp.models.chargeStatusWord
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ScopedFragment
 import mattecarra.accapp.viewmodel.DashboardViewModel
@@ -134,7 +135,6 @@ class DashboardFragment : ScopedFragment()
                 binding.dashChargingSpeedTextView.text = dash.batteryInfo.getCurrentNow(preferences.currentInputUnitOfMeasure, preferences.currentOutputUnitOfMeasure, plus, true)
 
                 binding.dashManualLockTextView.visibility = View.GONE
-                // No --state snapshot -> no input telemetry to show.
                 binding.dashChargerTextView.visibility = View.GONE
             }
 
@@ -385,13 +385,12 @@ class DashboardFragment : ScopedFragment()
         if (state.nativeEnabled && state.nativeStopLevel in 1..99 &&
             state.capacityPct > state.nativeStopLevel && (mc == "discharging" || mc == "drain"))
             return getString(R.string.status_draining_to, state.nativeStopLevel)
-        return when (mc)
-        {
-            "bypass" -> getString(R.string.status_bypass)
-            "standby", "idle" -> getString(R.string.status_standby)
-            "drain" -> getString(R.string.status_draining)
-            "" -> state.status
-            else -> mc.replaceFirstChar { c -> c.titlecase() }
+        return when (chargeStatusWord(state.plugged, state.measuredClass)) {
+            "Discharging" -> getString(R.string.status_discharging)
+            "Idle" -> getString(R.string.status_idle)
+            "Draining" -> getString(R.string.status_draining)
+            "Bypass" -> getString(R.string.status_bypass)
+            else -> if (state.status.equals("Full", true)) state.status else getString(R.string.charge_meter_charging)
         }
     }
 
@@ -400,26 +399,19 @@ class DashboardFragment : ScopedFragment()
         binding.dashBatteryStatusTextView.text = statusLabel(state)
         binding.dashBatteryStatusTextView.contentDescription = getString(R.string.status_hint)
 
-        val charging = state.measuredClass.equals("charging", true) ||
-                (state.measuredClass.isBlank() && state.status.equals("Charging", true))
+        val shownMa = state.signedCurrentMilliAmps()
+        val charging = shownMa > 80f
         binding.dashBatteryChargingSpeedTextView.text =
             if (charging) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
 
-        binding.dashChargingSpeedTextView.text =
-            formatCurrentFromState(state.signedCurrentMilliAmps())
+        val vbat = if (state.voltageRaw >= 100000L) (state.voltageRaw / 1000L).toInt() else state.voltageRaw.toInt()
+        val battW = if (vbat > 1000) kotlin.math.abs(shownMa) * vbat / 1000000f else 0f
+        binding.dashChargingSpeedTextView.text = formatCurrentFromState(shownMa) +
+            (if (battW >= 0.1f) "  ·  " + String.format("%.1f W", battW) else "")
 
-        // Manual-lock badge (rc8 userLocked): ACC will not auto-replace a user-pinned switch.
         binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
-
-        // Charge-speed line (physics only: watts = input V x A, classified by band - the one
-        // signal every charging system exposes, incl. vendor-opaque 120W+ ones). Shows class +
-        // measured watts + detected charger tier + input amps + input->battery ratio; appends a
-        // reason when charging is reduced (your ACC limit / heat / topping off). approx=true means
-        // the battery-side fallback (no input sensor): can only under-state, labeled as such.
-        // Hidden when not charging or nothing measurable. Replaces the rc13 charger-only line.
         val vin = state.inputVoltageMv
         val iin = state.inputCurrentMa
-        val vbat = if (state.voltageRaw >= 100000L) (state.voltageRaw / 1000L).toInt() else state.voltageRaw.toInt()
         val watts = state.chargeWatts
         val clsRes = when (state.chargeClass) {
             "slow" -> R.string.charge_class_slow
