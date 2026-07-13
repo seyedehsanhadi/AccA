@@ -19,6 +19,19 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        android:title="@string/pref_charging_category"
+        app:iconSpaceReserved="false">
+
+        <CheckBoxPreference
+            android:key="auto_rekick_on_plug"
+            android:defaultValue="false"
+            android:title="@string/pref_auto_rekick_title"
+            android:summary="@string/pref_auto_rekick_summary"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/pref_battery_source_category"
         app:iconSpaceReserved="false">
 

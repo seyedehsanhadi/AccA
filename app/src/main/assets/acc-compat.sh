@@ -3,7 +3,7 @@
 # AMPS - Adaptive Multi-device Probe & Selector.
 # Root-only universal charge-control switch finder: probes any device, leak-verifies
 # bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.1.3
+V=7.1.4
 # Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
@@ -878,6 +878,7 @@ log "==== LAYER 3 - current sign + unit auto-learn (ACC method) ===="
 P1=no; plugged && P1=yes
 ST="$(rd $BATT/status | sed -n '1p' | pclean)"
 RAW=0; CUR_FROZEN=0
+_cc0="$(san "$(read1 "$BATT/charge_counter")")"
 if [ -n "$CURF" ]; then
   cb1="$(san "$(read1 "$CURF")")"; sleep 1
   cb2="$(san "$(read1 "$CURF")")"; sleep 1
@@ -923,12 +924,32 @@ case "$EFFST" in ''|Unknown|unknown) EFFST="$AST";; esac
 [ -n "$ST_UNIT" ] && case "$ST_UNIT" in uA*|microamp*) UNIT=uA; THR=50000; IDLE=10000;; mA*|milliamp*) UNIT=mA; THR=50; IDLE=10;; esac
 CS="$(sgn "$RAW")"; _gt=0; [ "$ABSB" -gt "$THR" ] 2>/dev/null && _gt=1
 _lc="$(learn_chgdir "$EFFST" "$CS" "$_gt")"; CHGDIR="${_lc%% *}"; SIGN_CONF="${_lc##* }"; POL_SRC=live
+# rc13 (curtana lesson): COULOMB-PROOF the learned direction. The 6-sample sign vote above is
+# blind to WHY the sign is what it is; the fuel gauge's charge_counter is sign-convention-free.
+# If the counter ROSE >=150 uAh across the ~5s sample window while the charger is present, the
+# pack was provably FILLING, so the dominant large-sample sign IS the charging sign - physics,
+# not inference. This survives dual-path PMICs whose sign flips with the charge contract (5V
+# trickle positive / 9V parallel negative, both charging - field-verified on Redmi Note 9S).
+_cc1="$(san "$(read1 "$BATT/charge_counter")")"
+SIGN_MODE_DEP=0
+if [ -n "$_cc0" ] && [ -n "$_cc1" ] && present_now; then
+  _ccd=$(( _cc1 - _cc0 ))
+  if [ "$_ccd" -ge 150 ] 2>/dev/null && [ "${SIGN_UNSTABLE:-0}" = 0 ]; then
+    if [ "${_sgp:-0}" -ge 3 ] && [ "${_sgn:-0}" -le 1 ]; then CHGDIR=p; SIGN_CONF=high; POL_SRC=cc-physics
+    elif [ "${_sgn:-0}" -ge 3 ] && [ "${_sgp:-0}" -le 1 ]; then CHGDIR=n; SIGN_CONF=high; POL_SRC=cc-physics; fi
+  fi
+fi
 POL_CONFLICT=0
 if [ -n "$ST_POL" ]; then
   _sp="$(acca_sign "$ST_POL")"
   if [ -n "$_sp" ] && [ "${SIGN_UNSTABLE:-0}" = 1 ] && [ "$(pol_conflict "$_sp" "$CHGDIR" "$_gt" "$SIGN_CONF")" = 1 ]; then
     POL_CONFLICT=1
     warn "polarity CONFLICT: acca --state says $ST_POL but live samples flip sign within the read window (chg-sign=$CHGDIR) -- the current sign is unreliable on this phone (oplus/MTK latch it per charge session), so a single-sample polarity can mis-read working switches as 'no effect' -> verifying BLIND (status/charge_type/voltage), which is sign-independent."
+  elif [ -n "$_sp" ] && [ "$POL_SRC" = cc-physics ] && [ "$_sp" != "$CHGDIR" ]; then
+    # coulomb-proven sign for THIS session contradicts ACC's learned cache: the sign follows the
+    # charge mode on this phone. Keep the physics-proven value, never adopt the cache, and say so.
+    SIGN_MODE_DEP=1
+    warn "sign is MODE-DEPENDENT on this phone: the coulomb-proven charge sign this session (chg-sign=$CHGDIR) contradicts ACC's learned polarity ($ST_POL). Dual-path PMICs flip the current sign with the charge contract (5V vs 9V). Verdicts below are valid for THIS session's mode; runtime ACC arbitrates by coulomb slope, so daily behavior stays correct."
   elif [ -n "$_sp" ] && [ "$SIGN_CONF" != high ]; then
     CHGDIR="$_sp"; SIGN_CONF=high; POL_SRC="acca-state:$ST_POL"
   fi
@@ -2523,6 +2544,32 @@ else
   log "  (ACC not installed -- install it and re-run to cross-validate against ACC's own detection history.)"
 fi
 
+# ---- re-kick / re-negotiate detection: which resume mechanism does THIS phone have? ----
+# The trigger nodes are write-only, so LAYER 6's value-discovery never lists them -- probe by name.
+# Three real families across tested phones: qcom-smb5 (apsd_rerun/rerun_aicl/dp_dm), MediaTek
+# (en_power_path), and new-Qualcomm glink/UCSI which self-negotiate PD in firmware with NO sysfs
+# kick at all (if fast charge drops there, only a physical replug or reboot resumes it).
+REKICK=no; REKICK_KIND=; REKICK_NODES=
+for _rk in "$PSY/usb/apsd_rerun" "$PSY/battery/apsd_rerun" /sys/class/qcom-battery/apsd_rerun \
+           "$BATT/rerun_aicl" "$PSY/usb/rerun_aicl" /sys/class/qcom-battery/rerun_aicl; do
+  [ -w "$_rk" ] && { REKICK=yes; REKICK_KIND=qcom-smb5; REKICK_NODES="$REKICK_NODES ${_rk##*/}"; }
+done
+# dp_dm is an extra Qualcomm re-detect trigger -- REPORT it, but never auto-write it (opcode-specific).
+for _rk in "$PSY/battery/dp_dm" "$PSY/usb/dp_dm"; do [ -w "$_rk" ] && REKICK_NODES="$REKICK_NODES dp_dm"; done
+if [ "$REKICK" = no ] && [ -w /proc/mtk_battery_cmd/en_power_path ]; then REKICK=yes; REKICK_KIND=mtk; REKICK_NODES="en_power_path"; fi
+if [ "$REKICK" = no ]; then
+  case " $DRVS " in
+    *glink*|*ucsi*|*business_charger*|*qti_battery_charger*|*mmi*) REKICK=replug-only; REKICK_KIND="glink/ucsi";;
+  esac
+  [ "$REKICK" = no ] && { for _u in "$PSY"/ucsi-source-psy*; do [ -e "$_u" ] && { REKICK=replug-only; REKICK_KIND=ucsi; break; }; done; }
+fi
+REKICK_NODES="${REKICK_NODES# }"
+case $REKICK in
+  yes)         REKICK_MSG="SUPPORTED ($REKICK_KIND: $REKICK_NODES) -- AccA 'Re-kick fast charge on plug' works on this phone";;
+  replug-only) REKICK_MSG="NONE in software ($REKICK_KIND charger self-negotiates PD) -- if fast charge drops, physically unplug+replug or reboot; the AccA toggle cannot help here";;
+  *)           REKICK_MSG="none found (charger self-manages; the AccA toggle is a harmless no-op here)";;
+esac
+
 log ""
 log "==== DEEP-TEST LAYER RECAP (each layer ran + verified) ===="
 log "  L0-3 setup/baseline      : OK ($([ "$BLINDV" = 1 ] && echo "BLIND verify: status/charge_type/voltage" || echo "current-delta verify"))"
@@ -2535,6 +2582,7 @@ log "  write policy             : trusted reversible switches + native %-limits 
 log "  L6c firmware-observed    : ${tested_gen:-0} candidate(s) tested"
 log "  L6d combo engine         : ${cn:-0} grouped candidate(s)"
 log "  L6e firmware-teaching    : teacher=${TEACH_P:-none}; learned $NLEARN, tested $TEACHED, VERIFIED $TBUILT new switch(es)$([ -n "$BUILT" ] && echo " + built 1 combo")"
+log "  fast-charge re-kick      : $REKICK_MSG"
 log ""
 log "=====SUMMARY====="
 log "AMPS v$V (Adaptive Multi-device Probe & Selector)"
@@ -2543,10 +2591,11 @@ log "SOC=$(getprop ro.board.platform 2>/dev/null)"
 log "ANDROID=$(getprop ro.build.version.release 2>/dev/null)"
 log "ACC=${ACCV:-no}"
 log "SENSOR=${CURF:-none}"
-log "UNITS=$UNIT SIGN=$CHGDIR CONF=$SIGN_CONF BASE=$RAW"
+log "UNITS=$UNIT SIGN=$CHGDIR CONF=$SIGN_CONF SRC=$POL_SRC MODE_DEP=${SIGN_MODE_DEP:-0} BASE=$RAW"
 log "SYSFS_STATUS=$ST ANDROID_STATUS=${AST:-na}"
 log "BATT_TEMP=$(batt_temp) (0.1C units)  CAPACITY=${CAP}% (end $(rd $BATT/capacity | sed -n '1p' | pclean)%)"
 log "IDLE_MODE=$([ -n "$BYPASS" ] && echo yes || echo no)   (bypass / battery-idle charging support)"
+log "REKICK=$REKICK${REKICK_KIND:+ ($REKICK_KIND)}${REKICK_NODES:+ [$REKICK_NODES]}"
 log "ACTIVE=$ACTIVE SKIPALL=$SKIPALL"
 log "CUR_USABLE=$CUR_USABLE CUR_FROZEN=$CUR_FROZEN BLIND=$BLINDV PROOF=$PROOF"
 log "VOLT_mV=$(vmv) V0=$V0 VNOISE=$VNOISE VDROP=$VDROP VRISE=$VRISE"

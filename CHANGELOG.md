@@ -2,14 +2,26 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
-## [2.0.1-rc16] - 2026-07-09
+## [2.0.1-rc16] - 2026-07-13
 
 ### Added
-- **Re-kick fast charge** (overflow menu). If fast charging dropped for any reason (a loose cable, heat that cleared, another app), tap it to make the charger re-negotiate the fast-charge contract and clear any stray cut. It only ever enables charging, so it can never overcharge or stop charging; ACC re-applies your limit on its next loop.
+- **Re-kick fast charge on plug** (Settings > Charging, off by default). Plug in below your pause limit and AccA nudges the charger to re-negotiate fast charge - useful on phones that drop to slow charging after a cut. Guarded so it can never overcharge or fight your setup: it only fires below the limit, is a no-op on phones with no such control (Pixel/Tensor and other PD chargers), and steps aside entirely if you run your own Apply-on-plug script.
+- **AMPS reports whether your phone can re-kick.** The bundled compatibility tester (v7.1.4) detects your phone's resume mechanism: a software re-kick on Qualcomm (`apsd_rerun`/`rerun_aicl`/`dp_dm`) and MediaTek (`en_power_path`), or "physical replug or reboot only" on newer PD-glink/UCSI chargers that self-negotiate in firmware.
+- **"See all switches" in the switch finder**, so you can pin any verified switch, not only the recommended one.
+- **Sponsor links in About**: Buy Me a Coffee and Ko-fi, alongside the fork's Telegram.
+
+### Changed
+- **ACC install/update reads GitHub Releases.** The bundled ACC copy is gone - AccA now detects a separately-flashed ACC and points you to the download instead of shipping (and overwriting with) its own. Both update screens list every published version newest-first, default to the latest, show pre-releases, and show the version you have now.
+- **Battery-% source is one app-wide setting.** The dashboard, the status-bar meter and the notification all follow the same choice (Android System vs ACC's real level).
+- **Support and community links** now point to the fork's Telegram group and issue tracker.
+- Built against SDK 33; the switch finder is trimmed to verified switches; the redundant "Test" button was dropped from the switch editor.
 
 ### Fixed
-- **Charge meter no longer dies or freezes.** Turning the screen off used to detach the meter's notification from the foreground service, which let the system kill it (aggressively on some phones) so it never came back; and a single glitchy "is the screen on?" read could stop updates permanently while the screen was still on. The meter now stays a foreground service (survivable) and only swaps to a quiet, no-status-bar-icon channel when the screen is off, and the screen check is debounced so one bad read can never freeze it.
-- **Consistent charge words + current everywhere.** The status word (Charging / Idle / Bypass / Draining / Discharging) is derived from the same reading shown next to it, so the label can never contradict the number, and the dashboard and the notification use the same word for the same state. The status-bar number is now the median of the last few samples, so a momentary fuel-gauge spike never shows, and the dashboard current line shows watts alongside the amps.
+- **Settings no longer crashes on open** - a bare `%` in the battery-source summary threw a format exception.
+- **The switch picker no longer opens empty**, recovers cleanly on first run, and no longer mis-renders under some locales; switches that share a short label (the same node reached by two paths) are shown by full path so you can tell them apart.
+- **Charge meter no longer dies or freezes.** Screen-off used to detach its notification from the foreground service (letting the system kill it), and one glitchy "is the screen on?" read could freeze updates for good. It now stays a foreground service, swaps to a quiet no-status-bar-icon channel when the screen is off, and debounces the screen check.
+- **Consistent charge words and current everywhere.** The status word (Charging / Idle / Bypass / Draining / Discharging) is derived from the same reading shown beside it, the dashboard and notification agree, the status-bar number is a median of recent samples (no fuel-gauge spikes), and the dashboard shows watts alongside amps.
+- The About / team card lists the maintainer first.
 
 ## [2.0.1-rc15] - 2026-07-07
 

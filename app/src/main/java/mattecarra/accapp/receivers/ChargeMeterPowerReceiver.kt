@@ -33,11 +33,39 @@ class ChargeMeterPowerReceiver : BroadcastReceiver() {
             val pending = goAsync()
             Thread {
                 try {
-                    if (!Preferences(context).accdUserStopped && Shell.rootAccess()) {
+                    val prefs = Preferences(context)
+                    if (Shell.rootAccess()) {
                         runBlocking {
-                            if (!Acc.instance.isAccdRunning()) {
+                            if (!prefs.accdUserStopped && !Acc.instance.isAccdRunning()) {
                                 LogExt().d("ChargeMeterPowerReceiver", "accd dead on plug-in; restarting")
                                 Acc.instance.abcStartDaemon()
+                            }
+                            // Optional fast-charge re-kick on plug (default OFF, opt-in). Only fires
+                            // BELOW the pause limit - the one window where charging is wanted - so the
+                            // ENABLE-direction writes never fight ACC's hold or overshoot the cap. rekick
+                            // only touches nodes that exist AND are writable, so it is a harmless no-op
+                            // on phones without apsd_rerun/rerun_aicl/en_power_path (Pixel/Tensor
+                            // chargers self-renegotiate and have no such nodes). Any failure is swallowed.
+                            if (prefs.autoRekickOnPlug) {
+                                try {
+                                    val cfg = Acc.instance.readConfig()
+                                    // Respect a user's OWN plug script. applyOnPlug (configOnPlug) is
+                                    // ACC's plug-time hook; if the user set one, that IS their intended
+                                    // plug behaviour, so defer to it entirely and never layer our
+                                    // enable-writes on top. Mutually exclusive -> the two can't fight.
+                                    if (!cfg.configOnPlug.isNullOrBlank()) {
+                                        LogExt().d("ChargeMeterPowerReceiver", "auto re-kick skipped: user has an applyOnPlug script")
+                                    } else {
+                                        val pause = cfg.configCapacity.pause
+                                        val cap = Acc.instance.getBatteryInfo().capacity
+                                        if (cap in 0 until pause) {
+                                            LogExt().d("ChargeMeterPowerReceiver", "auto re-kick fast charge (cap=$cap < pause=$pause)")
+                                            Acc.rekickFastCharge()
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    LogExt().e("ChargeMeterPowerReceiver", "auto re-kick failed: ${e.message}")
+                                }
                             }
                         }
                     }

@@ -8,11 +8,6 @@
             app:showAsAction="ifRoom" />
 
     <item
-            android:id="@+id/menu_appbar_rekick"
-            android:title="@string/rekick_fast_charge"
-            app:showAsAction="never" />
-
-    <item
             android:id="@+id/menu_appbar_settings"
             android:title="@string/title_settings"
             app:showAsAction="never" />

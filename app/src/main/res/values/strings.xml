@@ -536,6 +536,9 @@
     <string name="pref_charge_meter_battery_source_summary">Which battery reading the whole app shows - the dashboard, the status-bar meter and the notification all follow this. ACC reflects your Capacity Mask if you set one; System is the phone\'s own raw level.</string>
     <string name="pref_charge_meter_show_temp_title">Show battery temperature</string>
     <string name="pref_charge_meter_show_temp_summary">Adds the battery temperature next to the status-bar number and in the detailed line. Shown in °C or °F per the Temperature output unit below, under Units of measure.</string>
+    <string name="pref_charging_category">Charging</string>
+    <string name="pref_auto_rekick_title">Re-kick fast charge on plug</string>
+    <string name="pref_auto_rekick_summary">When you plug in below your pause limit, nudge the charger to re-negotiate fast charge. Helps some Qualcomm and MediaTek phones that stay on slow charging after a cut. Does nothing on Pixel/Tensor and phones without such a control, and never overrides your limit. If you set your own Apply-on-plug script, that takes over and this stays out of the way. Off by default.</string>
     <string name="charge_meter_stop_action">Stop</string>
     <!-- manual AccA-only update browser; ACC surfaces its own update via Magisk/KernelSU -->
     <string name="pref_check_updates_title">Check for updates</string>
@@ -677,8 +680,5 @@
          manual-lock marker on first launch after upgrade and AccA re-writes it. -->
     <string name="relock_v117_done">Charging switch re-locked for safety (1.1.7).</string>
 
-    <string name="rekick_fast_charge">Re-kick fast charge</string>
-    <string name="rekick_fast_charge_running">Re-kicking fast charge...</string>
-    <string name="rekick_fast_charge_done">Fast charge re-kicked. If it did not help, reseat the cable and try again.</string>
 
 </resources>

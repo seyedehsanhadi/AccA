@@ -6,6 +6,7 @@ import android.preference.PreferenceManager
 import mattecarra.accapp.djs.Djs
 import mattecarra.accapp.utils.Constants.ACCD_USER_STOPPED
 import mattecarra.accapp.utils.Constants.ACC_VERSION
+import mattecarra.accapp.utils.Constants.AUTO_REKICK_ON_PLUG
 import mattecarra.accapp.utils.Constants.CHARGE_METER_BATTERY_SOURCE
 import mattecarra.accapp.utils.Constants.CHARGE_METER_DISPLAY
 import mattecarra.accapp.utils.Constants.CHARGE_METER_ENABLED
@@ -215,6 +216,10 @@ class Preferences(private val context: Context)
     var accdUserStopped: Boolean
         get() = sharedPrefs.getBoolean(ACCD_USER_STOPPED, false)
         set(value) { sharedPrefs.edit().putBoolean(ACCD_USER_STOPPED, value).apply() }
+
+    var autoRekickOnPlug: Boolean
+        get() = sharedPrefs.getBoolean(AUTO_REKICK_ON_PLUG, false)
+        set(value) { sharedPrefs.edit().putBoolean(AUTO_REKICK_ON_PLUG, value).apply() }
 
     companion object { @Volatile private var djsInstalledCache: Boolean? = null }
 }
