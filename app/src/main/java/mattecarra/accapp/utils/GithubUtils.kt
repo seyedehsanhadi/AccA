@@ -38,17 +38,30 @@ object GithubUtils {
         })
     }
 
-    /** Latest ACC module info from the fork's module.json on main - the SAME file Magisk's
-     * updateJson reads, so its versionCode/version are authoritative for "is a newer ACC out".
-     * AccA never installs ACC itself (no bundle); the user flashes the module. */
-    suspend fun getLatestAccModuleInfo(): AccModuleInfo? = withContext(Dispatchers.IO) {
+    /** Latest ACC module info from the GitHub RELEASES (not main/module.json, which is only bumped
+     * at a stable release and lags the rc line). The versionCode lives in the flashable zip's name
+     * (acc_<ver>_<versionCode>[_build].zip). AccA never installs ACC; the user flashes the module. */
+    suspend fun getLatestAccModuleInfo(includePreReleases: Boolean = true): AccModuleInfo? = withContext(Dispatchers.IO) {
         try {
-            val o = JsonParser
-                .parseString(fetchText("https://raw.githubusercontent.com/seyedehsanhadi/acc/main/module.json"))
-                .asJsonObject
-            val ver = o.get("version").asString
-            AccModuleInfo(ver, o.get("versionCode").asInt,
-                "https://github.com/seyedehsanhadi/acc/releases/tag/$ver")
+            val arr = JsonParser
+                .parseString(fetchText("https://api.github.com/repos/seyedehsanhadi/acc/releases?per_page=30"))
+                .asJsonArray
+            for (el in arr) {
+                val o = runCatching { el.asJsonObject }.getOrNull() ?: continue
+                if (runCatching { o.get("draft").asBoolean }.getOrDefault(false)) continue
+                if (!includePreReleases && runCatching { o.get("prerelease").asBoolean }.getOrDefault(false)) continue
+                val tag = runCatching { o.get("tag_name").asString }.getOrNull() ?: continue
+                val code = runCatching { o.getAsJsonArray("assets") }.getOrNull()?.firstNotNullOfOrNull { a ->
+                    runCatching {
+                        val name = a.asJsonObject.get("name").asString
+                        if (name.endsWith(".zip", true) && !name.contains("uninstaller", true))
+                            Regex("(20\\d{7})").find(name)?.value?.toInt()
+                        else null
+                    }.getOrNull()
+                } ?: continue
+                return@withContext AccModuleInfo(tag, code, htmlUrl(o) ?: releasePage("acc", tag))
+            }
+            null
         } catch (e: Exception) {
             LogExt().e("GithubUtils", "getLatestAccModuleInfo failed: $e")
             null

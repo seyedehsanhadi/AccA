@@ -96,7 +96,7 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                         progress(R.string.wait)
                         cancelOnTouchOutside(false)
                     }
-                    val latest = GithubUtils.getLatestAccModuleInfo()
+                    val latest = GithubUtils.getLatestAccModuleInfo(Preferences(ctx).includePreReleases)
                     if (!isAdded || activity?.isFinishing != false) { try { checking.dismiss() } catch (_: Exception) {}; return@launch }
                     checking.dismiss()
 
