@@ -13,4 +13,8 @@
         <attr name="bounded_width" format="dimension"/>
     </declare-styleable>
 
+    <declare-styleable name="InfoCheckBoxPreference">
+        <attr name="infoText" format="reference|string"/>
+    </declare-styleable>
+
 </resources>

@@ -538,7 +538,8 @@
     <string name="pref_charge_meter_show_temp_summary">Adds the battery temperature next to the status-bar number and in the detailed line. Shown in °C or °F per the Temperature output unit below, under Units of measure.</string>
     <string name="pref_charging_category">Charging</string>
     <string name="pref_auto_rekick_title">Re-kick fast charge on plug</string>
-    <string name="pref_auto_rekick_summary">When you plug in below your pause limit, nudge the charger to re-negotiate fast charge. Helps some Qualcomm and MediaTek phones that stay on slow charging after a cut. Does nothing on Pixel/Tensor and phones without such a control, and never overrides your limit. If you set your own Apply-on-plug script, that takes over and this stays out of the way. Off by default.</string>
+    <string name="pref_auto_rekick_summary">Re-negotiate fast charge when you plug in below your limit. Off by default.</string>
+    <string name="pref_auto_rekick_info">When you plug in below your pause limit, AccA nudges the charger to re-negotiate fast charge. Helps some Qualcomm and MediaTek phones that stay on slow charging after a cut.\n\nIt is safe by design: it only fires below your limit, so it can never overcharge or override your setting, and it does nothing on Pixel/Tensor and other phones that have no such control. If you set your own Apply-on-plug script, that takes over and this stays out of the way.</string>
     <string name="charge_meter_stop_action">Stop</string>
     <!-- manual AccA-only update browser; ACC surfaces its own update via Magisk/KernelSU -->
     <string name="pref_check_updates_title">Check for updates</string>
