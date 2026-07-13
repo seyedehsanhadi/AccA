@@ -152,7 +152,7 @@ object Acc {
         preferences.voltageInputUnitOfMeasure = if(microVolts >= 6)  VoltageUnit.uV else VoltageUnit.mV
     }
 
-    private fun getAccVersion(): Int? {
+    internal fun getAccVersion(): Int? {
         // Crash-safe: this runs at startup (Acc.instance) before root may be granted, so a
         // thrown libsu exception (no shell, I/O error) must never propagate. split() never
         // returns an empty list, so last()/first() are safe; toIntOrNull() guards the parse.

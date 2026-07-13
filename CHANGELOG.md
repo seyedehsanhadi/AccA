@@ -7,6 +7,7 @@ Notable changes to this fork. Format follows [Keep a Changelog](https://keepacha
 ### Added
 - **Re-kick fast charge on plug** (Settings > Charging, off by default). Plug in below your pause limit and AccA nudges the charger to re-negotiate fast charge - useful on phones that drop to slow charging after a cut. Guarded so it can never overcharge or fight your setup: it only fires below the limit, is a no-op on phones with no such control (Pixel/Tensor and other PD chargers), and steps aside entirely if you run your own Apply-on-plug script.
 - **AMPS reports whether your phone can re-kick.** The bundled compatibility tester (v7.1.4) detects your phone's resume mechanism: a software re-kick on Qualcomm (`apsd_rerun`/`rerun_aicl`/`dp_dm`) and MediaTek (`en_power_path`), or "physical replug or reboot only" on newer PD-glink/UCSI chargers that self-negotiate in firmware.
+- **Update notifications** (on by default). AccA now checks for newer ACC *and* AccA versions and posts one combined, persistent notification - with each version's changelog and a per-app *Update* button - so a pending update for one never hides the other. It stays until you act on it or swipe it away, and a version you dismissed will not nag again.
 - **"See all switches" in the switch finder**, so you can pin any verified switch, not only the recommended one.
 - **Sponsor links in About**: Buy Me a Coffee and Ko-fi, alongside the fork's Telegram.
 
@@ -14,6 +15,7 @@ Notable changes to this fork. Format follows [Keep a Changelog](https://keepacha
 - **ACC install/update reads GitHub Releases.** The bundled ACC copy is gone - AccA now detects a separately-flashed ACC and points you to the download instead of shipping (and overwriting with) its own. Both update screens list every published version newest-first, default to the latest, show pre-releases, and show the version you have now.
 - **Battery-% source is one app-wide setting.** The dashboard, the status-bar meter and the notification all follow the same choice (Android System vs ACC's real level).
 - **Support and community links** now point to the fork's Telegram group and issue tracker.
+- Long setting descriptions (re-kick fast charge, updating ACC) are now a short line with an info (i) icon that opens the full explanation on tap.
 - Built against SDK 33; the switch finder is trimmed to verified switches; the redundant "Test" button was dropped from the switch editor.
 
 ### Fixed

@@ -111,6 +111,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".receivers.UpdateDismissReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".receivers.ChargeMeterPowerReceiver"
             android:exported="false">
             <intent-filter>

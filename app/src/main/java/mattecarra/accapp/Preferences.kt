@@ -7,6 +7,9 @@ import mattecarra.accapp.djs.Djs
 import mattecarra.accapp.utils.Constants.ACCD_USER_STOPPED
 import mattecarra.accapp.utils.Constants.ACC_VERSION
 import mattecarra.accapp.utils.Constants.AUTO_REKICK_ON_PLUG
+import mattecarra.accapp.utils.Constants.UPDATE_NOTIFICATIONS
+import mattecarra.accapp.utils.Constants.UPDATE_DISMISSED_ACCA
+import mattecarra.accapp.utils.Constants.UPDATE_DISMISSED_ACC
 import mattecarra.accapp.utils.Constants.CHARGE_METER_BATTERY_SOURCE
 import mattecarra.accapp.utils.Constants.CHARGE_METER_DISPLAY
 import mattecarra.accapp.utils.Constants.CHARGE_METER_ENABLED
@@ -220,6 +223,18 @@ class Preferences(private val context: Context)
     var autoRekickOnPlug: Boolean
         get() = sharedPrefs.getBoolean(AUTO_REKICK_ON_PLUG, false)
         set(value) { sharedPrefs.edit().putBoolean(AUTO_REKICK_ON_PLUG, value).apply() }
+
+    var updateNotifications: Boolean
+        get() = sharedPrefs.getBoolean(UPDATE_NOTIFICATIONS, true)
+        set(value) { sharedPrefs.edit().putBoolean(UPDATE_NOTIFICATIONS, value).apply() }
+
+    var dismissedAccaVersion: String
+        get() = sharedPrefs.getString(UPDATE_DISMISSED_ACCA, "") ?: ""
+        set(value) { sharedPrefs.edit().putString(UPDATE_DISMISSED_ACCA, value).apply() }
+
+    var dismissedAccVersionCode: Int
+        get() = sharedPrefs.getInt(UPDATE_DISMISSED_ACC, 0)
+        set(value) { sharedPrefs.edit().putInt(UPDATE_DISMISSED_ACC, value).apply() }
 
     companion object { @Volatile private var djsInstalledCache: Boolean? = null }
 }

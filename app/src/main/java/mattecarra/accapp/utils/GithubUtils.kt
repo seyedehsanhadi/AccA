@@ -9,7 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 data class ReleaseInfo(val version: String, val notes: String, val pageUrl: String, val apkUrl: String?)
-data class AccModuleInfo(val version: String, val versionCode: Int, val releasePage: String)
+data class AccModuleInfo(val version: String, val versionCode: Int, val releasePage: String, val notes: String = "")
 
 object GithubUtils {
     // Plain URL(x).readText() sets no timeout, so a dead/slow connection can hang a "check for
@@ -59,7 +59,8 @@ object GithubUtils {
                         else null
                     }.getOrNull()
                 } ?: continue
-                return@withContext AccModuleInfo(tag, code, htmlUrl(o) ?: releasePage("acc", tag))
+                val body = runCatching { o.get("body").asString }.getOrNull().orEmpty()
+                return@withContext AccModuleInfo(tag, code, htmlUrl(o) ?: releasePage("acc", tag), body)
             }
             null
         } catch (e: Exception) {

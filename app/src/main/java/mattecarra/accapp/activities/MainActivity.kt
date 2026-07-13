@@ -85,9 +85,13 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
 
         if (firstInit)
         {
-        checkAppUpdate()
-        // No ACC update check here: ACC already surfaces its own update via module.prop's
-        // updateJson, which Magisk/KernelSU show natively in their Modules list.
+        // With update notifications on (default), post ONE combined, persistent notification for
+        // both ACC and AccA so answering one update never hides the other. Off = the old in-app
+        // AccA-only dialog.
+        if (Preferences(this).updateNotifications)
+            launch { mattecarra.accapp.utils.UpdateNotifier.checkAndNotify(this@MainActivity) }
+        else
+            checkAppUpdate()
 
         // Subscribe to viewmodel config and action if config is null
         _sharedViewModel.observeConfig(this, Observer { r ->

@@ -10,12 +10,20 @@
             android:summary="@string/acc_version_preference_description"
             android:title="@string/acc_version_preference_title"
             app:iconSpaceReserved="false"></Preference>
-        <Preference
+        <mattecarra.accapp.prefs.InfoPreference
             android:key="acc_update_info"
             android:selectable="false"
-            android:summary="@string/acc_update_via_magisk_summary"
+            android:summary="@string/acc_update_via_magisk_summary_short"
             android:title="@string/acc_update_via_magisk_title"
-            app:iconSpaceReserved="false"></Preference>
+            app:infoText="@string/acc_update_via_magisk_summary"
+            app:iconSpaceReserved="false" />
+
+        <CheckBoxPreference
+            android:key="update_notifications"
+            android:defaultValue="true"
+            android:title="@string/pref_update_notif_title"
+            android:summary="@string/pref_update_notif_summary"
+            app:iconSpaceReserved="false" />
     </PreferenceCategory>
 
     <PreferenceCategory
