@@ -26,6 +26,7 @@ import it.sephiroth.android.library.xtooltip.Tooltip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -1015,10 +1016,14 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 initialSwitch?.let { knownSwitches.add(it) }
                 try
                 {
-                    when (val v = withContext(Dispatchers.IO) { VerifiedSwitch.detect() })
+                    // 4s cap: right after an AMPS run ACC restarts and can briefly hold the single
+                    // libsu root shell, so an un-timed detect() BLOCKED here and the dialog rendered
+                    // EMPTY (just Cancel) -- the "it doesn't show" field report. Time out -> fall
+                    // through to the fallback below instead of hanging the dialog forever.
+                    when (val vs = withTimeoutOrNull(4000) { withContext(Dispatchers.IO) { VerifiedSwitch.detect() } })
                     {
-                        is VerifiedSwitch.Verified -> { knownSwitches.add(v.switch.trim()); v.alts.forEach { knownSwitches.add(it.switch.trim()) } }
-                        is VerifiedSwitch.NeedsTest -> { knownSwitches.add(v.switch.trim()); v.alts.forEach { knownSwitches.add(it.switch.trim()) } }
+                        is VerifiedSwitch.Verified -> { knownSwitches.add(vs.switch.trim()); vs.alts.forEach { knownSwitches.add(it.switch.trim()) } }
+                        is VerifiedSwitch.NeedsTest -> { knownSwitches.add(vs.switch.trim()); vs.alts.forEach { knownSwitches.add(it.switch.trim()) } }
                         else -> {}
                     }
                 }
@@ -1027,23 +1032,22 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     LogExt().e(javaClass.simpleName, "VerifiedSwitch.detect() failed: $ex")
                 }
 
+                // Never open empty: if AMPS has not run yet (no verified switches beyond the current
+                // one), fall back to ACC's own auto-detected switches so the picker always has real
+                // options. Also timeout-capped so a busy root shell can't hang the dialog.
+                if (knownSwitches.size <= 1)
+                {
+                    try { (withTimeoutOrNull(4000) { withContext(Dispatchers.IO) { Acc.instance.listChargingSwitches() } } ?: emptyList()).forEach { knownSwitches.add(it.trim()) } }
+                    catch (ex: Exception) { LogExt().e(javaClass.simpleName, "listChargingSwitches() fallback failed: $ex") }
+                }
+
                 var chargingSwitches = listOf(
                     automaticString,
                     addNewChargingSwitchString,
                     *knownSwitches.toTypedArray()
                 )
 
-                // Guide the exact user who most needs it: nothing detected yet (no current switch,
-                // no verified scan) means the list is just Automatic/Add new, and Automatic often
-                // can't stop charging. Point them at "Find my charging switch". A Toast (not a
-                // dialog message()) because this library renders message()+list as either/or.
-                if (knownSwitches.isEmpty())
-                    Toast.makeText(this@AccConfigEditorActivity, R.string.edit_charging_switch_hint, Toast.LENGTH_LONG).show()
-
-                var currentIndex = chargingSwitches.indexOf(initialSwitch ?: automaticString)
-
-                setActionButtonEnabled(WhichButton.POSITIVE, currentIndex != -1)
-                setActionButtonEnabled(WhichButton.NEUTRAL, currentIndex != -1)
+                var currentIndex = chargingSwitches.indexOf(initialSwitch ?: automaticString).let { if (it < 0) 0 else it }
 
                 listItemsSingleChoice(
                     items = chargingSwitches,
