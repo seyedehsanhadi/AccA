@@ -491,6 +491,7 @@
         \nAccA will download the latest version of ACC from GitHub based on the latest commit of the selected branch.
         \nDo you want to continue?</string>
     <string name="add_charging_switch">Add Charging Switch</string>
+    <string name="add_charging_switch_warning">Be careful what you add here. A wrong switch can stop your phone charging or fail to limit it. Only add a node you know works - it is live-tested before saving, so plug the charger in first. Prefer \"Find my switch\" to detect the right one automatically.</string>
     <string name="charging_switch_on_value_label">Charging switch ON VALUE</string>
     <string name="charging_switch_off_value_label">Charging switch OFF VALUE</string>
     <!-- Add-Switch needs a live test, which only runs while charging — block save when unplugged. -->

@@ -148,7 +148,7 @@ class Preferences(private val context: Context)
         }
 
     var includePreReleases: Boolean
-        get() = sharedPrefs.getBoolean(INCLUDE_PRE_RELEASES, false)
+        get() = sharedPrefs.getBoolean(INCLUDE_PRE_RELEASES, true)
         set(value) {
             val editor = sharedPrefs.edit()
             editor.putBoolean(INCLUDE_PRE_RELEASES, value)

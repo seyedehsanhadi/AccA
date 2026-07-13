@@ -1006,24 +1006,26 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             noAutoDismiss()
 
             launch {
-                val existingSwitches = try
+                // Only surface switches we KNOW are relevant: the one currently configured, plus
+                // every switch the last "Find my switch" (AMPS) run verified on THIS device. The old
+                // list dumped the raw `acc -s s:` candidate tree - hundreds of untested nodes that
+                // left users unable to tell which one to pick ("I cannot find my switch"). A custom
+                // switch can still be added via "Add new" (live-tested + warned before it is saved).
+                val knownSwitches = LinkedHashSet<String>()
+                initialSwitch?.let { knownSwitches.add(it) }
+                try
                 {
-                    Acc.instance.listChargingSwitches().toTypedArray()
+                    when (val v = withContext(Dispatchers.IO) { VerifiedSwitch.detect() })
+                    {
+                        is VerifiedSwitch.Verified -> { knownSwitches.add(v.switch.trim()); v.alts.forEach { knownSwitches.add(it.switch.trim()) } }
+                        is VerifiedSwitch.NeedsTest -> { knownSwitches.add(v.switch.trim()); v.alts.forEach { knownSwitches.add(it.switch.trim()) } }
+                        else -> {}
+                    }
                 }
                 catch (ex: Exception)
                 {
-                    ex.printStackTrace()
-                    LogExt().e(javaClass.simpleName, "listChargingSwitches() failed: $ex")
-                    if (isShowing) dismiss()
-                    return@launch
+                    LogExt().e(javaClass.simpleName, "VerifiedSwitch.detect() failed: $ex")
                 }
-
-                // An Apply&Lock (AMPS) pin stores the switch as a full /sys path that `acca -s s:`
-                // may not list, so the dialog used to open with NOTHING selected and the present
-                // switch invisible. If the current switch is not in the list, show it on top.
-                val knownSwitches = existingSwitches.toMutableList()
-                if (initialSwitch != null && knownSwitches.none { it.trim() == initialSwitch })
-                    knownSwitches.add(0, initialSwitch)
 
                 var chargingSwitches = listOf(
                     automaticString,
@@ -1048,6 +1050,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                         MaterialDialog(this@AccConfigEditorActivity).show {
                             noAutoDismiss()
                             title(text = addNewChargingSwitchString)
+                            message(R.string.add_charging_switch_warning)
 //                            customView(R.layout.add_charging_switch_dialog)
                             val binding = AddChargingSwitchDialogBinding.inflate(layoutInflater)
                             customView(view = binding.root)
