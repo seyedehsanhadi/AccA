@@ -414,11 +414,15 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     private fun showNoRoot() {
         if (isFinishing) return
         MaterialDialog(this).show {
-            title(R.string.tile_acc_no_root)
+            title(R.string.no_root_title)
             message(R.string.no_root_message)
-            positiveButton(android.R.string.ok) { finish() }
+            // Retry re-probes root: a user who denied the su prompt by mistake, or grants root
+            // after seeing this, recovers without force-killing the app. Back is ignored so the
+            // choice is explicit (grant + Retry, or Exit).
+            positiveButton(R.string.retry) { detectAccAndInit() }
+            negativeButton(R.string.exit) { finish() }
             cancelOnTouchOutside(false)
-            onKeyCodeBackPressed { dismiss(); finish(); false }
+            onKeyCodeBackPressed { true }
         }
     }
 
@@ -452,14 +456,13 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             title(R.string.acc_daemon_stuck_title)
             message(R.string.acc_daemon_stuck_message)
             positiveButton(R.string.retry) { detectAccAndInit() }
-            negativeButton(R.string.get_acc) {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Constants.ACC_RELEASE_URL)))
-                } catch (_: Exception) { }
-            }
+            // Stuck = ACC is installed but the daemon never came up (common KernelSU partial
+            // install). A reboot is the #1 recovery and the message already recommends it, so give
+            // it a button (root is confirmed on this path) instead of sending the user out of the app.
+            negativeButton(R.string.reboot) { try { Shell.su("reboot").submit() } catch (_: Exception) {} }
             neutralButton(R.string.exit) { finish() }
             cancelOnTouchOutside(false)
-            onKeyCodeBackPressed { finish(); false }
+            onKeyCodeBackPressed { true }
         }
     }
 
@@ -567,9 +570,14 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 if (latest.isBlank() || current.isBlank()) return@launch
                 if (!VersionCompare.isNewer(latest, current)) return@launch
                 if (isFinishing || isDestroyed) return@launch
+                // Pre-releases default ON, so this can auto-offer a beta/RC. Label it (inferred from
+                // the tag) so a charge-critical app never nudges a user onto a less-tested build
+                // silently. The manual update list already labels "(pre-release)"; match it here.
+                val isPre = Regex("-(rc|beta|alpha|pre)", RegexOption.IGNORE_CASE).containsMatchIn(info.version)
                 MaterialDialog(this@MainActivity).show {
                     title(R.string.app_update_title)
-                    message(text = getString(R.string.app_update_message, latest, current) + whatsNew(info.notes))
+                    message(text = getString(R.string.app_update_message, latest, current) +
+                        (if (isPre) "\n\n" + getString(R.string.app_update_prerelease_note) else "") + whatsNew(info.notes))
                     positiveButton(R.string.app_update_get) {
                         val target = info.apkUrl?.takeIf { it.isNotBlank() } ?: info.pageUrl
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))

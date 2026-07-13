@@ -10,6 +10,12 @@
             android:summary="@string/acc_version_preference_description"
             android:title="@string/acc_version_preference_title"
             app:iconSpaceReserved="false"></Preference>
+        <Preference
+            android:key="acc_update_info"
+            android:selectable="false"
+            android:summary="@string/acc_update_via_magisk_summary"
+            android:title="@string/acc_update_via_magisk_title"
+            app:iconSpaceReserved="false"></Preference>
     </PreferenceCategory>
 
     <PreferenceCategory

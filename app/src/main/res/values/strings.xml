@@ -18,6 +18,7 @@
 
     <!-- ACC Tile Strings -->
     <string name="tile_acc_no_root">No Root</string>
+    <string name="no_root_title">Root access required</string>
     <string name="tile_acc_enabled">Daemon running</string>
     <string name="tile_acc_disabled">Daemon stopped</string>
 
@@ -84,7 +85,8 @@
     <string name="charge_seconds">Charge seconds:</string>
     <string name="cooldown_pause_seconds">Pause seconds:</string>
     <string name="shutdown_capacity">Shutdown (if not charging) at:</string>
-    <string name="no_root_message">AccA requires ROOT.</string>
+    <string name="no_root_message">AccA needs root to control charging. Grant it in Magisk, KernelSU or APatch, then tap Retry. If you denied by mistake, clear AccA\'s denial in your root manager\'s app list and Retry.</string>
+    <string name="app_update_prerelease_note">Heads up: this is a pre-release (beta / release candidate) - newest fixes, less testing. For stable builds only, turn off \"Include pre-releases\" in Settings.</string>
     <string name="config_error_title">Config parse error</string>
     <string name="config_error_dialog">Failed to parse ACC config!\nPlease check whether \"su -c acc --set --print\" works.</string>
 
@@ -183,6 +185,7 @@
     <string name="wrong_volt_file">Either the chosen file does not work, or your kernel doesn\'t support this feature.</string>
     <string name="invalid_voltage_max">The value should be a number between 3700 and 4300 (millivolts)</string>
     <string name="edit_charging_switch">Edit charging switch</string>
+    <string name="edit_charging_switch_hint">Pick the switch that limits charging on your phone. This list shows your current switch and any that \"Find my charging switch\" verified. \"Automatic\" often can\'t stop charging on its own - if the list is empty or your limit is ignored, run \"Find my charging switch\" first.</string>
     <string name="test_switch">Test charging switch</string>
     <string name="no_option_selected">No option selected; please select one!</string>
     <string name="charging_switch_works">Selected charging switch works!</string>
@@ -339,10 +342,9 @@
 
     <string name="acc_version_preference_title">ACC version</string>
 
-    <string name="acc_version_preference_description">You can choose the ACC variant to use: bundled (stable, recommended for most users), master (stable), develop (bleeding edge but not necessarily unstable) or any of the tagged versions.
-        Bundled is the most extensively tested version for AccA - thus it\'s the recommended choice.
-        While not guaranteed, other variants are generally safe.
-    </string>
+    <string name="acc_version_preference_description">Choose which ACC version to install. Defaults to the latest release from GitHub; \"Bundled\" is an offline fallback shipped with the app.</string>
+    <string name="acc_update_via_magisk_title">Updating ACC</string>
+    <string name="acc_update_via_magisk_summary">ACC (the charging module) updates through your root manager - Magisk, KernelSU or APatch show it in their Modules list when a new version is out. The picker above only chooses which ACC version to install. AccA updates itself separately.</string>
 
     <string name="install_bundled_version">Install bundled variant</string>
 
@@ -615,7 +617,7 @@
     <string name="verified_switch_tap_all">Tap to see all %1$d working switches and choose one to lock</string>
 
     <!-- Find my charging switch (runs the bundled AMPS tester with a live log) -->
-    <string name="find_switch_title">Find my charging switch (AMPS)</string>
+    <string name="find_switch_title">Find my charging switch</string>
     <string name="find_switch_apply">Apply this switch</string>
     <string name="find_switch_cancel">Cancel</string>
     <string name="find_switch_elapsed">%1$ds elapsed</string>

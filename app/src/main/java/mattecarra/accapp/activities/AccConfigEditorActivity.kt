@@ -1033,6 +1033,13 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     *knownSwitches.toTypedArray()
                 )
 
+                // Guide the exact user who most needs it: nothing detected yet (no current switch,
+                // no verified scan) means the list is just Automatic/Add new, and Automatic often
+                // can't stop charging. Point them at "Find my charging switch". A Toast (not a
+                // dialog message()) because this library renders message()+list as either/or.
+                if (knownSwitches.isEmpty())
+                    Toast.makeText(this@AccConfigEditorActivity, R.string.edit_charging_switch_hint, Toast.LENGTH_LONG).show()
+
                 var currentIndex = chargingSwitches.indexOf(initialSwitch ?: automaticString)
 
                 setActionButtonEnabled(WhichButton.POSITIVE, currentIndex != -1)

@@ -54,19 +54,25 @@ import java.io.File
     suspend fun MaterialDialog.accVersionSingleChoice(
         accVersion: String, callback: VersionChoiceListener): MaterialDialog
     {
-        val options = context.resources.getStringArray(R.array.acc_version_options).toMutableList()
-        val optionValues = context.resources.getStringArray(R.array.acc_version_option_values).toMutableList()
+        // The value array (["bundled"]) is NOT localized and is the source of truth for how many
+        // fixed rows exist. The localized DISPLAY arrays still ship stale extra rows (Master /
+        // Develop) with no matching value; truncate the labels to the value array so display and
+        // values line up 1:1 in EVERY locale (else the "latest" default and tag->ref mapping break
+        // in non-English builds).
+        val fixedValues = context.resources.getStringArray(R.array.acc_version_option_values).toList()
+        val fixedLabels = context.resources.getStringArray(R.array.acc_version_options).toList().take(fixedValues.size)
         val githubTags = GithubUtils.listAccReleaseTags(Preferences(context).includePreReleases)
-        options.addAll(githubTags)
+        val options = fixedLabels + githubTags
 
-        // Default to the LATEST GitHub release, not the bundled fallback: the bundle ships a fixed
-        // (often older) ACC, and ACC/AccA are released independently, so the offer should track
-        // GitHub. Bundled stays in the list as an offline fallback; a version the user pinned
-        // before is still honored.
-        val storedIndex =
-            if (optionValues.contains(accVersion)) optionValues.indexOf(accVersion)
-            else options.map { it.toLowerCase() }.indexOf(accVersion)
-        val latestGithubIndex = if (githubTags.isNotEmpty()) optionValues.size else -1
+        // Value for a row: the fixed value for the first rows, then the EXACT git tag for the rest.
+        // Never lowercase a tag -- a lowercased/translated ref 404s on the github archive URL.
+        fun valueAt(i: Int) = if (i < fixedValues.size) fixedValues[i] else githubTags[i - fixedValues.size]
+
+        // Default to the LATEST GitHub release (first tag), not the bundled fallback: the bundle
+        // ships a fixed (often older) ACC and ACC/AccA release independently. Bundled stays as an
+        // offline fallback; a version the user pinned before is still honored.
+        val storedIndex = options.indices.firstOrNull { valueAt(it) == accVersion } ?: -1
+        val latestGithubIndex = if (githubTags.isNotEmpty()) fixedValues.size else -1
         val initial = when {
             storedIndex >= 0 && accVersion != "bundled" -> storedIndex
             latestGithubIndex >= 0 -> latestGithubIndex
@@ -77,8 +83,7 @@ import java.io.File
         return listItemsSingleChoice(
             items = options,
             initialSelection = initial
-        ) { _, index, text ->
-            if(index in optionValues.indices) { callback(optionValues[index]) }
-            else { callback(text.toString().toLowerCase()) }
+        ) { _, index, _ ->
+            callback(valueAt(index))
         }
     }
