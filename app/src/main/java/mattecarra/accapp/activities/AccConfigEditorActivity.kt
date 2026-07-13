@@ -1154,42 +1154,6 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     viewModel.chargeSwitch = if (currentIndex <= 0) null else chargingSwitches.getOrNull(currentIndex)
                     dismiss()
                 }
-
-                neutralButton(R.string.test_switch) {
-                    val switch = if (currentIndex <= 0) null else chargingSwitches.getOrNull(currentIndex)
-
-                    val dialog = MaterialDialog(this@AccConfigEditorActivity).show {
-                        title(R.string.test_switch)
-                        progress(R.string.wait)
-                    }
-
-                    this@AccConfigEditorActivity.launch {
-                        val description = try
-                        {
-                            when (Acc.instance.testChargingSwitch(switch))
-                            {
-                                0 -> R.string.charging_switch_works
-                                1 -> R.string.charging_switch_does_not_work
-                                2 -> R.string.plug_battery_to_test
-                                else -> R.string.error_occurred
-                            }
-                        }
-                        catch (ex: Exception)
-                        {
-                            ex.printStackTrace()
-                            LogExt().e(javaClass.simpleName, "testChargingSwitch() failed: $ex")
-                            R.string.error_occurred
-                        }
-
-                        if (dialog.isShowing) dialog.cancel()
-
-                        MaterialDialog(this@AccConfigEditorActivity).show {
-                            title(R.string.test_switch)
-                            message(description)
-                            positiveButton(android.R.string.ok)
-                        }
-                    }
-                }
             }
 
             negativeButton(android.R.string.cancel) { dismiss() }

@@ -441,10 +441,18 @@ class SwitchFinderActivity : ScopedAppActivity()
             .distinctBy { it.switch.trim() }.size
         if (total > 1)
         {
-            binding.switchFinderResultText.append("\n\n" + getString(R.string.find_switch_choose_hint, total))
+            // A real, prominent button so the user can open the full list and pick the best of ALL
+            // switches AMPS found (the old tap-the-text affordance was easy to miss).
+            binding.switchFinderAllButton.text = getString(R.string.find_switch_see_all, total)
+            binding.switchFinderAllButton.visibility = View.VISIBLE
+            binding.switchFinderAllButton.setOnClickListener { showAllSwitchesDialog() }
             binding.switchFinderResultText.setOnClickListener { showAllSwitchesDialog() }
         }
-        else binding.switchFinderResultText.setOnClickListener(null)
+        else
+        {
+            binding.switchFinderAllButton.visibility = View.GONE
+            binding.switchFinderResultText.setOnClickListener(null)
+        }
     }
 
     /**

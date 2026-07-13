@@ -633,6 +633,7 @@
     <string name="find_switch_elapsed">%1$ds elapsed</string>
     <string name="find_switch_found">Found: %1$s (%2$s, %3$s)</string>
     <string name="find_switch_choose_hint">▾ Tap to choose from all %1$d working switches</string>
+    <string name="find_switch_see_all">See all %1$d switches</string>
     <string name="find_switch_none">No reliable switch found — try a stronger charger, or see the log above.</string>
     <string name="find_switch_apply_testing">Testing the switch live…</string>
     <string name="find_switch_apply_locked">Locked ✓</string>

@@ -142,6 +142,15 @@
                     android:text="@string/find_switch_apply"
                     android:textColor="@color/color_surface" />
 
+                <Button
+                    android:id="@+id/switch_finder_all_button"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/card_content_padding"
+                    android:visibility="gone" />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
