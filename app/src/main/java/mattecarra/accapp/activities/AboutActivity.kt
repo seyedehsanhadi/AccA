@@ -93,6 +93,10 @@ class AboutActivity : AppCompatActivity() {
         openUrl("https://buymeacoffee.com/seyedehsanhadi")
     }
 
+    fun koFiOnClick(view: View) {
+        openUrl("https://ko-fi.com/seyedehsanhadi")
+    }
+
     fun vr25GitHubOnClick(view: View) {
         openUrl("https://github.com/VR-25")
     }

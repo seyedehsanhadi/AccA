@@ -183,6 +183,19 @@
                         android:textColor="@android:color/black"
                         app:icon="@drawable/ic_coffee"
                         app:iconTint="@android:color/black" />
+
+                    <com.google.android.material.button.MaterialButton
+                        style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/card_margin"
+                        android:backgroundTint="@color/kofi_red"
+                        android:ellipsize="end"
+                        android:onClick="koFiOnClick"
+                        android:text="@string/about_kofi"
+                        android:textColor="@android:color/white"
+                        app:icon="@drawable/ic_kofi"
+                        app:iconTint="@android:color/white" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
