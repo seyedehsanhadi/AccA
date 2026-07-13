@@ -117,7 +117,7 @@
     <string name="exit">Exit</string>
     <string name="reboot">Reboot</string>
     <string name="acc_installation_failed">Please archive and send logcat and /data/adb/acc-data/logs/ to the developers
-        at t.me/acc_group/ or github.com/MatteCarra/AccA/issues/.
+        at t.me/+hU1oF-BCf5hmM2Rk or github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="acc_installation_failed_title">ACC Installation Failed!</string>
 
@@ -129,7 +129,7 @@
     </string>
     <string name="installing_djs">Installing DJS</string>
     <string name="djs_installation_failed">Please archive and send logcat and /data/adb/djs-data/logs/ to the developers
-        at t.me/acc_group/ or github.com/MatteCarra/AccA/issues/.
+        at t.me/+hU1oF-BCf5hmM2Rk or github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="djs_installation_failed_title">DJS Installation Failed!</string>
 
@@ -314,7 +314,7 @@
     <string name="logs_not_found">Log file not found.</string>
     <string name="copy_log">Copy log</string>
     <string name="copied_to_clipboard">Log copied to clipboard</string>
-    <string name="acc_telegram">For additional support, join ACC Telegram group (t.me/acc_group)!</string>
+    <string name="acc_telegram">For additional support, join ACC Telegram group (t.me/+hU1oF-BCf5hmM2Rk)!</string>
 
     <string name="current_measure_unit_preference_title">Input Current unit of measure</string>
     <string name="current_measure_unit_preference_description">ACC retrieves charging information from the sys interface.

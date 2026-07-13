@@ -57,10 +57,10 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
         telegram?.onPreferenceClickListener = Preference.OnPreferenceClickListener {
             context?.let {
                 try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=acc_group")))
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/+hU1oF-BCf5hmM2Rk")))
                 } catch (ignored: Exception) {
                     try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/acc_group")))
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/+hU1oF-BCf5hmM2Rk")))
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
