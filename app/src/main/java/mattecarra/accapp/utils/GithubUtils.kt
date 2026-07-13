@@ -160,4 +160,37 @@ object GithubUtils {
             emptyList()
         }
     }
+
+    /** Every ACC release on GitHub (newest-first). downloadUrl is the flashable .zip (not the
+     * uninstaller) so the user can grab it and flash it in their root manager. AccA never installs
+     * ACC itself; this is the "pick any version" list, mirroring the AccA self-update list. */
+    suspend fun listAccReleases(includePreReleases: Boolean): List<ReleaseEntry> = withContext(Dispatchers.IO) {
+        try {
+            JsonParser
+                .parseString(fetchText("https://api.github.com/repos/seyedehsanhadi/acc/releases?per_page=30"))
+                .asJsonArray
+                .mapNotNull { runCatching { it.asJsonObject }.getOrNull() }
+                .filterNot { runCatching { it.get("draft").asBoolean }.getOrDefault(false) }
+                .filter { includePreReleases || !runCatching { it.get("prerelease").asBoolean }.getOrDefault(false) }
+                .mapNotNull { o ->
+                    val tag = runCatching { o.get("tag_name").asString }.getOrNull() ?: return@mapNotNull null
+                    val zip = runCatching { o.getAsJsonArray("assets") }.getOrNull()?.firstNotNullOfOrNull { el ->
+                        runCatching {
+                            val a = el.asJsonObject
+                            val n = a.get("name").asString
+                            if (n.endsWith(".zip", true) && !n.contains("uninstaller", true)) a.get("browser_download_url").asString else null
+                        }.getOrNull()
+                    }
+                    ReleaseEntry(
+                        tag = tag,
+                        prerelease = runCatching { o.get("prerelease").asBoolean }.getOrDefault(false),
+                        pageUrl = htmlUrl(o) ?: releasePage("acc", tag),
+                        downloadUrl = zip
+                    )
+                }
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "listAccReleases failed: $e")
+            emptyList()
+        }
+    }
 }

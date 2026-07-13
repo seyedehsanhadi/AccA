@@ -106,8 +106,12 @@ class DashboardFragment : ScopedFragment()
             // Set Status Card text
             dash.daemon?.let { daemon -> setAccdStatusUi(daemon) }
 
-            // Battery/Charge details
-            binding.dashBatteryCapacityPBar.progress = dash.batteryInfo.capacity
+            // Battery/Charge details. The whole app follows the "Battery percentage source" setting:
+            // ACC's coulomb capacity (reflects your Capacity Mask) when set to "acc", else the phone's
+            // own System level. Falls back to System whenever the ACC snapshot is missing/invalid.
+            val accCap = dash.state?.capacityPct?.takeIf { it in 0..100 }
+            val shownCapacity = if (preferences.chargeMeterBatterySource == "acc" && accCap != null) accCap else dash.batteryInfo.capacity
+            binding.dashBatteryCapacityPBar.progress = shownCapacity
 
             // Prefer the rc9+ `acca --state` snapshot when present: its status/measuredClass and
             // signed current are correct even while ACC is cutting (the legacy `acca -i` reads

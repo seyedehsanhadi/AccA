@@ -90,45 +90,52 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                 this@SettingsFragment.launch {
                     val installedStr = try { Acc.getAccVersionToStr().trim() } catch (e: Exception) { "" }
                     val installedCode = Regex("\\((\\d+)\\)").find(installedStr)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                    val includePre = Preferences(ctx).includePreReleases
 
                     val checking = MaterialDialog(ctx).show {
                         title(R.string.acc_checking_update)
                         progress(R.string.wait)
                         cancelOnTouchOutside(false)
                     }
-                    val latest = GithubUtils.getLatestAccModuleInfo(Preferences(ctx).includePreReleases)
+                    // Full list of ACC releases from GitHub, like AccA's own version list. AccA never
+                    // installs ACC; tapping a version opens its release (download the zip, flash it in
+                    // Magisk/KernelSU/APatch). Codes come from the zip asset name (acc_<ver>_<code>...).
+                    val releases = GithubUtils.listAccReleases(includePre)
                     if (!isAdded || activity?.isFinishing != false) { try { checking.dismiss() } catch (_: Exception) {}; return@launch }
-                    checking.dismiss()
+                    try { checking.dismiss() } catch (_: Exception) {}
 
-                    val releasesUrl = "https://github.com/seyedehsanhadi/acc/releases/latest"
                     fun open(url: String) { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) {} }
+                    fun codeOf(r: GithubUtils.ReleaseEntry) = Regex("(20\\d{7})").find(r.downloadUrl ?: "")?.value?.toIntOrNull()
 
-                    MaterialDialog(ctx).show {
-                        when {
-                            installedStr.isBlank() || installedCode == null -> {
-                                title(R.string.acc_not_installed_title)
-                                message(R.string.acc_get_message)
-                                positiveButton(R.string.get_acc) { open(latest?.releasePage ?: releasesUrl) }
-                                negativeButton(android.R.string.cancel)
-                            }
-                            latest == null -> {
-                                title(R.string.acc_module_title)
-                                message(text = getString(R.string.acc_installed_cant_check, installedStr))
-                                positiveButton(android.R.string.ok)
-                                neutralButton(R.string.get_acc) { open(releasesUrl) }
-                            }
-                            latest.versionCode > installedCode -> {
-                                title(R.string.acc_update_available_title)
-                                message(text = getString(R.string.acc_update_available_message, installedStr, latest.version))
-                                positiveButton(R.string.get_update) { open(latest.releasePage) }
-                                negativeButton(android.R.string.cancel)
-                            }
-                            else -> {
-                                title(R.string.acc_module_title)
-                                message(text = getString(R.string.acc_up_to_date, installedStr))
-                                positiveButton(android.R.string.ok)
-                            }
+                    if (releases.isEmpty()) {
+                        MaterialDialog(ctx).show {
+                            title(R.string.acc_module_title)
+                            message(text = if (installedStr.isBlank()) getString(R.string.acc_get_message)
+                                           else getString(R.string.acc_installed_cant_check, installedStr))
+                            positiveButton(android.R.string.ok)
+                            neutralButton(R.string.get_acc) { open("https://github.com/seyedehsanhadi/acc/releases/latest") }
                         }
+                        return@launch
+                    }
+
+                    val latestCode = releases.firstNotNullOfOrNull { codeOf(it) }
+                    val updateHint = if (installedCode != null && latestCode != null && latestCode > installedCode)
+                        "  - update available" else ""
+                    val labels = releases.map { r ->
+                        buildString {
+                            append(r.tag)
+                            if (r.prerelease) append("  (pre-release)")
+                            if (installedCode != null && codeOf(r) == installedCode) append("  ✓ installed")
+                        }
+                    }
+                    MaterialDialog(ctx).show {
+                        title(text = getString(R.string.acc_module_title) +
+                            (if (installedStr.isNotBlank()) "  (installed: $installedStr)" else "") + updateHint)
+                        listItems(items = labels) { _, index, _ ->
+                            val r = releases[index]
+                            open(r.downloadUrl?.takeIf { it.isNotBlank() } ?: r.pageUrl)
+                        }
+                        negativeButton(android.R.string.cancel)
                     }
                 }
             }

@@ -531,8 +531,9 @@
     <string name="pref_charge_meter_summary">A live meter in the status bar, charging or on battery. Read-only.</string>
     <string name="pref_charge_meter_style_title">Meter style</string>
     <string name="pref_charge_meter_display_title">Status bar shows</string>
+    <string name="pref_battery_source_category">Battery level</string>
     <string name="pref_charge_meter_battery_source_title">Battery percentage source</string>
-    <string name="pref_charge_meter_battery_source_summary">Which battery reading this meter shows in the detailed line and when it falls back to a level. ACC reflects Capacity Mask if you use one; System is the phone\'s own raw level.</string>
+    <string name="pref_charge_meter_battery_source_summary">Which battery % the whole app shows - the dashboard, the status-bar meter and the notification all follow this. ACC reflects your Capacity Mask if you use one; System is the phone\'s own raw level.</string>
     <string name="pref_charge_meter_show_temp_title">Show battery temperature</string>
     <string name="pref_charge_meter_show_temp_summary">Adds the battery temperature next to the status-bar number and in the detailed line. Shown in °C or °F per the Temperature output unit below, under Units of measure.</string>
     <string name="charge_meter_stop_action">Stop</string>

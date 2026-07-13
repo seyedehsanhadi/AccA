@@ -19,6 +19,22 @@
     </PreferenceCategory>
 
     <PreferenceCategory
+        android:title="@string/pref_battery_source_category"
+        app:iconSpaceReserved="false">
+
+        <ListPreference
+            android:key="charge_meter_battery_source"
+            android:defaultValue="system"
+            android:entries="@array/charge_meter_battery_source_options"
+            android:entryValues="@array/charge_meter_battery_source_values"
+            android:title="@string/pref_charge_meter_battery_source_title"
+            android:dialogTitle="@string/pref_charge_meter_battery_source_title"
+            android:summary="@string/pref_charge_meter_battery_source_summary"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/charge_meter_channel"
         app:iconSpaceReserved="false">
 
@@ -49,17 +65,6 @@
             android:title="@string/pref_charge_meter_display_title"
             android:dialogTitle="@string/pref_charge_meter_display_title"
             android:summary="%s"
-            app:iconSpaceReserved="false" />
-
-        <ListPreference
-            android:key="charge_meter_battery_source"
-            android:defaultValue="system"
-            android:dependency="charge_meter_enabled"
-            android:entries="@array/charge_meter_battery_source_options"
-            android:entryValues="@array/charge_meter_battery_source_values"
-            android:title="@string/pref_charge_meter_battery_source_title"
-            android:dialogTitle="@string/pref_charge_meter_battery_source_title"
-            android:summary="@string/pref_charge_meter_battery_source_summary"
             app:iconSpaceReserved="false" />
 
         <CheckBoxPreference
