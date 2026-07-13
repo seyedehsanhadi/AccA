@@ -458,8 +458,9 @@ class SwitchFinderActivity : ScopedAppActivity()
     {
         val rec = foundRecommended ?: return
         val all = (listOf(rec) + foundAlts).distinctBy { it.switch.trim() }
+        val labelMap = uniqueSwitchLabels(all.map { it.switch })
         val labels = all.mapIndexed { i, a ->
-            val node = switchLabel(a.switch)
+            val node = labelMap[a.switch] ?: switchLabel(a.switch)
             val badge = a.klass.ifBlank { "switch" }.uppercase()
             val cf = if (a.conf == "verified") "verified" else a.conf.ifBlank { "needs test" }
             val star = if (i == 0) "  ★ recommended" else ""
@@ -494,6 +495,25 @@ class SwitchFinderActivity : ScopedAppActivity()
         val p = paths.firstOrNull() ?: toks.firstOrNull().orEmpty()
         val segs = p.trim('/').split('/').filter { it.isNotEmpty() }
         return when { segs.size >= 2 -> segs.takeLast(2).joinToString("/"); segs.size == 1 -> segs[0]; else -> p }
+    }
+
+    /** Labels that are UNIQUE across the given specs. The short "parent/node" from switchLabel()
+     *  collides when the SAME kernel node is exposed at two different paths -- e.g. OnePlus/Oplus
+     *  publish it at BOTH /sys/class/oplus_chg/battery/mmi_charging_enable and
+     *  /sys/devices/virtual/oplus_chg/battery/mmi_charging_enable, and last-two-segments makes both
+     *  read "battery/mmi_charging_enable" so the user can't tell the two rows apart (field report:
+     *  "I told him to pick /sys/devices/virtual/...mmi_charging_enable but he couldn't find it").
+     *  On a collision, fall back to the full path (minus /sys/) so each row is distinguishable. */
+    private fun uniqueSwitchLabels(specs: List<String>): Map<String, String> {
+        val base = specs.associateWith { switchLabel(it) }
+        val counts = base.values.groupingBy { it }.eachCount()
+        return specs.associateWith { spec ->
+            val short = base.getValue(spec)
+            if ((counts[short] ?: 0) > 1) {
+                val p = spec.trim().split(' ').firstOrNull { it.startsWith("/") } ?: spec.trim()
+                p.removePrefix("/sys/").removePrefix("/").ifBlank { short }
+            } else short
+        }
     }
 
     /**
