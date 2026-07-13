@@ -74,7 +74,7 @@ class AboutActivity : AppCompatActivity() {
     }
 
     fun accaGitHubOnClick(view: View) {
-        openUrl("https://github.com/MatteCarra/AccA")
+        openUrl("https://github.com/seyedehsanhadi/AccA")
     }
 
     fun accaTelegramOnClick(v: View) {
@@ -87,6 +87,10 @@ class AboutActivity : AppCompatActivity() {
                 e.printStackTrace()
             }
         }
+    }
+
+    fun buyMeCoffeeOnClick(view: View) {
+        openUrl("https://buymeacoffee.com/seyedehsanhadi")
     }
 
     fun vr25GitHubOnClick(view: View) {

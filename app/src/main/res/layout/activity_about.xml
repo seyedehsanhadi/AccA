@@ -170,6 +170,19 @@
                         android:onClick="accaTelegramOnClick"
                         android:text="@string/about_project_telegram"
                         app:icon="@drawable/ic_telegram" />
+
+                    <com.google.android.material.button.MaterialButton
+                        style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/card_margin"
+                        android:backgroundTint="@color/bmc_yellow"
+                        android:ellipsize="end"
+                        android:onClick="buyMeCoffeeOnClick"
+                        android:text="@string/about_buy_me_coffee"
+                        android:textColor="@android:color/black"
+                        app:icon="@drawable/ic_coffee"
+                        app:iconTint="@android:color/black" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

@@ -492,6 +492,7 @@
     <string name="about_acc_api_version_label">ACCA⇄ACC API Version:</string>
     <string name="about_project_github">AccA GitHub</string>
     <string name="about_project_telegram">AccA Telegram</string>
+    <string name="about_buy_me_coffee">Buy me a coffee</string>
     <string name="about_github">GitHub</string>
     <string name="about_website">Website</string>
     <string name="toast_no_browser_installed">Unable to open link!\nMake sure you have a web browser installed.</string>
