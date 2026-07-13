@@ -15,10 +15,12 @@
     <string-array name="charge_meter_style_options">
         <item>Status-bar number and details</item>
         <item>Detailed notification only</item>
+        <item>Status-bar number, minimal row</item>
     </string-array>
     <string-array name="charge_meter_style_values">
         <item>both</item>
         <item>notif</item>
+        <item>mini</item>
     </string-array>
     <string-array name="charge_meter_battery_source_options">
         <item>System (Real Level, matches the status bar)</item>

@@ -54,7 +54,15 @@ class ChargeMeterService : Service() {
         // IMPORTANCE_LOW/MIN only show in the shade, never in the strip. New channel id because a
         // channel's importance is immutable once created (the old "_low" one stayed LOW on testers).
         private const val CHANNEL_ID = "acca_charge_meter_bar"
-        private const val CHANNEL_DIM = "acca_charge_meter_dim"
+        // IMPORTANCE_MIN (below) is what Android calls "minimized": it does not just hide this
+        // notification, it tells the shade/lock screen this slot is low-value, which made the
+        // WHOLE notification list bundle harder - a new email while this MIN notification sat
+        // there (every night, while charging, screen off) collapsed everything else into a small
+        // dot until the phone was unlocked. IMPORTANCE_LOW hides the strip icon exactly the same
+        // (per the note above) without that shade-wide bundling side effect. "_dim2" (not "_dim")
+        // because importance is immutable per channel id - bumping the constant alone would leave
+        // every existing install stuck on the old MIN channel forever.
+        private const val CHANNEL_DIM = "acca_charge_meter_dim2"
         private const val NOTIF_ID = 4712
         const val ACTION_START = "acca.meter.start"
         // Internal idle-stop: sent by sync() when plug/screen conditions say "don't show right now"
@@ -170,7 +178,7 @@ class ChargeMeterService : Service() {
             val q = quickIcon()
             try {
                 startForeground(NOTIF_ID, buildNotification(
-                    getString(R.string.charge_meter_charging), null, null, q?.first, q?.second, prefs.chargeMeterStyle))
+                    getString(R.string.charge_meter_charging), null, null, q?.first, q?.second, null, prefs.chargeMeterStyle))
                 promoted = true
             } catch (e: Exception) { LogExt().e(javaClass.simpleName, "startForeground failed: ${e.message}") }
         }
@@ -225,6 +233,8 @@ class ChargeMeterService : Service() {
     private var lastBig: String? = null
     private var lastIconVal: String? = null
     private var lastIconUnit: String? = null
+    private var lastIconTemp: String? = null
+    private var lastPostKey: String? = null
     @Volatile private var curChannel = CHANNEL_ID
 
     // Screen off/on only SWAPS the notification channel (dim = no status-bar strip icon, so it does
@@ -240,7 +250,7 @@ class ChargeMeterService : Service() {
         try {
             val n = buildNotification(
                 lastTitle ?: getString(R.string.charge_meter_charging),
-                lastCollapsed, lastBig, lastIconVal, lastIconUnit, prefs.chargeMeterStyle, curChannel)
+                lastCollapsed, lastBig, lastIconVal, lastIconUnit, lastIconTemp, prefs.chargeMeterStyle, curChannel)
             // startForeground (not notify) so the service STAYS foreground on the new channel. On
             // failure we do NOT stopForeground, so it remains foreground on the previous channel -
             // there is never a window where the service is background and killable.
@@ -248,7 +258,7 @@ class ChargeMeterService : Service() {
         } catch (e: Exception) {
             try { (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(NOTIF_ID,
                 buildNotification(lastTitle ?: getString(R.string.charge_meter_charging),
-                    lastCollapsed, lastBig, lastIconVal, lastIconUnit, prefs.chargeMeterStyle, curChannel)) } catch (_: Exception) {}
+                    lastCollapsed, lastBig, lastIconVal, lastIconUnit, lastIconTemp, prefs.chargeMeterStyle, curChannel)) } catch (_: Exception) {}
         }
     }
 
@@ -292,6 +302,31 @@ class ChargeMeterService : Service() {
         val pct = batteryLevelPct()
         if (pct != null) return "$pct" to "%"
         return null
+    }
+
+    // Battery temperature from the sticky intent - same no-root source as batteryLevelPct(),
+    // in the same deci-°C convention AccState.tempDeciC uses (EXTRA_TEMPERATURE is
+    // documented as tenths of a degree Celsius). Always available and fresh every tick, unlike
+    // ACC's --state (root-only, refreshed only every ROOT_EVERY ticks) - so the toggle works
+    // even with no root, matching this whole service's "no root needed" design.
+    private fun batteryTempDeciC(): Int? {
+        val bs = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
+        val t = bs.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+        return if (t == Int.MIN_VALUE) null else t
+    }
+
+    // Same C->F formula as BatteryInfo.getTemperature, so the meter and the dashboard can never
+    // disagree. compact=true (status-bar icon) drops the C/F letter to save the icon's few legible
+    // glyphs - the user already knows which unit they picked in Settings > Units of measure.
+    private fun tempGlyph(deciC: Int, unit: mattecarra.accapp.TemperatureUnit, compact: Boolean): String {
+        val c = deciC / 10.0
+        val f = c * 1.8 + 32.0
+        val cR = kotlin.math.round(c).toInt(); val fR = kotlin.math.round(f).toInt()
+        return when (unit) {
+            mattecarra.accapp.TemperatureUnit.F -> if (compact) "$fR°" else "$fR°F"
+            mattecarra.accapp.TemperatureUnit.CF -> if (compact) "$cR°" else "$cR°C/$fR°F"
+            else -> if (compact) "$cR°" else "$cR°C"
+        }
     }
 
     private fun refreshPluggedScreen() {
@@ -353,6 +388,10 @@ class ChargeMeterService : Service() {
             val sysPct = batteryLevelPct()
             val battPct = if (prefs.chargeMeterBatterySource == "system") sysPct ?: accPct else accPct ?: sysPct
 
+            // No-root sticky-intent reading preferred (fresh every tick); ACC's --state as a
+            // fallback only for the rare device where EXTRA_TEMPERATURE is absent.
+            val tempDeciC: Int? = batteryTempDeciC() ?: st?.tempDeciC?.takeIf { it > -2732 }
+
             // Pick ONE strip value + its unit, kept UNSIGNED and unit-less here; the sign and unit
             // are only appended below if the user opted in (the strip fits ~3 glyphs, so number-only
             // is the readable default - the shade carries the fully signed, united detail).
@@ -379,6 +418,12 @@ class ChargeMeterService : Service() {
             // Never fall back to a plain battery icon while the meter is on: if no current/watts are
             // readable this instant, show the battery level so the strip always has a real number.
             if (stripNum == null && battPct != null) { stripNum = "$battPct"; stripUnit = "%" }
+
+            // Opt-in: stacked icon, charge number on top, temperature below - both big, no
+            // unit letters (mA/W/°C dropped from the icon entirely so neither number has to
+            // shrink for them; the shade text still carries full units).
+            val iconTemp: String? = if (prefs.chargeMeterShowTemp && stripNum != null && tempDeciC != null)
+                tempGlyph(tempDeciC, prefs.temperatureOutputUnitOfMeasure, compact = true) else null
 
             // The strip always shows the sign and unit - both are permanent, not user toggles.
             val iconValue: String? = stripNum?.let { sign + it }
@@ -412,18 +457,26 @@ class ChargeMeterService : Service() {
                 listOfNotNull(vinS, inA, ratio?.let { "$it to battery" }).joinToString("  ·  ")
             } else null
             val battLine: String? = if (st != null && battPct != null && vbatV != null)
-                getString(R.string.charge_meter_battery_line, battPct, vbatV, st.tempDeciC / 10) else null
+                getString(R.string.charge_meter_battery_line, battPct, vbatV,
+                    tempDeciC?.let { tempGlyph(it, prefs.temperatureOutputUnitOfMeasure, compact = false) } ?: "?") else null
             val holdLine: String? = st?.nativeStopLevel?.takeIf { it in 1..100 }?.let { getString(R.string.charge_meter_holds_line, it) }
             val bigText = listOfNotNull(chargerLine, battLine, holdLine).joinToString("\n").ifBlank { null }
             val collapsed = chargerLine ?: battLine
 
             if (stopped || !prefs.chargeMeterEnabled) return@launch
             lastTitle = title; lastCollapsed = collapsed; lastBig = bigText
-            lastIconVal = iconValue; lastIconUnit = iconUnit
+            lastIconVal = iconValue; lastIconUnit = iconUnit; lastIconTemp = iconTemp
+            // Re-posting an UNCHANGED notification every 3s still counts as an update to the
+            // shade/status-bar ranker - it kept this meter "freshest", which crowded other
+            // apps' icons into the overflow dot ("my mail is just a dot until I unlock").
+            // Only touch the notification when something visible actually changed.
+            val postKey = "$title|$collapsed|$bigText|$iconValue|$iconUnit|$iconTemp|${prefs.chargeMeterStyle}|$curChannel"
+            if (postKey == lastPostKey) return@launch
             try {
                 val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                nm.notify(NOTIF_ID, buildNotification(title, collapsed, bigText, iconValue, iconUnit,
+                nm.notify(NOTIF_ID, buildNotification(title, collapsed, bigText, iconValue, iconUnit, iconTemp,
                     prefs.chargeMeterStyle, curChannel))
+                lastPostKey = postKey
             } catch (e: Exception) { LogExt().e(javaClass.simpleName, "notify failed: ${e.message}") }
         }
     }
@@ -443,19 +496,22 @@ class ChargeMeterService : Service() {
                 nm.createNotificationChannel(ch)
             }
             if (nm.getNotificationChannel(CHANNEL_DIM) == null) {
-                val dim = NotificationChannel(CHANNEL_DIM, getString(R.string.charge_meter_channel) + " (screen off)", NotificationManager.IMPORTANCE_MIN)
+                val dim = NotificationChannel(CHANNEL_DIM, getString(R.string.charge_meter_channel) + " (screen off)", NotificationManager.IMPORTANCE_LOW)
                 dim.setShowBadge(false)
                 dim.enableVibration(false)
                 dim.enableLights(false)
                 dim.setSound(null, null)
                 nm.createNotificationChannel(dim)
             }
+            // The old MIN channel from before this fix may still exist on an upgrade; delete it so
+            // it cannot keep bundling the shade even though nothing posts to it anymore.
+            try { nm.deleteNotificationChannel("acca_charge_meter_dim") } catch (_: Exception) {}
         }
     }
 
     private fun buildNotification(
         title: String, collapsed: String?, bigText: String?,
-        iconValue: String?, iconUnit: String?, style: String, channel: String = CHANNEL_ID
+        iconValue: String?, iconUnit: String?, iconTemp: String?, style: String, channel: String = CHANNEL_ID
     ): Notification {
         val tap = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -464,7 +520,7 @@ class ChargeMeterService : Service() {
         )
         val b = NotificationCompat.Builder(this, channel)
             .setContentTitle(title)
-            .setPriority(if (channel == CHANNEL_DIM) NotificationCompat.PRIORITY_MIN else NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(if (channel == CHANNEL_DIM) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_DEFAULT)
             .setOngoing(true)
             .setShowWhen(false)
             .setOnlyAlertOnce(true)   // updates every 3s must NOT re-alert
@@ -491,14 +547,17 @@ class ChargeMeterService : Service() {
         // static icon since the details, not the strip number, are the point there.
         val wantNumber = style != "notif"
         val icon = when {
-            wantNumber && iconValue != null && iconUnit != null -> numberIcon(iconValue, iconUnit)
-            wantNumber -> numberIcon("·", "")   // placeholder dot, never a battery glyph
+            wantNumber && iconValue != null && iconUnit != null -> numberIcon(iconValue, iconUnit, iconTemp)
+            wantNumber -> numberIcon("·", "", null)   // placeholder dot, never a battery glyph
             else -> null
         }
         if (icon != null) b.setSmallIcon(icon) else b.setSmallIcon(R.drawable.ic_battery_charging_full)
 
-        // Shade content: the detailed dashboard, for every style.
-        if (!bigText.isNullOrBlank()) {
+        // Shade content. "mini" = the smallest row Android allows: title only, no detail
+        // line, no expanded dashboard. A status-bar icon CANNOT exist without its shade row
+        // (the OS ties them; emptying the row entirely also kills the icon on MIUI - the old
+        // "icon" style bug), so mini is the honest floor, not a true icon-only mode.
+        if (style != "mini" && !bigText.isNullOrBlank()) {
             b.setContentText(collapsed ?: bigText.substringBefore('\n'))
             b.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
@@ -516,13 +575,13 @@ class ChargeMeterService : Service() {
     private var iconCacheKey: String? = null
     private var iconCache: IconCompat? = null
 
-    private fun numberIcon(value: String, unit: String): IconCompat? {
-        val key = "$value|$unit"
+    private fun numberIcon(value: String, unit: String, temp: String?): IconCompat? {
+        val key = "$value|$unit|${temp ?: ""}"
         if (key == iconCacheKey && iconCache != null) return iconCache
-        return renderIcon(value, unit)?.also { iconCacheKey = key; iconCache = it }
+        return renderIcon(value, unit, temp)?.also { iconCacheKey = key; iconCache = it }
     }
 
-    private fun renderIcon(value: String, unit: String): IconCompat? {
+    private fun renderIcon(value: String, unit: String, temp: String?): IconCompat? {
         return try {
             val size = 96
             val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -537,11 +596,20 @@ class ChargeMeterService : Service() {
                 style = Paint.Style.FILL_AND_STROKE; strokeWidth = stroke; strokeJoin = Paint.Join.ROUND
             }
             val fill = 0.96f
+            val s = size.toFloat()
             if (unit.isBlank()) {
-                drawFilled(canvas, p, value, size.toFloat(), fill, 0f, size.toFloat())
+                drawFilled(canvas, p, value, 0f, s, fill, 0f, s)
+            } else if (temp.isNullOrBlank()) {
+                drawFilled(canvas, p, value, 0f, s, fill, 0f, s * 0.63f)
+                drawFilled(canvas, p, unit, 0f, s, fill * 0.86f, s * 0.60f, s)
             } else {
-                drawFilled(canvas, p, value, size.toFloat(), fill, 0f, size * 0.63f)
-                drawFilled(canvas, p, unit, size.toFloat(), fill * 0.86f, size * 0.60f, size.toFloat())
+                // Stacked, no units: charge number on top, temperature below. Temp reuses the
+                // TOP number's exact font size (not its own independent fit - a short "30°"
+                // fitting-to-box would render bigger than a wide "-1234", the opposite of what
+                // "match the upper one" means) and its center is biased right, not true-center.
+                val gap = s * 0.03f
+                val vSize = drawFilled(canvas, p, value, 0f, s, fill, 0f, s * 0.48f - gap)
+                drawSized(canvas, p, temp, vSize, s * 0.62f, s * 0.48f + gap, s, s * 0.97f)
             }
             IconCompat.createWithBitmap(bmp)
         } catch (e: Exception) {
@@ -550,23 +618,42 @@ class ChargeMeterService : Service() {
     }
 
     /**
-     * Draw [text] centered in the full width and the vertical band [top,bottom], scaled up until it
-     * fills [fill] of that box in whichever dimension binds first (measured via getTextBounds, so a
-     * 2-char value renders far larger than a 4-char one - always as big as the glyphs allow).
+     * Draw [text] centered in the cell [x0,x1] x [top,bottom], scaled up until it fills [fill]
+     * of that box in whichever dimension binds first (measured via getTextBounds, so a 2-char
+     * value renders far larger than a 4-char one - always as big as the cell allows). Returns
+     * the font size it settled on, so a second string can be forced to match it exactly.
      */
-    private fun drawFilled(canvas: Canvas, p: Paint, text: String, size: Float, fill: Float, top: Float, bottom: Float) {
-        if (text.isEmpty()) return
+    private fun drawFilled(canvas: Canvas, p: Paint, text: String, x0: Float, x1: Float, fill: Float, top: Float, bottom: Float): Float {
+        if (text.isEmpty()) return 0f
         val bandH = bottom - top
+        val bandW = x1 - x0
         p.textSize = 100f
         val b = android.graphics.Rect()
         p.getTextBounds(text, 0, text.length, b)
         val w = (b.width().takeIf { it > 0 } ?: 1)
         val h = (b.height().takeIf { it > 0 } ?: 1)
-        p.textSize = 100f * minOf(size * fill / w, bandH * fill / h)
+        val ts = 100f * minOf(bandW * fill / w, bandH * fill / h)
+        p.textSize = ts
         val b2 = android.graphics.Rect()
         p.getTextBounds(text, 0, text.length, b2)
         // baseline so the glyph's optical center lands on the band center
         val cy = (top + bottom) / 2f - (b2.top + b2.bottom) / 2f
-        canvas.drawText(text, size / 2f, cy, p)
+        canvas.drawText(text, (x0 + x1) / 2f, cy, p)
+        return ts
+    }
+
+    /**
+     * Draw [text] at a FIXED [textSize] (no fit-to-box scaling), centered at [centerX] but
+     * pulled left just enough to stay inside [maxRight] if it would otherwise clip.
+     */
+    private fun drawSized(canvas: Canvas, p: Paint, text: String, textSize: Float, centerX: Float, top: Float, bottom: Float, maxRight: Float) {
+        if (text.isEmpty() || textSize <= 0f) return
+        p.textSize = textSize
+        val b = android.graphics.Rect()
+        p.getTextBounds(text, 0, text.length, b)
+        val halfW = b.width() / 2f
+        val cx = minOf(centerX, maxRight - halfW).coerceAtLeast(halfW)
+        val cy = (top + bottom) / 2f - (b.top + b.bottom) / 2f
+        canvas.drawText(text, cx, cy, p)
     }
 }

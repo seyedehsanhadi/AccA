@@ -335,7 +335,7 @@
     <string name="voltage_measure_output_preference_title">Output Voltage unit of measure</string>
     <string name="voltage_measure_output_preference_title_description">The output of voltage, 4.123 V (Volt) or 4123 mV (Milvolt).</string>
     <string name="temperature_measure_output_preference_title">Output Temperature unit of measure</string>
-    <string name="temperature_measure_output_preference_title_description">The output of temperature: -1C/30F (Celsius/Fahrenheit) or -1C (Celsius) or 30C (Fahrenheit).</string>
+    <string name="temperature_measure_output_preference_title_description">The output of temperature: -1C/30F (Celsius/Fahrenheit) or -1C (Celsius) or 30F (Fahrenheit).</string>
 
     <string name="acc_version_preference_title">ACC version</string>
 
@@ -520,6 +520,8 @@
     <string name="pref_charge_meter_display_title">Status bar shows</string>
     <string name="pref_charge_meter_battery_source_title">Battery percentage source</string>
     <string name="pref_charge_meter_battery_source_summary">Which battery reading this meter shows in the detailed line and when it falls back to a level. ACC reflects Capacity Mask if you use one; System is the phone\'s own raw level.</string>
+    <string name="pref_charge_meter_show_temp_title">Show battery temperature</string>
+    <string name="pref_charge_meter_show_temp_summary">Adds the battery temperature next to the status-bar number and in the detailed line. Shown in °C or °F per the Temperature output unit below, under Units of measure.</string>
     <string name="charge_meter_stop_action">Stop</string>
     <!-- manual AccA-only update browser; ACC surfaces its own update via Magisk/KernelSU -->
     <string name="pref_check_updates_title">Check for updates</string>
@@ -528,7 +530,7 @@
     <string name="check_updates_title">AccA releases</string>
     <string name="check_updates_none">Could not reach GitHub. Check your connection and try again.</string>
     <!-- detailed-notification lines -->
-    <string name="charge_meter_battery_line">Battery %1$d%% · %2$s V · %3$d°C</string>
+    <string name="charge_meter_battery_line">Battery %1$d%% · %2$s V · %3$s</string>
     <string name="charge_meter_holds_line">Holds at %1$d%%</string>
     <string name="charge_reason_user_limit">limited by your Max current</string>
     <string name="charge_reason_thermal">slowed by heat</string>

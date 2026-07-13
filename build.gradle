@@ -3,9 +3,9 @@
 buildscript {
     ext {
         versions = [
-                kotlin: '1.5.31',
+                kotlin: '1.7.10',
                 libsuVersion: '3.0.2',
-                roomVersion: '2.4.0-beta01',
+                roomVersion: '2.4.3',
                 lifecycle: '2.4.0',
                 coroutines: '1.4.3',
                 viewpager: "1.0.0",
@@ -21,7 +21,7 @@ buildscript {
         maven { url 'https://jitpack.io' }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.0.3'
+        classpath 'com.android.tools.build:gradle:7.4.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${versions.kotlin}"
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

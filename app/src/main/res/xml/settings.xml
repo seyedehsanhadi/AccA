@@ -56,6 +56,14 @@
             android:summary="@string/pref_charge_meter_battery_source_summary"
             app:iconSpaceReserved="false" />
 
+        <CheckBoxPreference
+            android:key="charge_meter_show_temp"
+            android:defaultValue="false"
+            android:dependency="charge_meter_enabled"
+            android:title="@string/pref_charge_meter_show_temp_title"
+            android:summary="@string/pref_charge_meter_show_temp_summary"
+            app:iconSpaceReserved="false" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

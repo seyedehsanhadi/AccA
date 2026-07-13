@@ -15,7 +15,7 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.lifecycle.Observer
-import androidx.lifecycle.ViewModelProviders
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.ItemTouchHelper.ACTION_STATE_SWIPE
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -71,7 +71,7 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
         binding.scriptsRecyclerView.adapter = mScriptesAdapter
         binding.scriptsRecyclerView.layoutManager = LinearLayoutManager(mContext)
 
-        mScriptsViewModel = ViewModelProviders.of(this).get(ScriptsViewModel::class.java)
+        mScriptsViewModel = ViewModelProvider(this).get(ScriptsViewModel::class.java)
 
         // Observe data
         mScriptsViewModel.getLiveData().observe(viewLifecycleOwner, Observer { scripts ->

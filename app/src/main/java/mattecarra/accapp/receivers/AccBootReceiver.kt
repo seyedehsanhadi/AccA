@@ -15,10 +15,17 @@ class AccBootReceiver: BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         // Some OEMs (and "fast boot" / HTC) only send a QUICKBOOT_POWERON broadcast and never
         // ACTION_BOOT_COMPLETED, so init has to run for those too or the daemon won't start.
+        // MY_PACKAGE_REPLACED (an app update - Play Store, sideload, or AccA's own updater) kills
+        // this process the same way a reboot does, but was never in this filter: the charge meter
+        // and accd silently stayed dead after every AccA update until the next full reboot or a
+        // plug/unplug cycle (ChargeMeterPowerReceiver's ACTION_POWER_CONNECTED/DISCONNECTED still
+        // caught it eventually - just not right away, and not at all for someone who updates while
+        // already charging and doesn't unplug for hours).
         val action = intent.action
         if (Intent.ACTION_BOOT_COMPLETED == action
             || "android.intent.action.QUICKBOOT_POWERON" == action
-            || "com.htc.intent.action.QUICKBOOT_POWERON" == action) {
+            || "com.htc.intent.action.QUICKBOOT_POWERON" == action
+            || Intent.ACTION_MY_PACKAGE_REPLACED == action) {
             // Restore the status-bar charge meter on the MAIN thread, synchronously, right here in
             // onReceive: BOOT_COMPLETED is an allowed window to start a foreground service, and
             // starting it from the background worker thread below can fall outside that window on

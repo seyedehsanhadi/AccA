@@ -9,6 +9,7 @@ import mattecarra.accapp.utils.Constants.ACC_VERSION
 import mattecarra.accapp.utils.Constants.CHARGE_METER_BATTERY_SOURCE
 import mattecarra.accapp.utils.Constants.CHARGE_METER_DISPLAY
 import mattecarra.accapp.utils.Constants.CHARGE_METER_ENABLED
+import mattecarra.accapp.utils.Constants.CHARGE_METER_SHOW_TEMP
 import mattecarra.accapp.utils.Constants.CHARGE_METER_STYLE
 import mattecarra.accapp.utils.Constants.CURRENT_INPUT_UNIT_OF_MEASURE
 import mattecarra.accapp.utils.Constants.CURRENT_OUTPUT_UNIT_OF_MEASURE
@@ -199,6 +200,14 @@ class Preferences(private val context: Context)
     var chargeMeterBatterySource: String
         get() = sharedPrefs.getString(CHARGE_METER_BATTERY_SOURCE, "system") ?: "system"
         set(value) { sharedPrefs.edit().putString(CHARGE_METER_BATTERY_SOURCE, value).apply() }
+
+    // Off by default. Adds battery temperature next to the strip number, in whatever unit
+    // temperatureOutputUnitOfMeasure (Settings > Units of measure) is already set to - no
+    // separate C/F choice for the meter, so the one global unit picker stays the single source
+    // of truth and can't disagree with itself between the dashboard and the status bar.
+    var chargeMeterShowTemp: Boolean
+        get() = sharedPrefs.getBoolean(CHARGE_METER_SHOW_TEMP, false)
+        set(value) { sharedPrefs.edit().putBoolean(CHARGE_METER_SHOW_TEMP, value).apply() }
 
     // True only when the user DELIBERATELY stopped accd (dashboard toggle, QS tile, widget dialog).
     // The plug-in daemon guard checks this so it never resurrects a daemon the user turned off;
