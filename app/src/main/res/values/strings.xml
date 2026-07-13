@@ -340,11 +340,19 @@
     <string name="temperature_measure_output_preference_title">Output Temperature unit of measure</string>
     <string name="temperature_measure_output_preference_title_description">The output of temperature: -1C/30F (Celsius/Fahrenheit) or -1C (Celsius) or 30F (Fahrenheit).</string>
 
-    <string name="acc_version_preference_title">ACC version</string>
+    <string name="acc_version_preference_title">ACC module</string>
 
-    <string name="acc_version_preference_description">Choose which ACC version to install. Defaults to the latest release from GitHub; \"Bundled\" is an offline fallback shipped with the app.</string>
+    <string name="acc_version_preference_description">Shows the installed ACC version and checks GitHub for a newer one. AccA never installs or overrides ACC - it points you to the download so you flash it yourself.</string>
     <string name="acc_update_via_magisk_title">Updating ACC</string>
-    <string name="acc_update_via_magisk_summary">ACC (the charging module) updates through your root manager - Magisk, KernelSU or APatch show it in their Modules list when a new version is out. The picker above only chooses which ACC version to install. AccA updates itself separately.</string>
+    <string name="acc_update_via_magisk_summary">ACC (the charging module) is a Magisk / KernelSU / APatch module you flash yourself - AccA never installs or overrides it. Tap \"ACC module\" above to check for a newer version. AccA updates itself separately.</string>
+    <string name="acc_module_title">ACC module</string>
+    <string name="acc_checking_update">Checking for ACC updates…</string>
+    <string name="acc_get_message">ACC (the charging module) is not installed. AccA runs without it, but needs it to actually control charging. Download the latest ACC, then flash it in Magisk / KernelSU / APatch.</string>
+    <string name="acc_installed_cant_check">ACC %1$s is installed. Couldn\'t reach GitHub to check for a newer version - try again when you\'re online.</string>
+    <string name="acc_update_available_title">ACC update available</string>
+    <string name="acc_update_available_message">You have ACC %1$s. %2$s is available. Download it and flash it in your root manager to update - AccA won\'t change your installed ACC for you.</string>
+    <string name="acc_up_to_date">ACC %1$s is installed and up to date.</string>
+    <string name="get_update">Get update</string>
 
     <string name="install_bundled_version">Install bundled variant</string>
 

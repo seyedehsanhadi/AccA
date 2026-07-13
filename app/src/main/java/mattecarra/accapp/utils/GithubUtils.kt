@@ -9,6 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 data class ReleaseInfo(val version: String, val notes: String, val pageUrl: String, val apkUrl: String?)
+data class AccModuleInfo(val version: String, val versionCode: Int, val releasePage: String)
 
 object GithubUtils {
     // Plain URL(x).readText() sets no timeout, so a dead/slow connection can hang a "check for
@@ -35,6 +36,23 @@ object GithubUtils {
             LogExt().e("GithubUtils", "getLatestAccCommit failed: $e")
             null
         })
+    }
+
+    /** Latest ACC module info from the fork's module.json on main - the SAME file Magisk's
+     * updateJson reads, so its versionCode/version are authoritative for "is a newer ACC out".
+     * AccA never installs ACC itself (no bundle); the user flashes the module. */
+    suspend fun getLatestAccModuleInfo(): AccModuleInfo? = withContext(Dispatchers.IO) {
+        try {
+            val o = JsonParser
+                .parseString(fetchText("https://raw.githubusercontent.com/seyedehsanhadi/acc/main/module.json"))
+                .asJsonObject
+            val ver = o.get("version").asString
+            AccModuleInfo(ver, o.get("versionCode").asInt,
+                "https://github.com/seyedehsanhadi/acc/releases/tag/$ver")
+        } catch (e: Exception) {
+            LogExt().e("GithubUtils", "getLatestAccModuleInfo failed: $e")
+            null
+        }
     }
 
     private fun fetchNewestRelease(repo: String, includePreReleases: Boolean): JsonObject? {

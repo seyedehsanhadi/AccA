@@ -81,85 +81,56 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
 
         val accVersion = findPreference<Preference>(ACC_VERSION)
         accVersion?.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-            context?.let { context ->
-                val preferences = Preferences(context)
+            context?.let { ctx ->
+                // AccA does NOT install or bundle ACC. This checks the installed ACC against the
+                // latest release on GitHub (the fork's module.json - the same file Magisk reads) and,
+                // when ACC is missing or a newer version exists, points the user at the release to
+                // download and flash themselves. Discoverable "update ACC from AccA" without AccA
+                // ever overriding a flashed module.
+                this@SettingsFragment.launch {
+                    val installedStr = try { Acc.getAccVersionToStr().trim() } catch (e: Exception) { "" }
+                    val installedCode = Regex("\\((\\d+)\\)").find(installedStr)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
-                // getAccVersionToStr() is the human-readable release string ("v2025.5.18-6.5.1-rc10
-                // (202505290)") straight from `acc --version` - NOT Acc.instance.version, which is
-                // only the bare numeric versionCode used internally for feature-gating comparisons
-                // (>= 202002170 etc) and reads as a meaningless number to a user.
-                val installedAcc = try { Acc.getAccVersionToStr().trim() } catch (e: Exception) { "" }
-                MaterialDialog(context)
-                    .show {
-                        title(text = getString(R.string.acc_version_picker_title) +
-                            if (installedAcc.isNotBlank()) "  (installed: $installedAcc)" else "")
-                        message(R.string.acc_version_picker_message)
+                    val checking = MaterialDialog(ctx).show {
+                        title(R.string.acc_checking_update)
+                        progress(R.string.wait)
                         cancelOnTouchOutside(false)
-                        launch {
-                            accVersionSingleChoice(preferences.accVersion) { version ->
-                                val installVersion: () -> Job = {
-                                    this@SettingsFragment.launch {
-                                        // Don't show the progress dialog if the fragment/activity is already gone.
-                                        if (!isAdded || activity?.isFinishing != false) return@launch
+                    }
+                    val latest = GithubUtils.getLatestAccModuleInfo()
+                    if (!isAdded || activity?.isFinishing != false) { try { checking.dismiss() } catch (_: Exception) {}; return@launch }
+                    checking.dismiss()
 
-                                        val dialog = MaterialDialog(context).show {
-                                            title(R.string.installing_acc)
-                                            progress(R.string.wait)
-                                            cancelOnTouchOutside(false)
-                                            onKeyCodeBackPressed { false }
-                                        }
+                    val releasesUrl = "https://github.com/seyedehsanhadi/acc/releases/latest"
+                    fun open(url: String) { try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) {} }
 
-                                        val res = if (version == "bundled") {
-                                            Acc.installBundledAccModule(context)
-                                        } else {
-                                            Acc.installAccModuleVersion(context, version)
-                                        }
-
-                                        // The install can take a long time; the fragment may have been
-                                        // detached or the activity finished while it ran. Showing a
-                                        // dialog now would throw BadTokenException and leak the activity.
-                                        if (!isAdded || activity?.isFinishing != false) {
-                                            try { dialog.dismiss() } catch (_: Exception) {}
-                                            return@launch
-                                        }
-
-                                        dialog.dismiss()
-
-                                        when(res?.code) {
-                                            0 -> {
-                                                preferences.lastCommit = GithubUtils.getLatestAccCommit(version)
-                                                preferences.accVersion = version
-                                            }
-                                            else -> {
-                                                MaterialDialog(context) //Dialog to tell the user that installation failed
-                                                    .show {
-                                                        title(R.string.acc_installation_failed_title)
-                                                        message(R.string.installation_failed_non_bundled)
-                                                        positiveButton(android.R.string.ok)
-                                                        if(res != null)
-                                                            shareLogsNeutralButton(File(context.filesDir, "logs/acc-install.log"), R.string.acc_installation_failed_log)
-                                                    }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (version == "bundled") {
-                                    installVersion()
-                                } else {
-                                    MaterialDialog(context)
-                                        .show {
-                                            title(R.string.acc_version_compatibility_warning_title)
-                                            message(R.string.acc_version_compatibility_warning_description)
-                                            positiveButton(android.R.string.yes) {
-                                                installVersion()
-                                            }
-                                            negativeButton(android.R.string.cancel)
-                                        }
-                                }
+                    MaterialDialog(ctx).show {
+                        when {
+                            installedStr.isBlank() || installedCode == null -> {
+                                title(R.string.acc_not_installed_title)
+                                message(R.string.acc_get_message)
+                                positiveButton(R.string.get_acc) { open(latest?.releasePage ?: releasesUrl) }
+                                negativeButton(android.R.string.cancel)
+                            }
+                            latest == null -> {
+                                title(R.string.acc_module_title)
+                                message(text = getString(R.string.acc_installed_cant_check, installedStr))
+                                positiveButton(android.R.string.ok)
+                                neutralButton(R.string.get_acc) { open(releasesUrl) }
+                            }
+                            latest.versionCode > installedCode -> {
+                                title(R.string.acc_update_available_title)
+                                message(text = getString(R.string.acc_update_available_message, installedStr, latest.version))
+                                positiveButton(R.string.get_update) { open(latest.releasePage) }
+                                negativeButton(android.R.string.cancel)
+                            }
+                            else -> {
+                                title(R.string.acc_module_title)
+                                message(text = getString(R.string.acc_up_to_date, installedStr))
+                                positiveButton(android.R.string.ok)
                             }
                         }
                     }
+                }
             }
 
             true

@@ -20,7 +20,10 @@ import java.net.URL
 import kotlin.math.abs
 
 object Acc {
-    const val bundledVersion = 202505245
+    // Fallback ACC API version for picking a handler when the installed version can't be read yet
+    // (e.g. right after a flash, before the daemon is up). AccA ships NO bundle; keep this at the
+    // latest known release so a fresh/unreadable install uses the newest handler.
+    const val fallbackVersion = 202505294
     private const val TAG = "Acc"
     private val FILES_DIR = "/data/data/mattecarra.accapp/files"
 
@@ -60,7 +63,7 @@ object Acc {
             }
         }
 
-    internal fun createAccInstance(version: Int = getAccVersion() ?: bundledVersion): AccInterface{
+    internal fun createAccInstance(version: Int = getAccVersion() ?: fallbackVersion): AccInterface{
         INSTANCE = getAccInterfaceForversion(version)
         return INSTANCE as AccInterface
     }
@@ -85,10 +88,6 @@ object Acc {
             LogExt().e(TAG, "isAccInstalled failed: ${Log.getStackTraceString(e)}")
             false
         }
-    }
-
-    fun isInstalledAccOutdated(): Boolean = runBlocking {
-        instance.getAccVersion()?.let { it < bundledVersion } ?: true
     }
 
     fun initAcc(installationDir: File): Boolean {
@@ -130,83 +129,11 @@ object Acc {
         }
     }
 
-    suspend fun installBundledAccModule(context: Context): Shell.Result?  = withContext(Dispatchers.IO) {
-        try {
-            val bundleFile = File(context.filesDir, "acc_bundle.tar.gz")
-
-            context.resources.openRawResource(R.raw.acc_bundle).use { out ->
-                FileOutputStream(bundleFile).use {
-                    out.copyTo(it)
-                }
-            }
-
-            installLocalAccModule(context)
-        } catch (ex: java.lang.Exception) {
-            LogExt().e(TAG, "installBundledAccModule failed: ${Log.getStackTraceString(ex)}")
-            null
-        }
-    }
-
-    suspend fun installAccModuleVersion(context: Context, version: String): Shell.Result?  = withContext(Dispatchers.IO) {
-        try {
-            val bundleFile = File(context.filesDir, "acc_bundle.tar.gz")
-
-            BufferedInputStream(URL("https://github.com/seyedehsanhadi/acc/archive/$version.tar.gz").openStream())
-                .use { inStream ->
-                    FileOutputStream(bundleFile)
-                        .use {
-                            inStream.copyTo(it)
-                        }
-                }
-
-            installLocalAccModule(context)
-        } catch (ex: java.lang.Exception) {
-            LogExt().e(TAG, "installAccModuleVersion failed: ${Log.getStackTraceString(ex)}")
-            null
-        }
-    }
-
-    /*
-    * This function assumes that acc tar gz is already in place
-    */
-    private suspend fun installLocalAccModule(context: Context): Shell.Result? = withContext(Dispatchers.IO){
-        try {
-            val installShFile = File(context.filesDir, "install-tarball.sh")
-
-            context.resources.openRawResource(R.raw.install).use { installer ->
-                FileOutputStream(installShFile).use {
-                    installer.copyTo(it)
-                }
-            }
-
-            val res = Shell.su("sh ${installShFile.absolutePath} acc").exec()
-
-            try {
-                Shell.su("[ -d /data/adb/magisk ] || { chcon -R u:object_r:system_file:s0 /data/adb/modules/acc 2>/dev/null; chmod 0755 /data/adb/modules/acc; }").exec()
-            } catch (_: java.lang.Exception) {}
-
-            val version = getAccVersion() ?: throw java.lang.Exception("ACC installation failed")
-
-            createAccInstance()
-
-            if(version >= 202002292) {
-                val preferences = Preferences(context)
-                preferences.currentInputUnitOfMeasure = CurrentUnit.A
-                preferences.voltageInputUnitOfMeasure = VoltageUnit.V
-            } else if(version >= 202002290) {
-                val preferences = Preferences(context)
-                preferences.currentInputUnitOfMeasure = CurrentUnit.mA
-                preferences.voltageInputUnitOfMeasure = VoltageUnit.V
-            } else {
-                calibrateMeasurements(context)
-            }
-
-            res
-        } catch (ex: java.lang.Exception) {
-            LogExt().e(TAG, "installLocalAccModule failed: ${Log.getStackTraceString(ex)}")
-            null
-        }
-    }
+    // AccA no longer installs or bundles ACC. ACC is a Magisk/KernelSU/APatch module the user
+    // flashes themselves; AccA only detects it (isAccInstalled) and, when it is missing or
+    // outdated, points the user at the GitHub release to download + flash (SettingsFragment /
+    // showAccNotFound). This removes the "AccA reinstalls its bundled ACC over your flashed one"
+    // override class entirely.
 
     private suspend fun calibrateMeasurements(context: Context) = withContext(Dispatchers.IO) {
 
@@ -239,7 +166,7 @@ object Acc {
     // File-based fallback so AccA handles ANY ACC version. The running tool
     // (/dev/.vr25/acc/acc) may be absent even when ACC is installed (e.g. flashed
     // but the daemon has not started yet), which would make getAccVersion() return
-    // null -> AccA would use bundledVersion's handler and mis-parse an OLDER installed
+    // null -> AccA would use fallbackVersion's handler and mis-parse an OLDER installed
     // ACC. Reading versionCode from the module prop at the canonical home (a symlink
     // to the module dir for Magisk/KSU) yields the REAL installed version regardless.
     private fun getAccVersionFromModuleProp(): Int? {
