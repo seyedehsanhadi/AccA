@@ -3,7 +3,7 @@
 # AMPS - Adaptive Multi-device Probe & Selector.
 # Root-only universal charge-control switch finder: probes any device, leak-verifies
 # bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.1.5
+V=7.1.6
 # Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
@@ -2756,16 +2756,35 @@ _csn(){ _v=$(_csr "$1"); _v=${_v#-}; case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$
 _cscap(){ _v=$(_csr "$1"); case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$_v" -gt 100000 ] && echo $((_v/1000)) || echo "$_v";; esac; }
 _ct="$(_csr $PSY/battery/charge_type)"; _stt="$(_csr $PSY/battery/status)"
 _imax=0; _iin=0; _vbus=0; _src=none
-# v7.1.5: find the energised supply by SCANNING, never by a hardcoded name list. The old list
-# (usb main dc wireless pc_port) had no `ac`, so on Qualcomm/OPLUS phones -- where the mains path
-# reports online on `ac` while usb/pc_port sit at online=0 mid-charge -- nothing matched and the
-# box printed "not plugged" while the phone was actively charging.
-for _d in "$PSY"/*; do
-  [ -r "$_d/online" ] || continue
-  [ "$(_csr "$_d/online")" = 1 ] || continue
-  case "$(_csr "$_d/type")" in [Bb]attery|BMS|bms) continue;; esac
-  _src=${_d##*/}; break
+# v7.1.6: find the energised supply. Three tiers, in order -- a blind "first online supply" scan is
+# NOT safe: Pixel/Tensor exposes VIRTUAL control supplies (gccd, main-charger, rt9471 -- all
+# type=Unknown) that are online=1 too and sort ahead of `usb` alphabetically, and their voltage_now
+# mirrors the BATTERY, not VBUS (it printed Vbus=3996mV on a 9V PD charger). A real port must win.
+#   1. a canonical port name that is online -- usb/ac/main/... (`ac` matters: on Qualcomm/OPLUS the
+#      mains path is `ac` while usb sits at online=0 mid-charge, which used to print "not plugged"
+#      while the phone was charging)
+#   2. any online supply whose TYPE says it is a real port (exotic vendor names)
+#   3. last resort: any online non-battery supply (kernels that report type=Unknown everywhere)
+for _u in usb ac main dc wireless pc_port; do
+  [ -r "$PSY/$_u/online" ] || continue
+  [ "$(_csr "$PSY/$_u/online")" = 1 ] || continue
+  _src=$_u; break
 done
+if [ "$_src" = none ]; then
+  for _d in "$PSY"/*; do
+    [ -r "$_d/online" ] || continue
+    [ "$(_csr "$_d/online")" = 1 ] || continue
+    case "$(_csr "$_d/type")" in USB*|Mains|AC|ac|Wireless|wireless|BrickID) _src=${_d##*/}; break;; esac
+  done
+fi
+if [ "$_src" = none ]; then
+  for _d in "$PSY"/*; do
+    [ -r "$_d/online" ] || continue
+    [ "$(_csr "$_d/online")" = 1 ] || continue
+    case "$(_csr "$_d/type")" in [Bb]attery|BMS|bms) continue;; esac
+    _src=${_d##*/}; break
+  done
+fi
 # The telemetry does not always live on the energised supply: `ac` commonly exposes only
 # online+type, while the real limits sit under usb/ and main/ even when those read online=0. Take
 # the first supply that actually carries each reading, source first. Gate the whole sweep on
