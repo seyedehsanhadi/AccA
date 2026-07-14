@@ -3,7 +3,7 @@
 # AMPS - Adaptive Multi-device Probe & Selector.
 # Root-only universal charge-control switch finder: probes any device, leak-verifies
 # bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.1.4
+V=7.1.5
 # Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
@@ -712,7 +712,42 @@ log ""
 log "==== LAYER 0 - root + battery interface ===="
 if [ "$(id -u 2>/dev/null)" != 0 ]; then log "STOP: not root. ACC needs root (Magisk/KernelSU/APatch). Re-run: su -c 'sh ...'"; exit 0; fi
 log "root: yes   timeout-guard: $([ "$HAVE_TO" = 1 ] && echo on || echo off)"
-log "device: $(getprop ro.product.manufacturer 2>/dev/null) $(getprop ro.product.model 2>/dev/null) ($(getprop ro.product.device 2>/dev/null))"
+# v7.1.5: device identity, SPOOF-AWARE. ro.product.* is trivially faked -- custom ROMs and
+# integrity/spoof modules routinely advertise a Samsung or Pixel model on entirely different
+# silicon (a Realme GT Neo 2 reporting itself as SM-S918B is what forced this). AMPS keys its
+# per-device switch DB off that string, so an unnoticed spoof files THIS phone's switches under
+# somebody else's model and misleads every future owner of the real device. Cross-check against
+# what a system-only spoof does NOT rewrite: the vendor/odm partition props, the bootloader's
+# device tree, and the charger-driver family. Report both; key the DB on the hardware truth.
+_gp(){ getprop "$1" 2>/dev/null; }
+_id_pick(){ for _p in $1; do _v=$(_gp "$_p"); [ -n "$_v" ] && { printf '%s' "$_v"; return; }; done; }
+SW_BRAND=$(_gp ro.product.manufacturer); SW_MODEL=$(_gp ro.product.model); SW_DEV=$(_gp ro.product.device)
+HW_BRAND=$(_id_pick "ro.product.vendor.manufacturer ro.vendor.product.manufacturer ro.product.odm.manufacturer")
+HW_MODEL=$(_id_pick "ro.product.vendor.model ro.vendor.product.model ro.product.odm.model")
+HW_DEV=$(_id_pick "ro.product.vendor.device ro.vendor.product.device ro.boot.product.hardware.sku")
+DT_MODEL=$(tr -d '\000' < /proc/device-tree/model 2>/dev/null || tr -d '\000' < /sys/firmware/devicetree/base/model 2>/dev/null)
+CHG_FAMILY=; [ ! -d /sys/class/oplus_chg ] || CHG_FAMILY=oplus   # oplus_chg exists only on OPPO/Realme/OnePlus
+SPOOF=0
+[ -z "$HW_MODEL" ] || [ "$HW_MODEL" = "$SW_MODEL" ] || SPOOF=1
+[ -z "$HW_BRAND" ] || [ "$HW_BRAND" = "$SW_BRAND" ] || SPOOF=1
+if [ "$CHG_FAMILY" = oplus ]; then
+  case "$(echo "$SW_BRAND" | tr 'A-Z' 'a-z')" in ''|oppo|realme|oneplus) :;; *) SPOOF=1;; esac
+fi
+# the DB key must follow the hardware, never the spoof
+DB_BRAND=$SW_BRAND; DB_DEV=$SW_DEV
+if [ "$SPOOF" = 1 ]; then
+  [ -z "$HW_BRAND" ] || DB_BRAND=$HW_BRAND
+  [ -z "$HW_DEV" ]   || DB_DEV=$HW_DEV
+fi
+log "device: $SW_BRAND $SW_MODEL ($SW_DEV)"
+if [ "$SPOOF" = 1 ]; then
+  log "  ! MODEL SPOOF DETECTED -- ro.product.* does not match this hardware. The ROM is reporting a fake model."
+  [ -z "$HW_BRAND$HW_MODEL" ] || log "    vendor partition: $HW_BRAND $HW_MODEL${HW_DEV:+ ($HW_DEV)}"
+  [ -z "$DT_MODEL" ]          || log "    device tree:      $DT_MODEL"
+  [ -z "$CHG_FAMILY" ]        || log "    charger driver:   $CHG_FAMILY family (OPPO / Realme / OnePlus silicon)"
+  log "    -> switches are filed under the HARDWARE identity ($DB_BRAND $DB_DEV), not the spoofed name,"
+  log "       so this report cannot poison another phone's entry in the DB."
+fi
 log "soc: $(getprop ro.board.platform 2>/dev/null)/$(getprop ro.hardware 2>/dev/null)  android: $(getprop ro.build.version.release 2>/dev/null)  kernel: $(uname -r 2>/dev/null)"
 log "rom: $(getprop ro.build.version.incremental 2>/dev/null)"
 BATT=
@@ -789,7 +824,15 @@ present_now(){
   return 1
 }
 plugged(){ present_now; }
-chgin_node(){ for n in $PSY/usb/input_current_now $PSY/usb/current_now $PSY/main-charger/current_now $PSY/dc/current_now $PSY/wireless/current_now; do ex "$n" && { printf '%s' "$n"; return; }; done
+# v7.1.5: prefer a supply the firmware actually marks ONLINE. The old usb-first order pinned the
+# charger-input node to $PSY/usb/input_current_now even on phones charging over `ac` with usb at
+# online=0 (Qualcomm/OPLUS), so every input reading for the whole run came from a dead path.
+chgin_node(){ for _d in "$PSY"/*; do
+    [ -r "$_d/online" ] && [ "$(cat "$_d/online" 2>/dev/null)" = 1 ] || continue
+    case "$(cat "$_d/type" 2>/dev/null)" in [Bb]attery|BMS|bms) continue;; esac
+    for n in "$_d/input_current_now" "$_d/current_now"; do ex "$n" && { printf '%s' "$n"; return; }; done
+  done
+  for n in $PSY/usb/input_current_now $PSY/usb/current_now $PSY/main-charger/current_now $PSY/dc/current_now $PSY/wireless/current_now; do ex "$n" && { printf '%s' "$n"; return; }; done
   for n in $PSY/*/input_current_now; do ex "$n" && { printf '%s' "$n"; return; }; done; }
 CHGIN="$(chgin_node)"
 
@@ -2586,7 +2629,12 @@ log "  fast-charge re-kick      : $REKICK_MSG"
 log ""
 log "=====SUMMARY====="
 log "AMPS v$V (Adaptive Multi-device Probe & Selector)"
-log "DEVICE=$(getprop ro.product.manufacturer 2>/dev/null)_$(getprop ro.product.device 2>/dev/null)"
+log "DEVICE=${DB_BRAND}_${DB_DEV}"
+log "DEVICE_SPOOFED=$SPOOF"
+if [ "$SPOOF" = 1 ]; then
+  log "DEVICE_REPORTED=${SW_BRAND}_${SW_DEV} (${SW_MODEL})   <- FAKE, do not file under this"
+  log "DEVICE_HW=${HW_BRAND} ${HW_MODEL}${HW_DEV:+ ($HW_DEV)}${DT_MODEL:+  dt='${DT_MODEL}'}${CHG_FAMILY:+  chg=${CHG_FAMILY}}"
+fi
 log "SOC=$(getprop ro.board.platform 2>/dev/null)"
 log "ANDROID=$(getprop ro.build.version.release 2>/dev/null)"
 log "ACC=${ACCV:-no}"
@@ -2700,25 +2748,52 @@ else
 fi
 _csr(){ cat "$1" 2>/dev/null | sed -n '1p'; }
 _csn(){ _v=$(_csr "$1"); _v=${_v#-}; case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$_v" -gt 100000 ] && echo $((_v/1000)) || echo "$_v";; esac; }
+# v7.1.5: a cap/limit is NEVER negative. A negative raw read is a kernel ERROR code (-22 = -EINVAL
+# "property not supported", -19 = -ENODEV ...), not a value. _csn strips the sign, which is right
+# for a measurement (current_now is signed by direction) but catastrophic for a cap: it turned a
+# -22 into a bogus "IC cap (CCC)=22mA", suppressed the fallback to main/, and could fire a false
+# "IC/THERMAL-CAPPED: CCC 22mA < input 1600mA" verdict. Caps reject negatives and fall through.
+_cscap(){ _v=$(_csr "$1"); case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$_v" -gt 100000 ] && echo $((_v/1000)) || echo "$_v";; esac; }
 _ct="$(_csr $PSY/battery/charge_type)"; _stt="$(_csr $PSY/battery/status)"
 _imax=0; _iin=0; _vbus=0; _src=none
-for _u in usb main dc wireless pc_port; do
-  [ -e $PSY/$_u/online ] || continue
-  [ "$(_csr $PSY/$_u/online)" = 1 ] || continue
-  _src=$_u; _imax=$(_csn $PSY/$_u/current_max); _vbus=$(_csn $PSY/$_u/voltage_now)
-  _iin=$(_csn $PSY/$_u/input_current_now); [ "$_iin" = 0 ] && _iin=$(_csn $PSY/$_u/current_now)
-  break
+# v7.1.5: find the energised supply by SCANNING, never by a hardcoded name list. The old list
+# (usb main dc wireless pc_port) had no `ac`, so on Qualcomm/OPLUS phones -- where the mains path
+# reports online on `ac` while usb/pc_port sit at online=0 mid-charge -- nothing matched and the
+# box printed "not plugged" while the phone was actively charging.
+for _d in "$PSY"/*; do
+  [ -r "$_d/online" ] || continue
+  [ "$(_csr "$_d/online")" = 1 ] || continue
+  case "$(_csr "$_d/type")" in [Bb]attery|BMS|bms) continue;; esac
+  _src=${_d##*/}; break
 done
-_ccc=$(_csn $PSY/battery/constant_charge_current_max); [ "$_ccc" = 0 ] && _ccc=$(_csn $PSY/main/constant_charge_current_max)
-_ib=$(_csn $PSY/battery/current_now); _vb=$(_csn $PSY/battery/voltage_now)
+# The telemetry does not always live on the energised supply: `ac` commonly exposes only
+# online+type, while the real limits sit under usb/ and main/ even when those read online=0. Take
+# the first supply that actually carries each reading, source first. Gate the whole sweep on
+# "something is actually plugged": offline supplies keep their LAST values in sysfs, so sweeping
+# them while unplugged invented a phantom 5.3V / 1.6A input on an idle phone.
+if [ "$_src" != none ] || [ "$_stt" = Charging ] || [ "$_stt" = Full ]; then
+  for _u in "$_src" usb main pc_port dc wireless; do
+    [ "$_u" != none ] && [ -d "$PSY/$_u" ] || continue
+    [ "$_imax" != 0 ] || _imax=$(_cscap "$PSY/$_u/current_max")
+    [ "$_vbus" != 0 ] || _vbus=$(_cscap "$PSY/$_u/voltage_now")
+    [ "$_iin" != 0 ] || { _iin=$(_cscap "$PSY/$_u/input_current_now"); [ "$_iin" != 0 ] || _iin=$(_cscap "$PSY/$_u/current_now"); }
+  done
+fi
+_ccc=$(_cscap $PSY/battery/constant_charge_current_max); [ "$_ccc" = 0 ] && _ccc=$(_cscap $PSY/main/constant_charge_current_max)
+_ib=$(_csn $PSY/battery/current_now); _vb=$(_cscap $PSY/battery/voltage_now)
 log "+----------------------------------------------------"
 log "|  CHARGER / SPEED"
 log "|  source=$_src  charge_type=${_ct:-?}  status=${_stt:-?}"
 log "|  input:   Imax=${_imax}mA  Iin=${_iin}mA  Vbus=${_vbus}mV"
 _cccd="${_ccc}mA"; [ "$_ccc" -gt 0 ] 2>/dev/null || _cccd="n/a"
 log "|  battery: I=${_ib}mA  V=${_vb}mV  (~$((_ib*_vb/1000))mW)   IC cap (CCC)=${_cccd}"
-if [ "$_src" = none ]; then
-  log "|  -> not plugged / no input supply reports online"
+if [ "$_src" = none ] && [ "$_stt" != Charging ] && [ "$_stt" != Full ]; then
+  log "|  -> not plugged"
+elif [ "$_imax" = 0 ] && [ "$_iin" = 0 ]; then
+  _sd="$_src"; [ "$_sd" != none ] || _sd="an unnamed path"
+  log "|  -> charging via $_sd, but this kernel publishes no input telemetry on any supply. Speed is"
+  log "|     judged from the battery side (~$((_ib*_vb/1000))mW). This is a reporting gap, NOT a fault"
+  log "|     and NOT an ACC limit."
 elif [ "$_imax" -gt 0 ] 2>/dev/null && [ "$_imax" -le 510 ] 2>/dev/null; then
   log "|  -> INPUT-CAPPED ~${_imax}mA = USB SDP (PC port / data tether / weak cable). NOT a phone/ACC limit;"
   log "|     the IC can pull ${_ccc}mA. Use a wall charger + good cable. If it stays low there, the kernel"

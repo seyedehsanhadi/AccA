@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc17] - 2026-07-14
+
+### Fixed
+- **Find my switch (AMPS) v7.1.5.** The charger/speed panel was accusing healthy phones of charging slowly. Three fixes, found from a Realme GT Neo 2 (65W SuperDart) report:
+  - It looked for the charger only on usb/main/dc/wireless/pc_port. On Qualcomm and OPLUS phones (Realme, OPPO, OnePlus) the mains path reports online on `ac` while usb stays at online=0 mid-charge, so it found nothing and said "not plugged / no input supply reports online" **while the phone was actively charging**, with input current and voltage all zero. It now scans every supply and takes whichever one the firmware marks online.
+  - A cap that reads back negative is a kernel error code, not a value: `-22` is `-EINVAL` ("property not supported"). AMPS stripped the sign and reported "IC cap (CCC)=22mA", which also hid the real ceiling and could fire a false "IC/THERMAL-CAPPED" verdict blaming your charge IC. Caps now reject negatives.
+  - **Model spoofing.** A ROM that fakes `ro.product.*` (this one claimed to be a Galaxy S23 Ultra) would file its switches into the device database under someone else's model. AMPS now cross-checks the vendor partition, device tree and charger-driver family, reports the spoof, and keys the database on the hardware identity.
+
 ## [2.0.1-rc16] - 2026-07-13
 
 ### Added
