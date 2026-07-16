@@ -2,6 +2,14 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc18] - 2026-07-16
+
+### Fixed
+- **Battery percentage source labels** were backwards. With a Capacity Mask set, "System" shows the masked value (it follows the status bar) and "ACC" shows the true measured level (it ignores the mask). The labels now match what each option does. Wording only, no behaviour change.
+
+### Changed
+- **Re-kick fast charge on plug** description is clearer. It said "below your limit", which read as ambiguous; it now says "below your Stop level" and spells out that it does not start charging (your Resume level still does that) - it only makes a resumed charge run at full speed. Wording only.
+
 ## [2.0.1-rc17] - 2026-07-14
 
 ### Fixed
