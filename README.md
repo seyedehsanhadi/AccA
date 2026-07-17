@@ -43,6 +43,7 @@ Join our [Telegram group](https://t.me/acc_group)!
 ## LICENSE
 
 Copyright 2019-2021, [MatteCarra](https://github.com/MatteCarra/), [Squabbi](https://github.com/Squabbi/), [VR25](https://github.com/VR-25/)
+Copyright 2026, [seyedehsanhadi](https://github.com/seyedehsanhadi/)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
