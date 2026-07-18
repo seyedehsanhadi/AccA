@@ -380,10 +380,13 @@ class ChargeMeterService : Service() {
 
             val sign = if (plugged) "+" else "-"
             val display = prefs.chargeMeterDisplay
-            // "acc" (default) = ACC's own reading, which reflects Capacity Mask if the user has one
-            // configured. "system" = the raw OS battery level (BatteryManager), unaffected by any
-            // mask - what the original AccA always showed. Same source for both places this meter
-            // displays a percentage, so the icon and the shade detail line never disagree.
+            // Which percentage to show. NOTE the direction here, it is easy to get backwards:
+            // the Capacity Mask works by writing ANDROID's battery state, so it is the SYSTEM
+            // reading that carries the mask (and matches the status bar), while "acc" comes from
+            // ACC's own state export, which reads the kernel percent and is therefore the TRUE
+            // level, mask or no mask. "system" = masked/status-bar value, "acc" = real measured
+            // level. Same source for both places this meter displays a percentage, so the icon
+            // and the shade detail line never disagree.
             val accPct = st?.capacityPct?.takeIf { it in 0..100 }
             val sysPct = batteryLevelPct()
             val battPct = if (prefs.chargeMeterBatterySource == "system") sysPct ?: accPct else accPct ?: sysPct
