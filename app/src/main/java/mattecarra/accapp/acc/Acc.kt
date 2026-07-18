@@ -23,7 +23,7 @@ object Acc {
     // Fallback ACC API version for picking a handler when the installed version can't be read yet
     // (e.g. right after a flash, before the daemon is up). AccA ships NO bundle; keep this at the
     // latest known release so a fresh/unreadable install uses the newest handler.
-    const val fallbackVersion = 202505294
+    const val fallbackVersion = 202505300
     private const val TAG = "Acc"
     private val FILES_DIR = "/data/data/mattecarra.accapp/files"
 
