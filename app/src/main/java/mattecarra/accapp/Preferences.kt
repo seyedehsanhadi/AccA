@@ -198,9 +198,13 @@ class Preferences(private val context: Context)
         get() = (sharedPrefs.getString(CHARGE_METER_STYLE, "both") ?: "both").let { if (it == "icon") "both" else it }
         set(value) { sharedPrefs.edit().putString(CHARGE_METER_STYLE, value).apply() }
 
-    // "system" (default) = the OS battery level - matches the status bar, the original AccA, and
-    // ACC's own default pause logic, with no root needed. "acc" = ACC's capacityPct, which reads
-    // the raw kernel node and reflects Capacity Mask when configured.
+    // "system" (default) = the OS battery level: matches the status bar and the original AccA, no
+    // root needed, and CARRIES the Capacity Mask when one is set (the mask works by writing
+    // Android's battery state, so the OS reading is the masked one).
+    // "acc" = ACC's capacityPct, read from the kernel percent, so it is the TRUE level and
+    // IGNORES the mask. Device-checked with a mask active: system showed 86, acc showed 76.
+    // Default is "system" so the app agrees with the status bar. Note this is a DISPLAY choice
+    // only: ACC's charging decisions always use the kernel value, never a number it wrote itself.
     var chargeMeterBatterySource: String
         get() = sharedPrefs.getString(CHARGE_METER_BATTERY_SOURCE, "system") ?: "system"
         set(value) { sharedPrefs.edit().putString(CHARGE_METER_BATTERY_SOURCE, value).apply() }
