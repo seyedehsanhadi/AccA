@@ -2,6 +2,26 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc20] - 2026-07-20
+
+Pairs with ACC v2025.5.18-6.5.1-rc21. Install both.
+
+Version bump only. The app and the module keep separate release numbers, so
+AccA rc20 is the build that goes with ACC rc21.
+
+No app code changed. rc21 is a module-side release, and every command AccA
+issues returns exactly what it returned under ACC rc20. That was checked rather
+than assumed: the full set of commands AccA runs was executed against both
+module versions on a Pixel 9a and a Mi A3 and the results compared. AccA also
+picks its handler by ACC version code, and rc21 (202505301) resolves to the same
+handler as rc20, so the module bump cannot quietly drop the app onto an older
+code path.
+
+One module fix is worth knowing about as an AccA user. On rc20, pressing an
+unrecognised key in ACC's charging-switch menu silently reset your chosen switch
+to Automatic and reported success. If you ever picked a switch by hand and later
+found it back on Automatic, that is why. rc21 fixes it.
+
 ## [2.0.1-rc19] - 2026-07-19
 
 Pairs with ACC v2025.5.18-6.5.1-rc20. Install both.
