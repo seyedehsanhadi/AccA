@@ -540,7 +540,7 @@
     <string name="pref_charge_meter_display_title">Status bar shows</string>
     <string name="pref_battery_source_category">Battery level</string>
     <string name="pref_charge_meter_battery_source_title">Battery percentage source</string>
-    <string name="pref_charge_meter_battery_source_summary">Which battery reading the whole app shows - the dashboard, the status-bar meter and the notification all follow this. System matches the rest of the phone (the status bar), so it shows your Capacity Mask value if you set one. ACC is ACC\'s own measured level, always the true percentage.</string>
+    <string name="pref_charge_meter_battery_source_summary">Which battery reading the whole app shows - the dashboard, the status-bar meter and the notification all follow this. ACC reads the kernel directly, so it is always the true percentage and cannot be thrown off if something freezes Android\'s battery state. System follows the rest of the phone instead, which means it shows your Capacity Mask value if you set one. With no mask set the two are the same number.</string>
     <string name="pref_charge_meter_show_temp_title">Show battery temperature</string>
     <string name="pref_charge_meter_show_temp_summary">Adds the battery temperature next to the status-bar number and in the detailed line. Shown in °C or °F per the Temperature output unit below, under Units of measure.</string>
     <string name="pref_charging_category">Charging</string>

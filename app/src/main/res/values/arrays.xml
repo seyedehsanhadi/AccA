@@ -23,12 +23,12 @@
         <item>mini</item>
     </string-array>
     <string-array name="charge_meter_battery_source_options">
-        <item>System (matches the status bar; masked if you set a Capacity Mask)</item>
-        <item>ACC (ACC\'s true measured level, ignores the mask)</item>
+        <item>ACC - the real measured level, read straight from the kernel (default)</item>
+        <item>System - follows the status bar, including any Capacity Mask you set</item>
     </string-array>
     <string-array name="charge_meter_battery_source_values">
-        <item>system</item>
         <item>acc</item>
+        <item>system</item>
     </string-array>
     <string-array name="current_measure_units_option_values">
         <item>A</item>

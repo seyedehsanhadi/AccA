@@ -203,10 +203,24 @@ class Preferences(private val context: Context)
     // Android's battery state, so the OS reading is the masked one).
     // "acc" = ACC's capacityPct, read from the kernel percent, so it is the TRUE level and
     // IGNORES the mask. Device-checked with a mask active: system showed 86, acc showed 76.
-    // Default is "system" so the app agrees with the status bar. Note this is a DISPLAY choice
-    // only: ACC's charging decisions always use the kernel value, never a number it wrote itself.
+    //
+    // Default is "acc": the kernel reading, which is the same source ACC's charging decisions
+    // use. It used to be "system" so the app agreed with the status bar, and that was fine
+    // until Android's battery state got frozen - then the app faithfully showed a stale
+    // number and users reported it as the app being wrong. Several worked it out and
+    // switched to ACC themselves, which is what prompted the change.
+    //
+    // Measured on a Pixel 9a, kernel at 69%:
+    //   no mask        : System 69, ACC 69   - identical, so this changes nothing for almost everyone
+    //   mask on        : System 100, ACC 69  - they differ by design; only mask users see a change
+    //   android frozen : System 23, ACC 69   - System stuck on a lie, ACC still correct
+    // The acc source read 12/12 cleanly and falls back to Android if --state is ever
+    // unreadable, so it cannot end up showing nothing.
+    //
+    // Still a DISPLAY choice only: ACC's charging decisions always use the kernel value,
+    // never a number it wrote itself, whichever way this is set.
     var chargeMeterBatterySource: String
-        get() = sharedPrefs.getString(CHARGE_METER_BATTERY_SOURCE, "system") ?: "system"
+        get() = sharedPrefs.getString(CHARGE_METER_BATTERY_SOURCE, "acc") ?: "acc"
         set(value) { sharedPrefs.edit().putString(CHARGE_METER_BATTERY_SOURCE, value).apply() }
 
     // Off by default. Adds battery temperature next to the strip number, in whatever unit

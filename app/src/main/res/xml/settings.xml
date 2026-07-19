@@ -46,7 +46,7 @@
 
         <ListPreference
             android:key="charge_meter_battery_source"
-            android:defaultValue="system"
+            android:defaultValue="acc"
             android:entries="@array/charge_meter_battery_source_options"
             android:entryValues="@array/charge_meter_battery_source_values"
             android:title="@string/pref_charge_meter_battery_source_title"

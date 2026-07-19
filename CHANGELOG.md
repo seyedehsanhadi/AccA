@@ -2,6 +2,24 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## [2.0.1-rc19] - 2026-07-19
+
+Pairs with ACC v2025.5.18-6.5.1-rc20. Install both.
+
+### Changed
+- **Battery percentage now comes from ACC (the kernel) by default, not Android.** Identical
+  numbers for almost everyone; it only differs if you set a Capacity Mask. Fixes the reported
+  case: when something freezes Android's battery state the app showed a stale number and
+  looked wrong. Measured on a Pixel 9a at 69% - no mask: both read 69; Android frozen: old
+  default read 23, new one read 69. Several users had already found this setting themselves.
+- Using a Capacity Mask and want the app to match your status bar? The System option is one
+  tap away. Display only - ACC's charging decisions always used the kernel and are unchanged.
+- Battery-source options reworded so it is clear which is which without trying them.
+
+### Fixed
+- The fallback ACC version assumed before the installed one can be read now tracks rc20, so a
+  fresh install picks the newest handler.
+
 ## [2.0.1-rc18] - 2026-07-16
 
 ### Fixed
