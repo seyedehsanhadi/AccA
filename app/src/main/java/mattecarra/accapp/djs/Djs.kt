@@ -82,7 +82,14 @@ data class DjsInstallOutcome(
 )
 
 object Djs {
-    const val bundledVersion = 202108262
+    // 202607221: forked djs.sh with the catch-up scheduler + battery-saver. The original daemon
+    // only fired a schedule if its loop sampled the EXACT scheduled minute, and a root-shell sleep
+    // does not tick through deep sleep/doze, so on an idle phone schedules were silently skipped
+    // (the "scheduled changes won't happen at the designed time" report). The fork tracks the last
+    // minute processed and fires everything in (last, now] on wake, in order. 221 adds sleep-to-
+    // target: the loop sleeps until the next scheduled minute (capped 120s) instead of a fixed 20s
+    // poll, so an idle phone wakes ~6x less often while still firing on time (catch-up unchanged).
+    const val bundledVersion = 202607221
 
     /*
     * This method returns the name of the package with a compatible AccInterface
@@ -196,10 +203,12 @@ object Djs {
 
             // service.sh is fire-and-forget (`(djs.sh &) &`); the /dev/.vr25/djs/* runtime
             // symlinks (incl. djs-version) are created ASYNCHRONOUSLY by the backgrounded daemon.
-            // The installer also early-exits 0 on an equal/newer already-installed version WITHOUT
-            // restarting the daemon. Nudge the daemon so the runtime links exist for later use.
+            // Restart UNCONDITIONALLY: after an UPDATE the old daemon is still running the old
+            // djs.sh loop (the djsc symlink exists, so a missing-link nudge would skip it) and the
+            // fixed scheduler would not take effect until the next reboot. djs.sh kills any prior
+            // instance on start, so this is a clean handover on both first install and update.
             try {
-                Shell.su("[ -f /dev/.vr25/djs/djsc ] || sh /data/adb/vr25/djs/service.sh").exec()
+                Shell.su("sh /data/adb/vr25/djs/service.sh").exec()
             } catch (_: java.lang.Exception) {}
 
             // Verify the install with a signal that does NOT depend on the async daemon:

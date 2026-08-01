@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.preference.CheckBoxPreference
@@ -67,6 +68,31 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
                 }
             }
             true
+        }
+
+        // ui_refresh: how often the daemon republishes state.json, the snapshot this app reads for
+        // the charge meter. Display-only -- no charging decision reads that file -- so the whole
+        // cost of raising it is that the meter's live current updates less often. Level and status
+        // changes still publish within 5s at every value.
+        //
+        // Worth exposing because that publish is the daemon's most expensive act: 1216ms of CPU per
+        // call on a Mi A3, 444ms on a Pixel 6a, against a ~2000ms/min floor for everything else.
+        // Measured idle with the screen off, A3 / Pixel 6a: 30s = 3900/3201 ms per minute,
+        // 60s = 2658/2809 (-32%/-12%), 120s = 2163/2559 (-45%/-20%), off = 1670/2298 (-57%/-28%).
+        //
+        // Written straight through `acc -s`, not through the config editor, so it cannot disturb a
+        // profile the user has built. A failure is reported rather than silently swallowed: the
+        // preference only keeps the new value if ACC accepted it.
+        findPreference<ListPreference>("ui_refresh")?.setOnPreferenceChangeListener { pref, newValue ->
+            val v = newValue as String
+            val ok = Shell.su("acc -s ui_refresh=$v").exec().isSuccess
+            if (ok) {
+                (pref as ListPreference).summary =
+                    getString(R.string.ui_refresh_pref_summary_fmt, pref.entries[pref.findIndexOfValue(v)])
+            } else {
+                Toast.makeText(context, R.string.ui_refresh_failed, Toast.LENGTH_LONG).show()
+            }
+            ok
         }
 
         val theme = findPreference<ListPreference>("theme")

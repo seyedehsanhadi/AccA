@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and below (fullBackupContent).
+
+  allowBackup defaults to true, but the Room database was never named here, so what actually
+  got preserved was left to chance. A user who reinstalled AccA lost every script they had
+  written, with no export path to fall back on. Naming the database explicitly makes the
+  intent unambiguous.
+
+  Room keeps three files: the database plus its write-ahead log and shared memory. Only the
+  main file is worth backing up; -wal and -shm are transient and restoring a stale pair
+  alongside a newer database can corrupt it, so they are excluded.
+
+  Do NOT treat this as the backup story on its own. Auto Backup needs a backup transport and a
+  matching signing key, and it silently does nothing for a sideloaded debug build. Explicit
+  Export/Import from the overflow menu is the reliable route; this is the safety net for users
+  who never think to use it.
+-->
+<full-backup-content>
+    <include domain="database" path="acca_database" />
+    <exclude domain="database" path="acca_database-wal" />
+    <exclude domain="database" path="acca_database-shm" />
+    <include domain="sharedpref" path="." />
+</full-backup-content>

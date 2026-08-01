@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <!-- Unblock is a visible toolbar action the moment anything is selected: burying a bulk
+         action in the overflow is how people end up using Clear all instead of removing the
+         two entries they meant to. -->
+    <item
+        android:id="@+id/blocked_menu_remove"
+        android:icon="@android:drawable/ic_menu_delete"
+        android:title="@string/blocked_remove_selected"
+        
+        app:showAsAction="ifRoom|withText" />
+    <item
+        android:id="@+id/blocked_menu_select_all"
+        android:title="@string/blocked_select_all"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/blocked_menu_clear"
+        android:title="@string/blocked_clear_all"
+        app:showAsAction="never" />
+</menu>

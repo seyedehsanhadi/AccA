@@ -31,7 +31,18 @@ class ScriptsViewModel(application: Application) : AndroidViewModel(application)
 
     fun copyScript(script: AccaScript) = viewModelScope.launch {
         script.uid = 0
+        // Land at the top, which is where a new script has always appeared. Without this it
+        // would take scOrder=0 and drop into the middle of a user-arranged list.
+        script.scOrder = (mScriptDao.getMinOrder() ?: 0) - 1
         mScriptDao.insert(script)
+    }
+
+    // Persist a drag or an up/down move. The caller hands over the list in its NEW visible
+    // order; positions are renumbered from 0 so the stored order can never drift out of step
+    // with what is on screen, however it was arrived at.
+    fun reorderScripts(scripts: List<AccaScript>) = viewModelScope.launch {
+        scripts.forEachIndexed { index, script -> script.scOrder = index }
+        mScriptDao.updateAll(scripts)
     }
 
     suspend fun getScripts(): List<AccaScript>

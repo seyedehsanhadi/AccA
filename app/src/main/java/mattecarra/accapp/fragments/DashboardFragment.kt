@@ -95,10 +95,23 @@ class DashboardFragment : ScopedFragment()
 
         //-----------------------------------------------------------------
 
-        val transaction = activity?.supportFragmentManager?.beginTransaction()
+        // Use the CHILD manager and commitAllowingStateLoss.
+        //
+        // This crashed the app outright: "IllegalStateException: Can not perform this action
+        // after onSaveInstanceState". onViewCreated can run after the host activity has saved
+        // its state -- launching while the notification shade is open reproduces it -- and
+        // commit() throws there rather than degrading. Caught on a Pixel.
+        //
+        // Two changes. childFragmentManager is the correct owner: this fragment is nested inside
+        // the dashboard, so its lifecycle should follow the parent fragment rather than the
+        // activity, which is what made the state-loss window reachable at all.
+        // commitAllowingStateLoss is safe for this transaction specifically -- it rebuilds a
+        // panel that is fully repopulated from SharedViewModel.config on every change, so there
+        // is no user input or navigation state to lose, only a view that gets re-inflated.
+        val transaction = childFragmentManager.beginTransaction()
         mDashboardConfigFrg = DashboardConfigFragment.newInstance()
-        transaction?.replace(R.id.current_profile, mDashboardConfigFrg)
-        transaction?.commit()
+        transaction.replace(R.id.current_profile, mDashboardConfigFrg)
+        transaction.commitAllowingStateLoss()
 
         //-----------------------------------------------------------------
 

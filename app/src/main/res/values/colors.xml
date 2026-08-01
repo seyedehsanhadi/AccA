@@ -25,4 +25,11 @@
     <color name="bmc_yellow">#FFDD00</color>
     <color name="kofi_red">#FF5E5B</color>
 
+    <!-- Blocked settings. Same blue as the rest of the app: this is an ACC screen, not a
+         separate product. The only distinguishing signal is a soft warning tint on the banner
+         and the item rail, which reads as "handle with care" without changing app identity. -->
+    <color name="blocked_accent">@color/color_primary</color>
+    <color name="blocked_rail">#E0A800</color>
+    <color name="blocked_banner_bg">#FFF8E6</color>
+    <color name="blocked_banner_fg">#5A4300</color>
 </resources>

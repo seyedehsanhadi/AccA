@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same geometry as every other list row in AccA (script_item, schedule_item): card margins
+     with a half margin at the bottom so rows sit close together, one content padding, and
+     ActionIcon for the button. Selection is shown by a small check that only takes space when
+     something is selected, because the whole row is already the tap target. -->
+<com.google.android.material.card.MaterialCardView
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        style="@style/Widget.MaterialComponents.CardView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="@dimen/card_margin"
+        android:layout_marginTop="@dimen/card_margindiv2"
+        android:layout_marginRight="@dimen/card_margin"
+        android:layout_marginBottom="@dimen/card_margindiv2"
+        android:foreground="?selectableItemBackground"
+        app:cardCornerRadius="@dimen/card_corner_radius"
+        app:cardElevation="3dp">
+
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="@dimen/card_content_padding">
+
+        <ImageView
+                android:id="@+id/blocked_check"
+                style="@style/IndexIcon"
+                android:visibility="gone"
+                android:contentDescription="@string/blocked_selected"
+                app:tint="@color/blocked_accent"
+                app:srcCompat="@android:drawable/checkbox_on_background" />
+
+        <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+            <TextView
+                    android:id="@+id/blocked_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+                    android:singleLine="true"
+                    android:ellipsize="middle" />
+
+            <TextView
+                    android:id="@+id/blocked_source"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.MaterialComponents.Caption"
+                    android:alpha="0.6"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+</LinearLayout>
+
+        <ImageButton
+                android:id="@+id/blocked_edit"
+                style="@style/ActionIcon"
+                android:contentDescription="@string/blocked_edit_title"
+                app:tint="@color/blocked_accent"
+                app:srcCompat="@drawable/ic_outline_edit_24px" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

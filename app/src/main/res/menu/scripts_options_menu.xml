@@ -17,6 +17,12 @@
         android:id="@+id/script_option_menu_rename"
         android:title="@string/menu_option_rename" />
     <item
+        android:id="@+id/script_option_menu_move_up"
+        android:title="@string/menu_option_move_up" />
+    <item
+        android:id="@+id/script_option_menu_move_down"
+        android:title="@string/menu_option_move_down" />
+    <item
         android:id="@+id/script_option_menu_delete"
         android:title="@string/menu_option_delete" />
 </menu>

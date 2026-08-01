@@ -55,8 +55,30 @@ import java.io.Serializable
 
     data class ConfigCapacity(var shutdown: Int = 5, var resume: Int = 70, var pause: Int = 75) : Serializable
     {
+        companion object {
+            // ACC's own "this capacity field is off" sentinel. Anything outside 1..100 (percent)
+            // and 3001..5000 (millivolt) makes the daemon's _le_pause_cap/_lt_pause_cap guards
+            // return early, so charging is never paused on capacity. ACC ships exactly this in its
+            // stock config -- capacity=(5 101 70 75 false) uses 101 to disable cooldown_capacity.
+            // Reusing it means disabling needs no new config key, no DB migration, and no AccA-side
+            // flag that could drift from what ACC actually does.
+            const val DISABLED = 101
+        }
+
+        /**
+         * True when ACC will actually act on this capacity limit. A pause value outside both the
+         * percent and millivolt domains is ACC's way of saying "ignore capacity", which is what a
+         * user asking for temperature-only control wants.
+         */
+        val isEnabled: Boolean
+            get() = pause in 1..100 || pause in 3001..5000
+
+        /** Turn capacity control off without losing the user's previous numbers. */
+        fun disable() { pause = DISABLED }
+
         fun toString(context: Context): String
         {
+            if (!isEnabled) return context.getString(R.string.capacity_control_disabled)
             // pause > 100 = ACC's millivolt capacity domain; show mV instead of % so the dashboard and
             // profile cards are not mislabeled "100%" for a voltage-based limit.
             val tmpl = if (pause > 100) R.string.template_capacity_profile_mv else R.string.template_capacity_profile

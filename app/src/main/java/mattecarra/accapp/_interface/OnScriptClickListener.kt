@@ -12,4 +12,6 @@ interface OnScriptClickListener
     fun onCopyScript(script: AccaScript)
     fun onRenameScript(script: AccaScript)
     fun onDeleteScript(script: AccaScript)
+    /** Move one position; [up] false means down. The keyboard/screen-reader route to reordering. */
+    fun onMoveScript(script: AccaScript, up: Boolean)
 }

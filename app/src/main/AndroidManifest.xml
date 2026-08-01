@@ -3,6 +3,7 @@
     package="mattecarra.accapp">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- WidgetService falls back to ContextCompat.startForegroundService(); API 26+ requires
@@ -17,6 +18,9 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:theme="@style/AccaTheme.DayNight">
 
         <activity
@@ -66,8 +70,11 @@
                 android:value="mattecarra.accapp.activities.AccConfigEditorActivity" />
         </activity>
         <activity android:name=".activities.SettingsActivity" />
+        <activity android:name=".activities.BlockedSettingsActivity" />
         <activity android:name=".activities.ExportProfilesActivity" />
         <activity android:name=".activities.ImportProfilesActivity" />
+        <activity android:name=".activities.ExportScriptsActivity" />
+        <activity android:name=".activities.ImportScriptsActivity" />
 
         <service
             android:name=".services.AccProfileTileService"
@@ -141,12 +148,20 @@
                 android:resource="@xml/widget_battery_hw23" />
         </receiver>
 
+        <!-- directBootAware + LOCKED_BOOT_COMPLETED: BOOT_COMPLETED reaches a normal receiver only
+             AFTER the first unlock on FBE phones, so daemon start waited for the user ("ACC settings
+             do not apply after a reboot until it's unlocked"). The locked branch starts the /data/adb
+             daemons (DE storage) without touching CE prefs. MY_PACKAGE_REPLACED was handled in code
+             but never declared here, so the after-update restart never fired. -->
         <receiver
             android:name=".receivers.AccBootReceiver"
             android:enabled="true"
-            android:exported="true">
+            android:exported="true"
+            android:directBootAware="true">
             <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>

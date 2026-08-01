@@ -1,10 +1,7 @@
 #!/system/bin/sh
 
 # AMPS - Adaptive Multi-device Probe & Selector.
-# Root-only universal charge-control switch finder: probes any device, leak-verifies
-# bypass/cut/drain switches + native %-limits, snapshots every write, restores on exit.
-V=7.1.6
-# Force C locale so status words, sort, and text tooling are deterministic regardless of the device locale.
+V=7.2.2
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
 SUPER=1; UNKNOWN=0
@@ -14,7 +11,6 @@ case "$*" in *--complete*|*--all*|*--deep*) MODE=complete;; *--quick*|*--fast*) 
 WANT_UNPLUG=0; case "$*" in *--unplug*|*--accurate*) WANT_UNPLUG=1;; esac
 [ "${UNKNOWN:-0}" = 1 ] && MODE=complete
 
-# Bootstrap: detect root and re-exec via su/tsu/sudo (selftest/version skip elevation).
 _uid="$(id -u 2>/dev/null)"
 if [ "${_STONLY:-}" != 1 ] && [ -n "$_uid" ] && [ "$_uid" != 0 ] && [ -z "${ACC_REEXEC:-}" ]; then
   for _su in su tsu sudo; do command -v "$_su" >/dev/null 2>&1 && { echo "[*] AMPS: elevating to root via $_su ..."; exec "$_su" -c "ACC_REEXEC=1 sh '$0' $*"; }; done
@@ -31,11 +27,16 @@ else
   done
   [ -n "${TMPD:-}" ] || TMPD=/data/local/tmp
 fi
-# Shared plumbing paths - AccA reads these by name (artifact, cancel stop-flag, backup dir),
-# so the on-disk identifiers stay "acc-compat" even though the engine is branded AMPS.
 BK="${BK:-$TMPD/acc_compat_bk}"
 STOPF="/data/local/tmp/.acc-compat-stop"
 ART="/data/local/tmp/acc-compat-verified"
+AMPSD="${AMPSD:-/data/adb/vr25/acc-data}"
+BLF="${BLF:-$AMPSD/.acc-compat-blacklist}"
+JRN="${JRN:-$AMPSD/.acc-compat-inflight}"
+RCT="${RCT:-$AMPSD/.acc-compat-recent}"
+bootid(){ cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo unknown; }
+PBL="${PBL:-$AMPSD/.probe-blacklist}"   # ACC's own crash blacklist, honoured read-only
+_BLTAB=$(printf '\t'); _BLCR=$(printf '\r')
 SNAP="$BK/snap.tsv"; DISC="$BK/disc.txt"; SNLIST="$BK/snlist"
 SCHG="$BK/s_chg.tsv"; SUNP="$BK/s_unplug.tsv"; SHELD="$BK/s_held.tsv"; GENC="$BK/gen.tsv"
 POLL=3; SETTLE=4; TO=5; MAXSEC=1020; MAX_NEW=20; MAX_CURR=10; MAX_GEN=12
@@ -85,11 +86,9 @@ OUT2="$TMPD/$OUTBASE"
 REG="$BK/switches.tsv"; : > "$REG" 2>/dev/null
 : > "$BK/combo.tsv" 2>/dev/null; : > "$BK/combo_seen" 2>/dev/null
 : > "$SHELD2" 2>/dev/null; : > "$TEACHC" 2>/dev/null; : > "$BK/teach_combo.tsv" 2>/dev/null
-rm -f /data/local/tmp/acc-compat-verified 2>/dev/null
 fi
 
-# Logging + timeout-guarded sysfs read/write helpers (rd/wr fall back to plain cat if no timeout binary).
-log(){ [ "${PROFILE:-0}" = 1 ] && case "$*" in *"===="*) set -- "[t+$(( $(san "$(now)") - ${START:-0} ))s] $*";; esac; printf '%s\n' "$*"; printf '%s\n' "$*" >> "$OUT" 2>/dev/null; [ "$OUT" = "$OUT2" ] || printf '%s\n' "$*" >> "$OUT2" 2>/dev/null; }
+log(){ case "$*" in '==== '*) _ln="$(san "$(now)")"; set -- "[t+$(( _ln - ${START:-_ln} ))s d+$(( _ln - ${_TL:-_ln} ))s] $*"; _TL="$_ln";; esac; printf '%s\n' "$*"; printf '%s\n' "$*" >> "$OUT" 2>/dev/null; [ "$OUT" = "$OUT2" ] || printf '%s\n' "$*" >> "$OUT2" 2>/dev/null; }
 canon(){ case "$1" in
     /sdcard/*) [ -d /storage/emulated/0 ] && printf '/storage/emulated/0/%s' "${1#/sdcard/}" || printf '%s' "$1";;
     /sdcard) [ -d /storage/emulated/0 ] && printf '/storage/emulated/0' || printf '%s' "$1";;
@@ -104,18 +103,214 @@ friendly(){ case "$1" in
 warn(){ WARN="$WARN
   - $*"; log "  ! $*"; }
 HAVE_TO=0; command -v timeout >/dev/null 2>&1 && HAVE_TO=1
+command -v awk >/dev/null 2>&1 || printf '%s\n' "! awk not found on this device -- the observe/diff discovery layers (S2/6c/6d) will find nothing; known-switch layers still run." >&2
 acc_to(){ if [ "$HAVE_TO" = 1 ]; then timeout 15 "$@"; else "$@"; fi; }
 rd(){ if [ "$HAVE_TO" = 1 ]; then timeout "$TO" cat "$1" 2>/dev/null; else cat "$1" 2>/dev/null; fi; }
 rd1(){ if [ "$HAVE_TO" = 1 ]; then timeout 1 cat "$1" 2>/dev/null; else cat "$1" 2>/dev/null; fi; }
 ex(){ [ -e "$1" ]; }
-wr(){ ex "$1" || return 1; chmod u+w "$1" 2>/dev/null
+jrn_begin(){ [ -n "${1:-}" ] || return 0
+  mkdir -p "$AMPSD" 2>/dev/null || :
+  { printf '%s\n' "$1"; printf '%s\n' "${2-}"; rd "$1" 2>/dev/null | sed -n 1p; } > "$JRN" 2>/dev/null || :
+  sync 2>/dev/null || :
+  [ -s "$JRN" ]; }
+jrn_end(){
+  [ -z "${1:-}" ] || { printf '%s\t%s\t%s\n' "$1" "${2-}" "$(bootid)" > "$RCT" 2>/dev/null || :; sync 2>/dev/null || :; }
+  rm -f "$JRN" 2>/dev/null || :; }
+bl_in(){
+  [ -s "$2" ] || return 1
+  while IFS="$3" read -r _bll _blrest || [ -n "${_bll:-}" ]; do
+    _bll=${_bll%"$_BLCR"}
+    case "$_bll" in ''|'#'*) continue;; esac
+    [ "$_bll" = "$1" ] || [ "$_bll" = "$_BLFP" ] || [ "$_bll" = "$_BLBN" ] || continue
+    return 0
+  done < "$2"
+  return 1; }
+bl_has(){
+  [ -n "${1:-}" ] || return 1
+  _BLBN=${1##*/power_supply/}; _BLFP=/sys/class/power_supply/$_BLBN
+  bl_in "$1" "$BLF" "$_BLTAB" && return 0
+  bl_in "$1" "$PBL" ' ' && return 0
+  return 1; }
+bl_add(){ [ -n "${1:-}" ] || return 0; bl_has "$1" && return 0
+  mkdir -p "$AMPSD" 2>/dev/null || :
+  printf '%s\t%s\t%s\n' "$1" "${2-}" "$(date '+%Y-%m-%d %H:%M' 2>/dev/null)" >> "$BLF" 2>/dev/null || :
+  sync 2>/dev/null || :; }
+survivor_check(){
+  if [ -s "$RCT" ] 2>/dev/null; then
+    _rcn=$(cut -f1 "$RCT" 2>/dev/null); _rcv=$(cut -f2 "$RCT" 2>/dev/null); _rcb=$(cut -f3 "$RCT" 2>/dev/null)
+    if [ -n "$_rcb" ] && [ "$_rcb" != unknown ] && [ "$_rcb" = "$(bootid)" ]; then
+      _rcn=
+    else
+      rm -f "$RCT" 2>/dev/null || :
+      _rcabn=0
+      case "$(getprop sys.boot.reason 2>/dev/null) $(getprop ro.boot.bootreason 2>/dev/null)" in
+        *panic*|*watchdog*|*wdog*|*kernel_panic*) _rcabn=1;;
+      esac
+      [ "$_rcabn" = 1 ] || _rcn=
+    fi
+    case "$_rcn" in
+      /*) case "$_rcn" in
+            *" "*|*"	"*) : ;;
+            *) if [ -n "$_rcb" ] && [ "$_rcb" != unknown ] && [ "$_rcb" != "$(bootid)" ]; then
+                 bl_add "$_rcn" "$_rcv"
+                 log ""
+                 log "  !! Your phone restarted shortly AFTER a scan wrote:"
+                 log "  !!   $_rcn${_rcv:+  (value: $_rcv)}"
+                 log "  !! The write itself returned, so this was not caught while it happened;"
+                 log "  !! it is blacklisted because the scan never reached its own exit."
+                 log "  !! If the restart was unrelated, allow it again with:"
+                 log "  !!   --blacklist rm $_rcn"
+                 log ""
+               fi;;
+          esac;;
+    esac
+  fi
+  [ -s "$JRN" ] 2>/dev/null || return 0
+  _svn="$(sed -n 1p "$JRN" 2>/dev/null)"
+  _svval="$(sed -n 2p "$JRN" 2>/dev/null)"
+  _svold="$(sed -n 3p "$JRN" 2>/dev/null)"
+  rm -f "$JRN" 2>/dev/null || :
+  case "$_svn" in
+    /*) : ;;
+    *) return 0 ;;
+  esac
+  case "$_svn" in
+    *" "*|*"	"*) return 0 ;;
+  esac
+  bl_add "$_svn" "$_svval"
+  [ -n "$_svold" ] && [ -e "$_svn" ] && { chmod u+w "$_svn" 2>/dev/null
+    printf '%s\n' "$_svold" > "$_svn" 2>/dev/null || :; }
+  log ""
+  log "  !! The previous scan did not return: your phone went down while writing"
+  log "  !!   $_svn${_svval:+  (it went down writing: $_svval)}"
+  log "  !! It has been restored to '${_svold:-unknown}' and PERMANENTLY blacklisted on this phone."
+  log "  !! It will never be written again. Remove it from the list with:"
+  log "  !!   --blacklist rm <node>      (see the list: --blacklist)"
+  log ""
+}
+wr(){ ex "$1" || return 1
+  if [ "${_RESTORING:-0}" != 1 ] && bl_has "$1"; then
+    # Say it ONCE per node, not once per probe. Every layer re-offers the same blacklisted node,
+    # so the old unconditional log printed the same line 59 times in a 569-line garnet report --
+    # 10% of the report saying nothing new. The refusal itself is unchanged; only the noise goes.
+    case "|${_BLSAID:-}|" in
+      *"|$1|"*) : ;;
+      *) _BLSAID="${_BLSAID:-}|$1"
+         [ -n "${_BLREFUSED:-}" ] || { _BLREFUSED=1
+           log "  [blocked] refusing to write blacklisted nodes (see --blacklist)"; }
+         log "  [blocked] $1 -- on the blocked list, not written (silenced for the rest of this run)" ;;
+    esac
+    return 1
+  fi
+  chmod u+w "$1" 2>/dev/null
+  jrn_begin "$1" "$2" || {
+    [ -n "${_JRNWARNED:-}" ] || { _JRNWARNED=1
+      warn "cannot write the crash journal (/data full or read-only?) -- skipping ALL node writes this run. Nothing is changed. Free some space and re-run."; }
+    return 1; }
   if [ "$HAVE_TO" = 1 ]; then printf '%s\n' "$2" | timeout "$TO" tee "$1" >/dev/null 2>&1
-  else { printf '%s\n' "$2" > "$1"; } 2>/dev/null; fi; }
+  else { printf '%s\n' "$2" > "$1"; } 2>/dev/null; fi
+  jrn_end "$1" "$2"; }
+[ "${_STONLY:-}" = 1 ] || survivor_check 2>/dev/null || :
+
+case "${1:-}" in --blacklist)
+  shift
+  case "${1:-list}" in
+    list|'')
+      if [ -s "$BLF" ]; then
+        echo "Nodes blacklisted on this phone (AMPS will never write these):"
+        while IFS= read -r _bline || [ -n "${_bline:-}" ]; do
+          case "$_bline" in ''|'#'*) continue;; esac
+          _bl=${_bline%%"$_BLTAB"*}; _brest=${_bline#*"$_BLTAB"}
+          [ "$_brest" = "$_bline" ] && _brest=
+          _bv=${_brest%%"$_BLTAB"*}; _bw=${_brest#*"$_BLTAB"}
+          [ "$_bw" = "$_brest" ] && _bw=
+          echo "  $_bl${_bv:+   (went down writing: $_bv)}${_bw:+   [$_bw]}"
+        done < "$BLF"
+        echo ""
+      else
+        echo "Blacklist is empty. Nothing has crashed this phone during a scan."
+      fi
+      if [ -s "$PBL" ]; then
+        echo "Also blocked by ACC's own probe blacklist:"
+        while IFS=' ' read -r _bl _brest || [ -n "${_bl:-}" ]; do
+          case "$_bl" in ''|'#'*) continue;; esac; echo "  $_bl"
+        done < "$PBL"
+        echo ""
+      fi
+      echo "Remove one:  --blacklist rm <node>      Remove all:  --blacklist clear";;
+    add)
+      [ -n "${2:-}" ] || { echo "usage: --blacklist add <full/sysfs/path>"; exit 2; }
+      bl_add "$2"
+      if bl_has "$2"; then echo "added: $2"; else
+        echo "could not add: $2" >&2
+        echo "The list at $BLF could not be written (read-only or full /data?)." >&2
+        exit 1
+      fi;;
+    rm|remove|del)
+      [ -n "${2:-}" ] || { echo "usage: --blacklist rm <full/sysfs/path>"; exit 2; }
+      _rmn=${2##*/power_supply/}; _rmfp=/sys/class/power_supply/$_rmn; _rmgot=0
+      if [ -s "$BLF" ]; then
+        : > "$BLF.tmp" 2>/dev/null || :
+        while IFS= read -r _rml || [ -n "${_rml:-}" ]; do
+          _rmf=${_rml%%"$_BLTAB"*}; _rmf=${_rmf%"$_BLCR"}
+          if [ "$_rmf" = "$2" ] || [ "$_rmf" = "$_rmfp" ] || [ "$_rmf" = "$_rmn" ]; then _rmgot=1; continue; fi
+          printf '%s\n' "$_rml" >> "$BLF.tmp" 2>/dev/null || :
+        done < "$BLF"
+        if [ "$_rmgot" = 1 ]; then
+          if [ -s "$BLF.tmp" ]; then mv -f "$BLF.tmp" "$BLF" 2>/dev/null || :
+          else rm -f "$BLF.tmp" "$BLF" 2>/dev/null || :; fi
+          sync 2>/dev/null || :
+        else rm -f "$BLF.tmp" 2>/dev/null || :; fi
+      fi
+      if [ "$_rmgot" = 1 ]; then
+        if bl_has "$2"; then
+          echo "could not remove: $2" >&2
+          echo "The list at $BLF could not be rewritten (read-only or full /data?)." >&2
+          exit 1
+        fi
+        echo "removed: $2"
+        echo "WARNING: this node crashed your phone before. It can now be tested again."
+      else
+        _BLBN=$_rmn; _BLFP=$_rmfp
+        if bl_in "$2" "$PBL" ' '; then
+          : > "$PBL.tmp" 2>/dev/null || :
+          while IFS= read -r _rml || [ -n "${_rml:-}" ]; do
+            _rmf=${_rml%% *}; _rmf=${_rmf%"$_BLCR"}
+            if [ "$_rmf" = "$2" ] || [ "$_rmf" = "$_rmfp" ] || [ "$_rmf" = "$_rmn" ] \
+              || [ "${_rmf##*/power_supply/}" = "$_rmn" ]; then continue; fi
+            printf '%s\n' "$_rml" >> "$PBL.tmp" 2>/dev/null || :
+          done < "$PBL"
+          mv -f "$PBL.tmp" "$PBL" 2>/dev/null || rm -f "$PBL.tmp" 2>/dev/null
+          sync 2>/dev/null || :
+          if bl_in "$2" "$PBL" ' '; then
+            echo "could not remove: $2" >&2
+            echo "The list at $PBL could not be rewritten (read-only or full /data?)." >&2
+            exit 1
+          fi
+          echo "removed: $2"
+          echo "WARNING: this node crashed your phone before. It can now be tested again."
+          exit 0
+        fi
+        echo "not blacklisted: $2"
+      fi;;
+    clear)
+      rm -f "$BLF" 2>/dev/null || :
+      [ -e "$PBL" ] && { : > "$PBL" 2>/dev/null || :; }
+      sync 2>/dev/null || :
+      if [ -s "$BLF" ] || [ -s "$PBL" ]; then
+        echo "could not clear the blocked list (read-only or full /data?)." >&2
+        exit 1
+      fi
+      echo "Blacklist cleared. All entries removed."
+      echo "WARNING: any node that previously crashed this phone can now be tested again.";;
+    *) echo "usage: --blacklist [list|add <node>|rm <node>|clear]"; exit 2;;
+  esac
+  exit 0;;
+esac
 read1(){ rd "$1" 2>/dev/null | sed -n '1p' | cut -d' ' -f1; }
 pclean(){ LC_ALL=C tr -dc ' -~'; }
 pclean2(){ LC_ALL=C tr -dc ' -~\n'; }
 read_st(){ rd "$BATT/status" | sed -n '1p' | pclean; }
-# Numeric sanitizers: strip +/- sign and leading zeros (avoid octal in $(( )) ), magnitude, sign, polarity-normalize.
 san(){ _s="$1"; case "$_s" in +*) _s="${_s#+}";; esac; _sg=; case "$_s" in -*) _sg=-; _s="${_s#-}";; esac; case "$_s" in ''|*[!0-9]*) echo 0; return;; esac; while :; do case "$_s" in 0[0-9]*) _s="${_s#0}";; *) break;; esac; done; [ "$_s" = 0 ] && _sg=; echo "$_sg$_s"; }
 abs(){ v="${1#-}"; case "$v" in ''|*[!0-9]*) echo 0;; *) echo "$v";; esac; }
 sgn(){ case "$1" in -*) echo n;; *) echo p;; esac; }
@@ -124,8 +319,6 @@ _norm(){ case "$2" in
     inverted) case "$1" in -*) printf '%s\n' "${1#-}";; 0) echo 0;; *) printf '%s\n' "-$1";; esac;;
     *) printf '%s\n' "$1";; esac; }
 
-# Pure decision logic (no device writes): learn charge direction, classify charge state from sign+status,
-# detect throttle/cut, rank and recommend the safest switch, cross-check polarity. All asserted in selftest.
 learn_chgdir(){ case "$3" in 1) ;; *) echo "p low"; return;; esac
   case "$1" in
     Charging|charging) echo "$2 high";;
@@ -162,50 +355,20 @@ reco_pick(){
 
 _lblof(){ printf '%s' "$1" | cut -d'|' -f1; }
 _clsof(){ printf '%s' "$1" | cut -d'|' -f2; }
-# Finalist stress verdict (pure): from firmware-override count / hammer count / capacity delta while
-# the level pick is engaged, decide LEAK (charged while held) > REARM (firmware kept overriding) > CLEAN.
 fstress_verdict(){ _fov="${1:-0}"; _fn="${2:-0}"; _fcapd="${3:-0}"; _fcls="${4:-}"
   case "$_fov" in ''|*[!0-9]*) _fov=0;; esac
   case "$_fn" in ''|*[!0-9]*) _fn=0;; esac
   case "$_fcapd" in ''|*[!0-9-]*) _fcapd=0;; esac
-  # A native %-limit is exempt from BOTH hammer signals, and the class check must come FIRST:
-  # - node-override count: the charger driver rewrites the level node's value while still holding
-  #   the battery flat (a Pixel churns charge_stop_level 74->100 under its own Adaptive Charging),
-  #   so churn is not a re-arm for a level node.
-  # - capacity delta: over a ~12s hammer even a fully broken switch gains <0.5% real charge, so a
-  #   +1% reading is SOC-display rounding (gdf 59.95 -> 60), not a leak -- v7.1.1 fixed REARM but
-  #   the capd>0 LEAK gate ran first and demoted the same verified Pixel limit on that noise.
-  # LAYER 5 already proved enforcement with a current anchor over a longer hold; nothing the
-  # hammer can measure supersedes that for this class.
   [ "$_fcls" = native-level ] && { printf CLEAN; return; }
   [ "$_fcapd" -gt 0 ] 2>/dev/null && { printf LEAK; return; }
   { [ "$_fov" -ge 3 ] 2>/dev/null && [ "$(( _fov * 3 ))" -ge "$_fn" ] 2>/dev/null; } && { printf REARM; return; }
   printf CLEAN; }
-# Thermal-level node check (pure): a node whose _max sibling is a tiny integer (1..10) is the kernel's
-# thermal charge-control interface (levels, not a switch) -- firmware owns it and re-arms it whenever
-# the thermal engine is active, even if a short hammer on a cool phone reads clean.
 fstress_thermal(){ case "${1:-}" in ''|*[!0-9]*) return 1;; esac
   [ "$1" -ge 1 ] 2>/dev/null && [ "$1" -le 10 ] 2>/dev/null; }
-# Finalist stress-test: the switch that WINS the recommendation can still be an intermittently
-# re-arming firmware node that happened to hold through its short passive window (the Mi A3's
-# charge_control_limit passes as BYPASS one run and re-arms minutes later). Whatever class won
-# (native-level, bypass, cut, drain), re-hammer its OFF value to provoke that re-arm; demote it
-# (STUCKS, so pick_usable skips it on the re-pick) if the firmware overrides the writes or the
-# pack keeps charging while engaged. Demote-only + snapshot-restored, so the worst case is the
-# 2nd-best pick. Every signal here is sensor-independent (node readback, coulomb capacity, _max
-# sibling), so this runs in BLIND sessions too - lying-sensor phones need it most. A cfg whose
-# node does not appear in the label (a class-default fallback from cfg_lookup missing the entry)
-# is SKIPPED rather than hammered: stressing the wrong node once read ccl's _max against
-# input_suspend and demoted the best switch. Args: $1=winner label, $2="node on off" cfg line.
 finalist_stress(){
   _fs_lbl="$1"; _fs_cfg="$2"; _fs_cls="${3:-}"
   [ -n "$_fs_lbl" ] && [ -n "$_fs_cfg" ] && [ "${STRESS_FINALIST:-1}" = 1 ] \
     && [ "${ACC_DEFER:-0}" = 0 ] && [ "$CAP" -ge 12 ] 2>/dev/null && [ "$CAP" -lt 96 ] 2>/dev/null && ! over || return 0
-  # A native %-limit is never hammered: LAYER 5's engage test already proved enforcement with a
-  # current anchor over a 24s hold, and neither hammer signal is valid for this class (the firmware
-  # manages the node's value, and %-rounding fakes a leak inside a 12s window). Hammering it only
-  # produced noise verdicts (v7.1.0 REARM, v7.1.1 LEAK) that demoted a verified Pixel limit to a
-  # battery-draining cut. Confirm it outright.
   if [ "$_fs_cls" = native-level ]; then
     log ""
     log "==== FINALIST STRESS-TEST (re-hammer the winning pick to catch an intermittent re-arm) ===="
@@ -240,7 +403,7 @@ finalist_stress(){
     log "  $_fs_lbl: $_fs_v"
   fi
   if [ "$_fs_v" != CLEAN ]; then
-    log "    -> DEMOTED: does not hold under load ($_fs_v). Re-picking from the remaining finalists."
+    log "    -> DEMOTED ($_fs_v): it looked HELD on the brief passive test but did NOT hold under a sustained re-hammer. This OVERRIDES this switch's 'working' line higher in the report -- do NOT use it. Re-picking the next-best finalist."
     REASSERT="$REASSERT|$_fs_lbl"; STUCKS="$STUCKS|$_fs_lbl"; RESUMES="$RESUMES|$_fs_lbl=STUCK"
     if [ "$_fs_lbl" = "$le_enf" ]; then
       LEVELOK="$(printf '%s\n' "$LEVELOK" | tr '|' '\n' | grep -vxF "$le_enf" 2>/dev/null | sed '/^$/d' | tr '\n' '|')"
@@ -277,7 +440,11 @@ native_verdict(){
 is_pump(){ case "$1" in *bq2597*|*ln8000*|*ln8410*|*sc854*|*sc855*|*pca94*|*pca12*|*upm672*|*mp2762*|*nu2105*) return 0;; *) return 1;; esac; }
 pump_conf(){
   [ "$1" = verified ] || { echo "$1"; return; }
-  case "$2" in bypass|cut|drain) ;; *) echo verified; return;; esac
+  case "$2" in
+    bypass|cut|drain) ;;
+    level|native-level) echo verified; return;;
+    *) echo needs-test; return;;
+  esac
   [ "${4:-0}" = 1 ] && { echo verified; return; }
   is_pump "$3" && { echo pump-needs-long-test; return; }
   echo verified; }
@@ -303,7 +470,24 @@ defer_to_acc(){
   case "|$3|$4|" in *"$_dn"*) return;; esac
   printf '%s' "$2"; }
 
-# Self-test: pure polarity/state/pick assertions, zero device I/O. Run with --selftest; exits nonzero on any fail.
+# A switch that will not release cleanly is not "verified", whichever slot of the report it lands
+# in. This lived inline in the recommended-pick path only, so alternatives kept conf=verified with
+# resume=stuck -- measured on a Mi A3, on the alternative labelled "gentlest (battery idle)".
+conf_resume(){ _crc="$1"; _crl="$2"; _crr="$3"
+  [ "$_crc" = verified ] || { printf '%s' "$_crc"; return; }
+  case "$_crr" in
+    slow) case "$_crl" in level|native-level) :;; *) _crc=needs-test;; esac;;
+    after-reset|after-rekick|stuck|unknown) _crc=needs-test;;
+  esac
+  printf '%s' "$_crc"; }
+
+# Which current unit to trust. ACC's currentUnits is only as good as its ampFactor: with none set
+# it falls back to the same per-value cutoff we do, so a phone sampled at an idle/taper current
+# reports mA on a uA node (ACC's own _se_units carries the identical warning). When we have read a
+# control node that cannot be mA, that measurement outranks ACC's second-hand guess.
+unit_pick(){ [ "${2:-0}" = 1 ] && { printf '%s' "$1"; return; }
+  case "${3:-}" in uA*|microamp*) printf uA;; mA*|milliamp*) printf mA;; *) printf '%s' "$1";; esac; }
+
 selftest(){ _sp=0; _sf=0
   _ck(){ if [ "$2" = "$3" ]; then _sp=$((_sp+1)); else echo "  FAIL $1: got='$2' want='$3'"; _sf=$((_sf+1)); fi; }
   echo "== AMPS v$V self-test (pure polarity + state) =="
@@ -338,6 +522,21 @@ selftest(){ _sp=0; _sf=0
   _ck u_blind_cut  "$(classify_unheld 0 0 'Not charging' 'Not charging' 1 1000 10 1)" CUT
   _ck u_blind_nthr "$(classify_unheld -600 -700 Charging Charging 0 1000 10 1)"      NONE
   _ck u_idlefloor  "$(classify_unheld -600 -5 Charging Charging 0 1000 10 0)"        NONE
+  _ck cr_stuck     "$(conf_resume verified cut stuck)"          needs-test
+  _ck cr_slow_cut  "$(conf_resume verified cut slow)"           needs-test
+  _ck cr_slow_lvl  "$(conf_resume verified level slow)"         verified
+  _ck cr_reset     "$(conf_resume verified bypass after-reset)" needs-test
+  _ck cr_rekick    "$(conf_resume verified drain after-rekick)" needs-test
+  _ck cr_unknown   "$(conf_resume verified bypass unknown)"     needs-test
+  _ck cr_ok        "$(conf_resume verified cut ok)"             verified
+  _ck cr_na        "$(conf_resume verified cut na)"             verified
+  _ck cr_keepslow  "$(conf_resume unconfirmed cut stuck)"       unconfirmed
+  _ck up_hw_wins   "$(unit_pick uA 1 mA)"                       uA
+  _ck up_hw_agrees "$(unit_pick uA 1 uA)"                       uA
+  _ck up_acc_fills "$(unit_pick mA 0 uA)"                       uA
+  _ck up_acc_mA    "$(unit_pick uA 0 mA)"                       mA
+  _ck up_no_acc    "$(unit_pick uA 0 '')"                       uA
+  _ck up_junk_acc  "$(unit_pick mA 0 wat)"                      mA
   _ck reco_native     "$(reco_pick nat bx cx ux dx ax tx)"     "nat|native-level"
   _ck reco_bypassV    "$(reco_pick '' bx cx ux dx ax tx)"      "bx|bypass"
   _ck reco_cut        "$(reco_pick '' '' cx '' dx ax tx)"      "cx|cut"
@@ -444,7 +643,6 @@ case "${1:-}" in
   --version)  echo "AMPS v$V (Adaptive Multi-device Probe & Selector)"; exit 0;;
   --probe)    PROBE=1;;
 esac
-# Misc helpers: 3-sample median, pre-write snapshot, value-class checks, runtime/deadline clock.
 med3(){ a="$1"; b="$2"; c="$3"
   if [ "$a" -le "$b" ]; then
     if [ "$b" -le "$c" ]; then echo "$b"; elif [ "$a" -le "$c" ]; then echo "$c"; else echo "$a"; fi
@@ -489,17 +687,17 @@ rel_score(){ case "$1" in
     *) echo 1;; esac; }
 bool_like(){ case "$1" in 0|1|on|off|enabled|disabled|true|false|low|high) return 0;; *) return 1;; esac; }
 flip_val(){ case "$1" in 0) echo 1;; 1) echo 0;; on) echo off;; off) echo on;; enabled) echo disabled;; disabled) echo enabled;; true) echo false;; false) echo true;; low) echo high;; high) echo low;; *) echo "";; esac; }
-# Write-safety gates: a candidate node must clear DANGER/DENY/SUPERDENY/EFFECT and match NAME/TRUST
-# before AMPS ever writes it. Unknown vendor nodes are reported, never written (--unknown refuses the name DB).
 safe_to_write(){ st_bn="${1##*/}"
+  bl_has "$1" && return 1
   [ "${UNKNOWN:-0}" = 1 ] && return 1
   printf '%s' "$1" | grep -Eiq "$DANGER_RE" && return 1
   printf '%s' "$st_bn" | grep -Eq "$EFFECT_RE" && return 1
   printf '%s' "$st_bn" | grep -Eq "^($TRUST_RE)$" && return 0
   return 1; }
 SUPERDENY_RE='cc_soc|/soc$|_soc$|msoc|rsoc|soc_now|soc_ajust|soc_adjust|coulomb|/bms|_bms|-bms|/fuel|gauge|/fg_|_fg$|cc_step|cv_step|usb_role|typec|moisture|/lpd|pd_disabled|pd_current|pd_curr|pdo_|pps_|apdo|/vreg|temp|therm|batt_verify|pagenumber|authen'
-SHAPEDENY_RE='reset|reboot|shutdown|poweroff|/display|panel|backlight|/lcd|modem|/radio|baseband|/fan|/gpio|/led|/key|vibrat|haptic|camera|torch|/cpu|/clk|/dma|/rtc|/nfc|/wlan|/wifi|/bt_|bluetooth|/sim|sdcard|/sec_|sysrq|crash|panic|/dump|recovery|fastboot|download|/audio|/sound|/sensor|proximity|fingerprint|host_mode|dual_role|peripheral|latch|fuse|efuse|oneshot|one_shot|write_protect|wprotect|_lock$|/lock|perm_|_perm$|align|sbu|force_epp|contaminant|accessor|sink_current|sdp_enum|update_sdp|qien|aacp|aafv|aacr|cal_mode|cal_state|sr_state|_filtered|has_wlc|txdone|rxdone|txbusy|aicl_delay|aicl_icl|irq_hpd|trickle_dry|trickle_version|trickle_cnt_thr|/count$|usb_limit|/compatibility|log_current|resistance_id|/wireless/device/|/device/frs|gpp_enhanced|mitigate_threshold|negopower|rxlen|dc_icl|short_c_|call_mode|time_zone|em_mode|endurance|bcc_|ufcs|voocchg|ppschg|quick_mode|chg_i2c|i2c_err|notify_code|batt_cb|smartchg|parallel_chg'
+SHAPEDENY_RE='reset|reboot|shutdown|poweroff|/display|panel|backlight|/lcd|modem|/radio|baseband|/fan|/gpio|/led|/key|vibrat|haptic|camera|torch|/cpu|/clk|/dma|/rtc|/nfc|/wlan|/wifi|/bt_|bluetooth|/sim|sdcard|/sec_|sysrq|crash|panic|/dump|recovery|fastboot|download|/audio|/sound|/sensor|proximity|fingerprint|host_mode|dual_role|peripheral|latch|fuse|efuse|oneshot|one_shot|write_protect|wprotect|_lock$|/lock|perm_|_perm$|align|sbu|force_epp|contaminant|accessor|sink_current|sdp_enum|update_sdp|qien|aacp|aafv|aacr|cal_mode|cal_state|sr_state|_filtered|has_wlc|txdone|rxdone|txbusy|aicl_delay|aicl_icl|irq_hpd|trickle_dry|trickle_version|trickle_cnt_thr|/count$|usb_limit|/compatibility|log_current|resistance_id|/wireless/device/|/device/frs|gpp_enhanced|mitigate_threshold|negopower|rxlen|dc_icl|short_c_|call_mode|time_zone|em_mode|endurance|bcc_|ufcs|voocchg|ppschg|quick_mode|chg_i2c|i2c_err|notify_code|batt_cb|smartchg|parallel_chg|_?learn|fake_|referance_|reference_power|constant_power|remaining_time|average_current|/deltafv|over_peak|battmoni|battcont|blank_status|hifi_|cid_status|chip_ok|_online$|_present$|smart_batt|smb_iin|_iin$|bus_delta|bus_current|tfullq|tremq|fcc_soh|fg1_fastcharge|verify_slave|bap_match|last_node|nvt_'
 super_safe(){ _ssbn="${1##*/}"
+  bl_has "$1" && return 1
   printf '%s' "$1"     | grep -Eiq "$DANGER_RE"    && return 1
   printf '%s' "$_ssbn" | grep -Eq  "$EFFECT_RE"    && return 1
   printf '%s' "$1"     | grep -Eq  "$DENY_RE"      && return 1
@@ -508,6 +706,7 @@ super_safe(){ _ssbn="${1##*/}"
   printf '%s' "$_ssbn" | grep -Eqi "$NAME_RE"      || return 1
   return 0; }
 shape_safe(){ _shpb="${1##*/}"
+  bl_has "$1" && return 1
   printf '%s' "$1"     | grep -Eiq "$DANGER_RE"    && return 1
   printf '%s' "$_shpb" | grep -Eq  "$EFFECT_RE"    && return 1
   printf '%s' "$1"     | grep -Eq  "$DENY_RE"      && return 1
@@ -516,8 +715,6 @@ shape_safe(){ _shpb="${1##*/}"
   return 0; }
 flag_observe(){ case "|$OBSERVED_ONLY|" in *"|$1 "*) :;; *) OBSERVED_ONLY="$OBSERVED_ONLY|$1 $2"; obs_n=$((obs_n+1));; esac; }
 
-# Native-charging restore engine: re-assert factory charging, recover a charger that dropped offline,
-# and snapshot-restore every touched node on exit (trap-driven, with a watchdog backstop).
 emit_native(){
 cat <<EOF
 $PSY/battery/input_suspend 0
@@ -601,10 +798,6 @@ recover_online(){
     done
   done
   [ -w "$BATT/input_suspend" ] && { _rfin="$(read1 "$BATT/input_suspend")"; [ "$_rfin" = 1 ] && wr "$BATT/input_suspend" 0 2>/dev/null; }
-  # Budget exhausted. The re-kick nodes above (apsd_rerun/rerun_aicl) are Qualcomm-specific; on
-  # SoCs without them (MediaTek/Exynos/Unisoc) the only generic lever is the input_suspend pulse.
-  # We deliberately do NOT write vendor-specific re-negotiation nodes here (zero field evidence,
-  # real risk) -- instead leave a breadcrumb so the next field report names the node that works.
   if ! online_now; then
     if ! ex "$PSY/usb/apsd_rerun" && ! ex "$BATT/rerun_aicl" && ! ex /sys/class/qcom-battery/apsd_rerun; then
       log "  [recover] charger still offline and this SoC has no APSD/AICL re-kick node ($(getprop ro.board.platform 2>/dev/null)) -- if replug fixes it, tell us which /sys node your kernel toggles so we can add it"
@@ -616,8 +809,11 @@ recover_online(){
 
 restore(){
   [ "$RESTORED" = 1 ] && return; RESTORED=1
+  _RESTORING=1   # 7.2.1: putting recorded values back is exempt from the blacklist (see wr)
+  rm -f "$RCT" 2>/dev/null || :
+  echo amps_switchfinder > /sys/power/wake_unlock 2>/dev/null || :   # 7.1.7: release the scan wakelock
   trap '' INT TERM HUP
-  ( sleep 130; defaults_native 2>/dev/null; sleep 5; kill -9 $$ 2>/dev/null ) >/dev/null 2>&1 & RWDOG=$!
+  ( sleep 130; defaults_native 2>/dev/null; sleep 5; echo amps_switchfinder > /sys/power/wake_unlock 2>/dev/null; kill -9 ${MYPID:-$$} 2>/dev/null ) >/dev/null 2>&1 & RWDOG=$!
   if [ "$DID" = 1 ]; then
     log ""; log "===== RESTORING (replaying snapshot to original values) ====="
     defaults_native
@@ -649,7 +845,13 @@ restore(){
            fst="$(rd "$BATT/status" | sed -n '1p' | pclean)"
            case "$fst" in
              Charging|Full) log "  charging re-onlined after an APSD/AICL re-kick (firmware had dropped to online=0)";;
-             *) log "  ! charging did NOT resume after restore (status=$fst) -- the charger may have dropped negotiation. Try a SLOW/standard USB charger, or REBOOT to clear it.";;
+             *) case "${PRE_ST:-}" in
+                  # Do not blame the tester (or send the user to reboot) for a state the phone was
+                  # ALREADY in before the run -- measured on a Pixel 6a on a 500mA PC port, which
+                  # read 'Not charging' at baseline and got told to reboot at the end.
+                  Charging|Full|'') log "  ! charging did NOT resume after restore (status=$fst) -- the charger may have dropped negotiation. Try a SLOW/standard USB charger, or REBOOT to clear it.";;
+                  *) log "  note: status is '$fst', which is what this phone read BEFORE the test started ($PRE_ST) -- the tester did not change it. If you expected charging here, it is the charger/port (see CHARGER / SPEED above), not this run.";;
+                esac ;;
            esac ;;
       esac
     fi
@@ -662,7 +864,8 @@ restore(){
           log "  ! $fail node(s) did not read back to original:${rbfails} -- charging re-asserted; REBOOT if it still looks stuck."
           [ -f "$ART" ] && [ -n "$_swbn" ] && { sed -i 's/^conf=verified$/conf=needs-test/' "$ART" 2>/dev/null; log "  ! recommended switch ($_swbn) restore unclean -> verified downgraded to needs-test (AccA re-tests before locking)"; } ;;
         *)
-          log "  note: $fail firmware-volatile node(s) kept the charger's own values:${rbfails} -- these actuators follow the charge state (normal, harmless); the recommended switch restored clean, artifact left verified." ;;
+          _acnf="$(sed -n 's/^conf=//p' "$ART" 2>/dev/null | sed -n '1p')"
+          log "  note: $fail firmware-volatile node(s) kept the charger's own values:${rbfails} -- these actuators follow the charge state (normal, harmless); the recommended switch restored clean, artifact left ${_acnf:-unchanged}." ;;
       esac
     fi
     if plugged 2>/dev/null; then
@@ -670,9 +873,14 @@ restore(){
       case "$_fst2" in
         Charging|Full) :;;
         *) if [ "${_fsusp:-0}" = 1 ]; then
-             log "  note: it shows 'not charging' because ACC is back in control and is HOLDING your %-cap (input_suspend=1) -- this is normal ACC behaviour, NOT a fault and NOT the tester; ACC resumes on its own per your pause/resume capacity (here ~resume_capacity%)."
+             _rcap=; [ -n "${PRE_RESUME:-}" ] && _rcap=" (here ~${PRE_RESUME}%)"
+             log "  note: it shows 'not charging' because ACC is back in control and is HOLDING your %-cap (input_suspend=1) -- this is normal ACC behaviour, NOT a fault and NOT the tester; ACC resumes on its own per your pause/resume capacity${_rcap}."
            else
-             log "  note: charger is plugged but not charging (input_suspend=0) -- this charger can need a physical UNPLUG + RE-PLUG to re-negotiate; do that once, or reboot, if it stays this way."
+             # The block above already said so when the phone arrived not charging; printing the
+             # replug/reboot advice as well gives two different answers for one state.
+             case "${PRE_ST:-}" in
+               Charging|Full|'') log "  note: charger is plugged but not charging (input_suspend=0) -- this charger can need a physical UNPLUG + RE-PLUG to re-negotiate; do that once, or reboot, if it stays this way.";;
+             esac
            fi ;;
       esac
     fi
@@ -683,9 +891,6 @@ restore(){
     am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$OUT" >/dev/null 2>&1
     am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "file://$OUTDIR" >/dev/null 2>&1
   fi
-  # Disarm both watchdogs INCLUDING their forked sleep children: killing only the subshell
-  # leaves its running sleep orphaned with an inherited copy of our stdout, and a pipe reader
-  # (AccA's live log stream) then waits the full sleep (~2 min of frozen UI) before seeing EOF.
   for _wd in "${WATCHDOG-}" "${RWDOG-}"; do
     [ -n "$_wd" ] || continue
     for _wc in $(pgrep -P "$_wd" 2>/dev/null); do kill -9 "$_wc" 2>/dev/null; done
@@ -694,31 +899,41 @@ restore(){
 }
 trap restore EXIT
 trap 'restore; trap - EXIT; exit 130' INT TERM HUP
+survivor_check
 MYPID=$$
-( i=0; lim=$(( (MAXSEC + 120) / 5 )); while [ $i -lt $lim ]; do sleep 5; kill -0 "$MYPID" 2>/dev/null || exit 0; i=$((i+1)); done; kill -TERM "$MYPID" 2>/dev/null ) >/dev/null 2>&1 &
+echo amps_switchfinder > /sys/power/wake_unlock 2>/dev/null || :
+_WLNS=$(( (MAXSEC + 300) * 1000000000 ))
+echo "amps_switchfinder $_WLNS" > /sys/power/wake_lock 2>/dev/null \
+  || echo amps_switchfinder > /sys/power/wake_lock 2>/dev/null || :
+( i=0; lim=$(( (MAXSEC + 120) / 5 )); while [ $i -lt $lim ]; do sleep 5; kill -0 "$MYPID" 2>/dev/null || { echo amps_switchfinder > /sys/power/wake_unlock 2>/dev/null; exit 0; }; i=$((i+1)); done; echo amps_switchfinder > /sys/power/wake_unlock 2>/dev/null; kill -TERM "$MYPID" 2>/dev/null ) >/dev/null 2>&1 &
 WATCHDOG=$!
 rm -f "$STOPF" 2>/dev/null
-# Runtime guards: cooperative cancel (AccA writes the stop-flag), ACC hold-off, thermal/precondition
-# gate, battery temperature/voltage reads, and multi-path charger-presence detection.
 stop_check(){ [ -e "$STOPF" ] && { rm -f "$STOPF" 2>/dev/null; log ""; log "===== CANCELLED by user -- restoring native charging + ACC ====="; exit 130; }; return 0; }
 acc_hold_off(){ [ "${ACC_WAS:-0}" = 1 ] && [ -n "${ACC_BIN:-}" ] && acc_to "$ACC_BIN" -D stop >/dev/null 2>&1; return 0; }
 q_more(){ [ "${MODE:-quick}" = complete ] && return 0; [ -z "${BYPASS:-}${BYPASS_HELD:-}${CFG_LEVEL:-}" ]; }
+have_clean_winner(){
+  { [ "${UNKNOWN:-0}" = 1 ] || [ "${WANT_UNPLUG:-0}" = 1 ]; } && return 1   # --unknown or Highest-accuracy (--unplug) => exhaustive, never early-exit
+  [ -n "${CFG_LEVEL:-}" ] && return 0
+  _hcw_ifs=$IFS; IFS='|'
+  for _hw in ${BYPASS_HELD:-} ${CUT:-}; do
+    [ -n "$_hw" ] || continue
+    case "|${STUCKS:-}|" in *"|$_hw|"*) continue;; esac
+    IFS=$_hcw_ifs; return 0
+  done
+  IFS=$_hcw_ifs; return 1
+}
 
-log "############ AMPS v$V - Adaptive Multi-device Probe & Selector (smart-observe + blind-verify + firmware-teach + verdict card + charger-speed + path-aware + auto-reonline + fast-regrade + fast-scan) ############"
+log "############ AMPS v$V - Adaptive Multi-device Probe & Selector -- finds & verifies the safest charge-limit switch for THIS phone ############"
 log "collected in report: phone model, soc, android+kernel build, charge-node names/values, charger driver names. no accounts/imei/serial/location."
 log "SAFE MODE: WRITES only well-known, reversible charge switches (ACC's standard enable/suspend set) + native %-limits. Unknown/vendor/learned nodes are READ + reported (paste them back so we add the real ones to the DB), NEVER written. No bypass/regulator/OTG/PD/fuel-gauge writes. Battery protection is never disabled. Every write is snapshotted and restored."
-log "TIME: ~2-6 minutes (Deep skips redundant re-grades + re-onlines a dropped charger automatically). Keep the charger plugged in + the screen on; it restores everything automatically at the end."
+_scanmode="Quick"; [ "${MODE:-quick}" = complete ] && _scanmode="Deep"; [ "${WANT_UNPLUG:-0}" = 1 ] && _scanmode="Highest-accuracy (Deep + unplug)"
+_scantime="~2-5 min"; [ "$_scanmode" = Deep ] && _scantime="~5-15 min"; case "$_scanmode" in Highest*) _scantime="~10-20 min + unplug prompts";; esac
+log "SCAN: $_scanmode   |   AMPS v$V   |   $(date '+%Y-%m-%d %H:%M' 2>/dev/null)   |   est. $_scantime"
+log "TIME: keep the charger plugged in + the screen on; everything restores automatically at the end. (Deep skips redundant re-grades and re-onlines a dropped charger.)"
 log ""
 log "==== LAYER 0 - root + battery interface ===="
 if [ "$(id -u 2>/dev/null)" != 0 ]; then log "STOP: not root. ACC needs root (Magisk/KernelSU/APatch). Re-run: su -c 'sh ...'"; exit 0; fi
 log "root: yes   timeout-guard: $([ "$HAVE_TO" = 1 ] && echo on || echo off)"
-# v7.1.5: device identity, SPOOF-AWARE. ro.product.* is trivially faked -- custom ROMs and
-# integrity/spoof modules routinely advertise a Samsung or Pixel model on entirely different
-# silicon (a Realme GT Neo 2 reporting itself as SM-S918B is what forced this). AMPS keys its
-# per-device switch DB off that string, so an unnoticed spoof files THIS phone's switches under
-# somebody else's model and misleads every future owner of the real device. Cross-check against
-# what a system-only spoof does NOT rewrite: the vendor/odm partition props, the bootloader's
-# device tree, and the charger-driver family. Report both; key the DB on the hardware truth.
 _gp(){ getprop "$1" 2>/dev/null; }
 _id_pick(){ for _p in $1; do _v=$(_gp "$_p"); [ -n "$_v" ] && { printf '%s' "$_v"; return; }; done; }
 SW_BRAND=$(_gp ro.product.manufacturer); SW_MODEL=$(_gp ro.product.model); SW_DEV=$(_gp ro.product.device)
@@ -733,7 +948,6 @@ SPOOF=0
 if [ "$CHG_FAMILY" = oplus ]; then
   case "$(echo "$SW_BRAND" | tr 'A-Z' 'a-z')" in ''|oppo|realme|oneplus) :;; *) SPOOF=1;; esac
 fi
-# the DB key must follow the hardware, never the spoof
 DB_BRAND=$SW_BRAND; DB_DEV=$SW_DEV
 if [ "$SPOOF" = 1 ]; then
   [ -z "$HW_BRAND" ] || DB_BRAND=$HW_BRAND
@@ -751,7 +965,8 @@ fi
 log "soc: $(getprop ro.board.platform 2>/dev/null)/$(getprop ro.hardware 2>/dev/null)  android: $(getprop ro.build.version.release 2>/dev/null)  kernel: $(uname -r 2>/dev/null)"
 log "rom: $(getprop ro.build.version.incremental 2>/dev/null)"
 BATT=
-for b in $PSY/*; do [ "$(read1 "$b/type")" = Battery ] && ex "$b/capacity" && { BATT="$b"; break; }; done
+ex "$PSY/battery/capacity" && [ "$(read1 "$PSY/battery/type")" = Battery ] && BATT="$PSY/battery"
+[ -n "$BATT" ] || for b in $PSY/*; do [ "$(read1 "$b/type")" = Battery ] && ex "$b/capacity" && { BATT="$b"; break; }; done
 [ -n "$BATT" ] || { ex "$PSY/battery/capacity" && BATT="$PSY/battery"; }
 [ -n "$BATT" ] || for b in $PSY/*; do ex "$b/capacity" && { BATT="$b"; break; }; done
 [ -n "$BATT" ] || { log "STOP: no battery power_supply at $PSY/*/capacity."; exit 0; }
@@ -760,10 +975,11 @@ CURF="$BATT/current_now"; CURAVG=0; ex "$CURF" || { ex "$BATT/current_avg" && { 
 [ -n "$CURF" ] && log "current sensor: $CURF" || warn "no current_now/current_avg -- cannot verify HOLD; results unreliable."
 TEMPF=; for tf in "$BATT/temp" "$BATT/batt_temp" "$PSY/bms/temp"; do ex "$tf" && { TEMPF="$tf"; break; }; done
 batt_temp(){ [ -n "$TEMPF" ] || { echo 250; return; }
-  t="$(san "$(read1 "$TEMPF")")"; t="${t#-}"
-  if [ "$t" -ge 1000 ] 2>/dev/null; then t=$(( t / 100 ))
-  elif [ "$t" -le 60 ] 2>/dev/null; then t=$(( t * 10 )); fi
-  case "$t" in ''|*[!0-9]*) t=250;; esac; echo "$t"; }
+  t="$(san "$(read1 "$TEMPF")")"; _ta="${t#-}"
+  case "$_ta" in ''|*[!0-9]*) echo 250; return;; esac
+  if [ "$_ta" -ge 1000 ] 2>/dev/null; then t=$(( t / 100 ))
+  elif [ "$_ta" -le 60 ] 2>/dev/null; then t=$(( t * 10 )); fi
+  echo "$t"; }
 MAXTEMP_C=45; TMAX=$(( MAXTEMP_C * 10 ))
 [ -n "$TEMPF" ] && log "temp sensor: $TEMPF ($(batt_temp) = $(( $(batt_temp) / 10 )).$(( $(batt_temp) % 10 ))C)" || log "temp sensor: none (temp guard disabled)"
 THERMOK=0; [ -n "$TEMPF" ] && THERMOK=1
@@ -787,8 +1003,6 @@ proof_available(){
 online_f(){ for o in $PSY/*/online; do ex "$o" || continue
   d="$(basename "$(dirname "$o")")"
   case "$d" in battery|*battery*) continue;; esac
-  # adapter/pogo/dock: charger-side supplies on some Samsung tablets / docked phones. Read-only
-  # widening -- a missed name only degraded present_now to its status fallback, never broke it.
   case "$d" in usb|*usb*|ac|dc|mains|main-charger|mainchg|pc_port|wireless|smb*|*ucsi*|*chg*|*charger*|*glink*|*tcpm*|*tcpc*|*pd*|*source*|*wls*|*dcin*|*adapter*|*pogo*|*dock*) printf '%s\n' "$o";; esac; done; }
 online_now(){
   any=0
@@ -824,9 +1038,6 @@ present_now(){
   return 1
 }
 plugged(){ present_now; }
-# v7.1.5: prefer a supply the firmware actually marks ONLINE. The old usb-first order pinned the
-# charger-input node to $PSY/usb/input_current_now even on phones charging over `ac` with usb at
-# online=0 (Qualcomm/OPLUS), so every input reading for the whole run came from a dead path.
 chgin_node(){ for _d in "$PSY"/*; do
     [ -r "$_d/online" ] && [ "$(cat "$_d/online" 2>/dev/null)" = 1 ] || continue
     case "$(cat "$_d/type" 2>/dev/null)" in [Bb]attery|BMS|bms) continue;; esac
@@ -873,7 +1084,7 @@ if [ -n "$GATE_MSG" ]; then
   _gvc="$(getprop ro.product.device 2>/dev/null)"; _gvs="$(getprop ro.board.platform 2>/dev/null)"
   { printf 'schema=1\nresult=precondition\nreason=%s\ncapacity=%s\ntemp_c=%s\ndevice=%s\nsoc=%s\nscript=acc-compat\ntester_version=%s\nok=0\n' \
       "$GATE_MSG" "$CAP" "$GATE_TEMP_C" "$_gvc" "$_gvs" "$V"; } > "${ART}.tmp" 2>/dev/null
-  mv -f "${ART}.tmp" "$ART" 2>/dev/null
+  { [ -s "${ART}.tmp" ] && mv -f "${ART}.tmp" "$ART" 2>/dev/null && chmod 0644 "$ART" 2>/dev/null; } || rm -f "${ART}.tmp" 2>/dev/null
   log ""; log "===== STOPPED: precondition not met. Nothing was changed; ACC is still running. ====="
   exit 3
 fi
@@ -901,12 +1112,14 @@ done
 [ "$DJS_WAS" = 1 ] && log "  DJS scheduler paused for the test window (will be restored at the end)"
 log "ACC installed: ${ACCV:-no}"
 PRE_SUSP="$(rd $BATT/input_suspend | sed -n '1p' | pclean)"
-log "pre-test input_suspend: ${PRE_SUSP:-na}"
+PRE_ST="$(rd $BATT/status | sed -n '1p' | pclean)"
+PRE_RESUME="$(sed -n 's/^capacity=(//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null | sed -n '1p' | cut -d' ' -f3 | tr -cd '0-9')"
+log "pre-test input_suspend: ${PRE_SUSP:-na}  status: ${PRE_ST:-na}"
 DID=1
 defaults_native
 _accsw="$(grep -m1 '^chargingSwitch=' /data/adb/vr25/acc-data/config.txt 2>/dev/null | sed -e 's/^chargingSwitch=(//' -e 's/).*$//' -e 's/ *--$//')"
 if [ -n "$_accsw" ]; then
-  set -- $_accsw
+  set -f; set -- $_accsw; set +f
   while [ "$#" -ge 3 ]; do
     for _pf in $1; do ex "$_pf" && { snap_add "$_pf"; wr "$_pf" "$2"; }; done
     shift 3
@@ -939,13 +1152,13 @@ if [ -n "$CURF" ]; then
   [ "$cspread" -eq 0 ] && CUR_FROZEN=1
 fi
 ABSB="$(abs "$RAW")"
-UNIT=mA; THR=50; IDLE=10
-if [ "$ABSB" -ge 16000 ] 2>/dev/null; then UNIT=uA; THR=50000; IDLE=10000; fi
+UNIT=mA; THR=50; IDLE=10; UNIT_HW=0
+if [ "$ABSB" -ge 16000 ] 2>/dev/null; then UNIT=uA; THR=50000; IDLE=10000; UNIT_HW=1; fi
 if [ "$UNIT" = mA ]; then
   for ucf in "$BATT/constant_charge_current" "$BATT/constant_charge_current_max" $PSY/*/current_max $PSY/*/input_current_limit; do
     ex "$ucf" || continue
     uv="$(san "$(read1 "$ucf")")"
-    [ "${uv#-}" -ge 100000 ] 2>/dev/null && { UNIT=uA; THR=50000; IDLE=10000; log "  unit corrected to uA (ctrl node $ucf=$uv)"; break; }
+    [ "${uv#-}" -ge 100000 ] 2>/dev/null && { UNIT=uA; THR=50000; IDLE=10000; UNIT_HW=1; log "  unit corrected to uA (ctrl node $ucf=$uv)"; break; }
   done
 fi
 SIGN_UNSTABLE=0
@@ -964,15 +1177,15 @@ if command -v dumpsys >/dev/null 2>&1; then
 fi
 EFFST="$ST"
 case "$EFFST" in ''|Unknown|unknown) EFFST="$AST";; esac
-[ -n "$ST_UNIT" ] && case "$ST_UNIT" in uA*|microamp*) UNIT=uA; THR=50000; IDLE=10000;; mA*|milliamp*) UNIT=mA; THR=50; IDLE=10;; esac
+if [ -n "$ST_UNIT" ]; then
+  _upk="$(unit_pick "$UNIT" "${UNIT_HW:-0}" "$ST_UNIT")"
+  [ "${UNIT_HW:-0}" = 1 ] && [ "$ST_UNIT" != "$UNIT" ] \
+    && log "  ACC reports currentUnits=$ST_UNIT but the hardware says $UNIT -- keeping $UNIT (measured beats reported)"
+  UNIT="$_upk"
+fi
+case "$UNIT" in uA) THR=50000; IDLE=10000;; *) THR=50; IDLE=10;; esac
 CS="$(sgn "$RAW")"; _gt=0; [ "$ABSB" -gt "$THR" ] 2>/dev/null && _gt=1
 _lc="$(learn_chgdir "$EFFST" "$CS" "$_gt")"; CHGDIR="${_lc%% *}"; SIGN_CONF="${_lc##* }"; POL_SRC=live
-# rc13 (curtana lesson): COULOMB-PROOF the learned direction. The 6-sample sign vote above is
-# blind to WHY the sign is what it is; the fuel gauge's charge_counter is sign-convention-free.
-# If the counter ROSE >=150 uAh across the ~5s sample window while the charger is present, the
-# pack was provably FILLING, so the dominant large-sample sign IS the charging sign - physics,
-# not inference. This survives dual-path PMICs whose sign flips with the charge contract (5V
-# trickle positive / 9V parallel negative, both charging - field-verified on Redmi Note 9S).
 _cc1="$(san "$(read1 "$BATT/charge_counter")")"
 SIGN_MODE_DEP=0
 if [ -n "$_cc0" ] && [ -n "$_cc1" ] && present_now; then
@@ -989,8 +1202,6 @@ if [ -n "$ST_POL" ]; then
     POL_CONFLICT=1
     warn "polarity CONFLICT: acca --state says $ST_POL but live samples flip sign within the read window (chg-sign=$CHGDIR) -- the current sign is unreliable on this phone (oplus/MTK latch it per charge session), so a single-sample polarity can mis-read working switches as 'no effect' -> verifying BLIND (status/charge_type/voltage), which is sign-independent."
   elif [ -n "$_sp" ] && [ "$POL_SRC" = cc-physics ] && [ "$_sp" != "$CHGDIR" ]; then
-    # coulomb-proven sign for THIS session contradicts ACC's learned cache: the sign follows the
-    # charge mode on this phone. Keep the physics-proven value, never adopt the cache, and say so.
     SIGN_MODE_DEP=1
     warn "sign is MODE-DEPENDENT on this phone: the coulomb-proven charge sign this session (chg-sign=$CHGDIR) contradicts ACC's learned polarity ($ST_POL). Dual-path PMICs flip the current sign with the charge contract (5V vs 9V). Verdicts below are valid for THIS session's mode; runtime ACC arbitrates by coulomb slope, so daily behavior stays correct."
   elif [ -n "$_sp" ] && [ "$SIGN_CONF" != high ]; then
@@ -1029,6 +1240,11 @@ if [ "$_bp" = 1 ] && [ "${_bcap:-0}" -lt 95 ] 2>/dev/null && [ "$BASE_STATE" != 
   done
   if [ "$BASE_STATE" = CHARGING ]; then
     WEAK_CHARGER=0; log "  super-native OK -- native charging re-established (baseline=$BASE_STATE)."
+    # The WEAK CHARGER warning raised a moment ago is now false: it was the pre-reset baseline,
+    # not the charger. Leaving it in WARN means the end-of-run WARN_DIAG line still tells the user
+    # their charger is too weak and the verdicts may be wrong, while the artifact says
+    # weak_charger=0. Retract it here rather than shipping two answers.
+    WARN="$(printf '%s\n' "$WARN" | grep -v 'WEAK CHARGER: plugged at')"
   elif present_now && { [ "${POL_CONFLICT:-0}" = 1 ] || [ "${SS_CONFLICT:-0}" = 1 ]; }; then
     WEAK_CHARGER=1; SIGN_CONF=low
     warn "baseline still reads $BASE_STATE, but the current SIGN is unreliable on this phone (it flips per charge session) -- a 'DRAIN' here can be a flipped-sign CHARGING. NOT stopping; proceeding with BLIND verification (status/voltage). For a current-anchored result re-run Highest-accuracy (--unplug)."
@@ -1036,7 +1252,7 @@ if [ "$_bp" = 1 ] && [ "${_bcap:-0}" -lt 95 ] 2>/dev/null && [ "$BASE_STATE" != 
     warn "could NOT reach native charging (baseline=$BASE_STATE). The charger likely dropped its negotiation -- UNPLUG and RE-PLUG (try another cable/port), then run again. Stopping so the result is not built on a dead baseline."
     _snd="$(getprop ro.product.device 2>/dev/null)"
     { printf 'schema=1\nresult=precondition\nreason=could not reach native charging (baseline=%s) -- replug the charger and retry\ncapacity=%s\ndevice=%s\nscript=acc-compat\ntester_version=%s\nok=0\n' "$BASE_STATE" "${_bcap:-?}" "$_snd" "$V"; } > "${ART}.tmp" 2>/dev/null
-    mv -f "${ART}.tmp" "$ART" 2>/dev/null
+    { [ -s "${ART}.tmp" ] && mv -f "${ART}.tmp" "$ART" 2>/dev/null && chmod 0644 "$ART" 2>/dev/null; } || rm -f "${ART}.tmp" 2>/dev/null
     log ""; log "  -- read-only candidate switches (paste back; even without a live baseline we can map them) --"
     for _cd in $DDIRS; do ex "$_cd" || continue
       for _cf in $( { if [ "$HAVE_TO" = 1 ]; then timeout "$TO" find -L "$_cd" -maxdepth 4 -type f 2>/dev/null; else find -L "$_cd" -maxdepth 4 -type f 2>/dev/null; fi; } | sed -n '1,200p' ); do
@@ -1104,8 +1320,6 @@ if [ "$ACTIVE" = 1 ] && [ "$CUR_USABLE" = 0 ]; then
 fi
 [ "$ACTIVE" = 1 ] && [ "$CUR_USABLE" = 1 ] && [ "$SIGN_CONF" != high ] && warn "charge sign/unit confidence not high -> using status+charge_type+voltage as corroboration."
 
-# Live charge-state sampling during tests: is-charging / idle checks, blind-mode voltage-rise proof,
-# and the thermal gate that pauses active probing when the battery runs hot.
 is_charging(){ c="$1"; case "$c" in ''|*[!0-9-]*) echo 1; return;; esac
   m="${c#-}"; [ "$m" -gt "$THR" ] 2>/dev/null || { echo 0; return; }
   [ "$(sgn "$c")" = "$CHGDIR" ] && echo 1 || echo 0; }
@@ -1118,6 +1332,19 @@ bcharge(){
   echo 1; }
 chg_now(){ if [ "$BLINDV" = 1 ]; then bcharge; else cc="$(med_cur)"; { [ "$(is_charging "$cc")" = 1 ] || [ "$(read_st)" = Charging ]; } && echo 1 || echo 0; fi; }
 resume_desc(){ if [ "$BLINDV" = 1 ]; then printf 'status=%s %smV' "$(read_st)" "$(vmv)"; else med_cur; fi; }
+
+reset_native_verify(){
+  defaults_native
+  online_now || recover_online 20 1 >/dev/null 2>&1
+  _rnv=0
+  while [ "$_rnv" -lt 18 ]; do
+    [ "$(chg_now)" = 1 ] && return 0
+    stop_check
+    [ "$_rnv" = 8 ] && { defaults_native; recover_online 14 1 >/dev/null 2>&1; }
+    sleep 2; _rnv=$((_rnv+2))
+  done
+  [ "$(chg_now)" = 1 ]
+}
 
 gate(){
   [ "$SKIPALL" = 0 ] || return 1
@@ -1134,6 +1361,12 @@ gate(){
     log "  ! charger OFFLINE -- waiting up to 30s for re-plug..."
     gi=0; while [ "$gi" -lt 30 ]; do sleep 2; gi=$((gi+2)); plugged && break; done
     plugged || { warn "charger unplugged mid-run -- remaining live tests skipped"; SKIPALL=1; return 1; }
+  fi
+  if ! reset_native_verify; then
+    GATE_HARDFAILS=$(( ${GATE_HARDFAILS:-0} + 1 ))
+    log "  [gate] native charging did not return after a full reset (a prior switch hard-latched, #$GATE_HARDFAILS)"
+    [ "${GATE_HARDFAILS:-0}" -ge 2 ] && { warn "charging could not be restored after repeated resets -- a tested switch latches and needs a physical replug/reboot. Stopping live tests; the verdict uses the switches already verified plus ACC history. Unplug+replug once (or reboot), then re-run to test the rest."; SKIPALL=1; }
+    return 1
   fi
   if [ "$BLINDV" = 1 ]; then
     gt=0
@@ -1169,6 +1402,15 @@ gate(){
 }
 
 SAMP_N=0; SAMP_LAST=1; SAMP_FIRST=1; C1=0; CL=0; ST3=Charging; ST4=Charging
+_obsrow(){ log "$(printf '      %-9s|  %-16s|  %s' "$1" "$2" "$3")"; }
+_obs_legend(){
+  [ "${OBS_LEG:-0}" = 1 ] && return; OBS_LEG=1
+  case "$CHGDIR" in n) _ocd="NEGATIVE (positive = discharging)";; *) _ocd="POSITIVE (negative = discharging)";; esac
+  log "      how to read: on this phone charging current is $_ocd. A switch HELD if 'engaged'"
+  log "                   current goes to ~0 (or reverses) and STAYS; it did NOT hold if it stays"
+  log "                   at the native charging value. Voltage sags a little once charging stops."
+}
+_mA(){ _mv="$1"; _mn=""; case "$_mv" in -*) _mn="-"; _mv="${_mv#-}";; esac; case "$_mv" in ''|*[!0-9]*) echo 0; return;; esac; [ "${UNIT:-uA}" = mA ] && echo "${_mn}${_mv}" || echo "${_mn}$(( _mv / 1000 ))"; }
 hold_probe(){
   stop_check
   SAMP_N=0; SAMP_FIRST=1; SAMP_LAST=1; C1=0; CL=0; ST3=Charging; ST4=Charging
@@ -1242,9 +1484,6 @@ classify_held(){
   fi
   echo CUT; }
 
-# Working-switch registry + per-switch tests: each found switch is recorded here (class/ctrl/stability/label)
-# so emit_alts surfaces it directly (no label re-resolution); then route discovery, sustained leak/re-arm
-# hold (catches charge-pump fake-idle), resume verification, and the native %-limit (level) test.
 reg_add(){ _rga="$(printf '%s' "$1" | tr 'A-Z' 'a-z')"; case "$_rga" in cut-*) _rga=cut;; esac; printf '%s\t%s\t%s\t%s\n' "$_rga" "$2" "$3" "$4" >> "$REG" 2>/dev/null; }
 route_hit(){
   rh_cfg="$(printf '%s' "$3" | sed 's/ (.*$//')"
@@ -1336,10 +1575,6 @@ test_switch(){
   printf '%s' "$p" | grep -Eiq "$SUPERDENY_RE" && { log "  [danger-skip] $lbl (never written: protected node family -- fuel-gauge/bms/PD/regulator/thermal)"; return; }
   grep -qxF "$p" "$BK/dead" 2>/dev/null && { log "  [skip dead] $lbl (a prior write to this node was rejected)"; return; }
   cur="$(rd "$p" | sed -n '1p')"
-  # Case-insensitive value gate: some kernels report "Enabled"/"Disabled"/"ON" (capitalized), which
-  # the lowercase-only gate skipped as a non-switch. Compare lowercased; every write still uses the
-  # verbatim $cur/$offv, and the no-stick read-back detector rejects drivers with case-sensitive
-  # stores, so widening the gate can only ADD tested candidates, never corrupt one.
   _cvg="$(printf '%s' "$cur" | tr 'A-Z' 'a-z')"
   case "$_cvg" in ''|0|1|"0 0"|"0 1"|enabled|disabled|on|off|true|false|[0-9]|[0-9][0-9]|[0-9][0-9][0-9]|[0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9][0-9]|[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) :;; *) return;; esac
   [ -w "$p" ] || { log "  [read-only] $lbl"; return; }
@@ -1349,7 +1584,12 @@ test_switch(){
   [ "$bwi" -gt 0 ] && log "  [baseline] $lbl: waited ${bwi}s for clean charging before test"
   snap_add "$p"
   printf '%s|%s\n' "$p" "$offv" >> "$BK/tested"
-  wr "$p" "$offv" || { log "  [write-fail] $lbl"; printf '%s\n' "$p" >> "$BK/dead" 2>/dev/null; return; }
+  _obs_bc="$(med_cur)"; _obs_bv="$(vmv)"   # 7.1.7: native current + voltage, for the observation table
+  # A blacklisted node is refused by wr(), which returns 1 exactly like a genuine write failure.
+  # Reporting that as [write-fail] read as "AMPS tried to write a node it just said it would not
+  # write" (garnet report, line 69) and marked it dead, hiding the real reason. Blacklisted is not
+  # failed: wr() has already logged the refusal, so say nothing more and do not mark it dead.
+  wr "$p" "$offv" || { bl_has "$p" || { log "  [write-fail] $lbl"; printf '%s\n' "$p" >> "$BK/dead" 2>/dev/null; }; return; }
   case "$offv" in
     ''|*[!0-9]*) :;;
     *) _rbv="$(rd "$p" | sed -n '1p')"
@@ -1357,6 +1597,13 @@ test_switch(){
        ;;
   esac
   hold_probe
+  if [ "$BLINDV" = 0 ]; then
+    _obs_legend
+    log "    -- $lbl"
+    _obsrow state current voltage
+    _obsrow native "$(_mA "${_obs_bc:-0}") mA" "${_obs_bv:-?} mV  (charging)"
+    _obsrow engaged "$(_mA "$C1") -> $(_mA "$CL") mA" "$(vmv) mV"
+  fi
   held=0; [ "$SAMP_LAST" = 0 ] && [ "$SAMP_N" -lt 3 ] && held=1
   if [ "$held" = 1 ]; then
     k0="$(classify_held)"
@@ -1375,7 +1622,8 @@ test_switch(){
       log "  $lbl -> off=$offv $det [$k0] [$STAB -- same node already graded; short $(( _gci*5 ))s re-confirm]"
     else
     lcap0="$(san "$(read1 "$BATT/capacity")")"; lcc0="$(san "$(read1 "$BATT/charge_counter")")"; rwi=0; rcons=0; rearmed=0; _rdl=0
-    while [ "$rwi" -lt 4 ]; do
+    _rwmax=4; { [ "${MODE:-quick}" = complete ] || [ "${CHG_FAMILY:-}" = oplus ]; } && _rwmax=8
+    while [ "$rwi" -lt "$_rwmax" ]; do
       over && { _rdl=1; break; }; stop_check; sleep 6; rwi=$((rwi+1))
       if [ "$(chg_now)" = 1 ]; then rcons=$((rcons+1)); [ "$rcons" -ge 2 ] && { rearmed=1; break; }; else rcons=0; fi
       lcapn="$(san "$(read1 "$BATT/capacity")")"; [ "${lcapn:-0}" -gt "${lcap0:-0}" ] 2>/dev/null && { rearmed=1; break; }
@@ -1385,7 +1633,7 @@ test_switch(){
       STAB=inconclusive
       log "  $lbl -> off=$offv $det [$k0] INCONCLUSIVE -- held so far but the run deadline cut the re-arm grade; re-run to confirm (not pinned)"
     elif [ "$rearmed" = 0 ]; then
-      STAB=holds-alone; [ "$rwi" -ge 4 ] && LONGOK="$LONGOK|$lbl"
+      STAB=holds-alone; [ "$rwi" -ge "$_rwmax" ] && LONGOK="$LONGOK|$lbl"
       log "  $lbl -> off=$offv $det [$k0] HELD-ALONE (+$(( rwi*6 ))s passive, no re-arm)"
     else
       dcap0="$(san "$(read1 "$BATT/capacity")")"; dcc0="$(san "$(read1 "$BATT/charge_counter")")"; di=0; leak=0; _flat=0; _ldl=0
@@ -1474,7 +1722,7 @@ test_level(){
   wr "$stop" "$pstop"; rb="$(rd "$stop" | sed -n '1p')"
   ok=0
   if [ "$rb" = "$pstop" ]; then ok=1
-  else case "$rb" in ''|*[!0-9]*) ok=0;; *) [ "$rb" -gt 0 ] 2>/dev/null && [ "$rb" -lt 100 ] 2>/dev/null && [ "$rb" != "$o" ] && ok=1;; esac; fi
+  else case "$rb" in ''|*[!0-9]*) ok=0;; *) [ "$rb" -gt 0 ] 2>/dev/null && [ "$rb" -lt 100 ] 2>/dev/null && [ "$rb" != "$o" ] && { ok=1; pstop="$rb"; };; esac; fi
   if [ "$ok" = 0 ]; then
     pstop2=$(( pstop-12 )); [ "$pstop2" -le "$pstart" ] 2>/dev/null && pstop2=$(( pstart+2 ))
     if [ "$pstop2" -gt 1 ] 2>/dev/null && [ "$pstop2" -lt 100 ] 2>/dev/null && [ "$pstop2" != "$pstop" ]; then
@@ -1493,8 +1741,9 @@ test_level(){
     [ "$SAMP_LAST" = 1 ] && { sleep "$SETTLE"; hold_probe; }
     _lvl_blind=0; [ "$BLINDV" = 1 ] && _lvl_blind=1
     _lvl_rearm=0; _li=0
+    _limax=4; { [ "${MODE:-quick}" = complete ] || [ "${CHG_FAMILY:-}" = oplus ]; } && _limax=8
     if [ "$SAMP_LAST" = 0 ] && [ "$SAMP_N" -lt 3 ] && [ "$_lvl_blind" = 0 ]; then
-      while [ "$_li" -lt 4 ]; do sleep 6; hold_probe; [ "$SAMP_LAST" = 1 ] && { _lvl_rearm=1; break; }; _li=$((_li+1)); done
+      while [ "$_li" -lt "$_limax" ]; do sleep 6; hold_probe; [ "$SAMP_LAST" = 1 ] && { _lvl_rearm=1; break; }; _li=$((_li+1)); done
     fi
     if [ "$(native_verdict "$SAMP_LAST" "$SAMP_N" "$_lvl_blind" "$_lvl_rearm")" = verified ]; then
       log "    engage stop=${pstop}% at SOC ${CAP}% -> last=$CL ENFORCED + held +$(( _li*6 ))s [native limit VERIFIED]"
@@ -1524,8 +1773,6 @@ test_level(){
   wr "$stop" "$o"; [ "$hasstart" = 1 ] && wr "$start" "$os"
   if [ "$lvl_enf" = 1 ]; then resume_check "$lbl"; else sleep 1; fi; }
 
-# Discovery engine: walk known + expanded candidate paths across vendors (Qualcomm/MTK/Exynos/Pixel/OEM),
-# test each node, and feed every working switch into the registry. The bulk of cross-device coverage lives here.
 emit_known(){
 [ "${UNKNOWN:-0}" = 1 ] && return
 cat <<'EOF'
@@ -1994,8 +2241,10 @@ else
 fi
 
 log ""
+EARLY_DONE=0
+if have_clean_winner; then EARLY_DONE=1; log ""; log "==== EARLY-EXIT (7.1.7): a clean non-latching switch is already verified -- skipping obscure-node discovery (L6g/6c/6d/6e). All known switches + native limits were tested. Re-run with --unplug (Highest accuracy) or --unknown for the exhaustive sweep. ===="; fi
 log "==== LAYER 6g - name-agnostic shape discovery (Deep: deny-clean bool switches the name-DB missed) ===="
-if [ "$ACTIVE" = 1 ] && [ "${MODE:-quick}" = complete ]; then
+if [ "$ACTIVE" = 1 ] && [ "${MODE:-quick}" = complete ] && [ "${EARLY_DONE:-0}" = 0 ]; then
   _sh_n=0; _shexam=0; SHAPE_SCAN_CAP=250
   for _shd in $DDIRS_ALL; do
     ex "$_shd" || continue
@@ -2035,7 +2284,7 @@ if [ -s "$SCHG" ]; then
     [ -s "$SUNP" ] && diff_pairs "$SCHG" "$SUNP" | sed 's/^/4|/'; } 2>/dev/null | sort -t'|' -k1,1nr | awk -F'|' '!seen[$2]++' > "$GENC"
 fi
 tested_gen=0
-if [ "$ACTIVE" = 1 ] && q_more && [ -s "$GENC" ]; then
+if [ "$ACTIVE" = 1 ] && q_more && [ -s "$GENC" ] && [ "${EARLY_DONE:-0}" = 0 ]; then
   while IFS='|' read -r score path von voff; do
     over && { log "  [deadline] stop generated tests"; break; }
     [ "$SKIPALL" = 1 ] && break
@@ -2082,7 +2331,7 @@ if [ -s "$GENC" ]; then
 fi
 cn=0; [ -s "$COMBO" ] && cn="$(wc -l < "$COMBO" | tr -d ' ')"
 GEN_SINGLE_HIT=0; case "|$BYPASS|$CUT|" in *"[GEN:"*) GEN_SINGLE_HIT=1;; esac
-if [ "$ACTIVE" = 1 ] && q_more && [ "$SKIPALL" = 0 ] && [ "$cn" -ge 2 ] 2>/dev/null && [ "$cn" -le 6 ] 2>/dev/null && [ "$GEN_SINGLE_HIT" = 0 ] && ! over; then
+if [ "$ACTIVE" = 1 ] && q_more && [ "$SKIPALL" = 0 ] && [ "$cn" -ge 2 ] 2>/dev/null && [ "$cn" -le 6 ] 2>/dev/null && [ "$GEN_SINGLE_HIT" = 0 ] && ! over && [ "${EARLY_DONE:-0}" = 0 ]; then
   if gate; then
     while IFS="	" read -r p von voff; do snap_add "$p"; done < "$COMBO"
     while IFS="	" read -r p von voff; do wr "$p" "$voff"; done < "$COMBO"
@@ -2119,7 +2368,7 @@ else
 fi
 
 if [ "$ACTIVE" = 1 ] && [ "${MODE:-quick}" = complete ] && [ "$SKIPALL" = 0 ] && ! over \
-   && [ -z "${BYPASS_HELD:-}" ] && [ "${cn:-0}" -ge 3 ] && [ "${cheld:-0}" != 1 ]; then
+   && [ -z "${BYPASS_HELD:-}" ] && [ "${cn:-0}" -ge 3 ] && [ "${cheld:-0}" != 1 ] && [ "${EARLY_DONE:-0}" = 0 ]; then
   log ""
   log "  -- LAYER 6d.2 widened pair-sweep (firmware-observed nodes tested in 2-pairs) --"
   if gate; then
@@ -2152,7 +2401,7 @@ if [ "$ACTIVE" = 1 ] && [ "${MODE:-quick}" = complete ] && [ "$SKIPALL" = 0 ] &&
   fi
 fi
 
-if [ "$ACTIVE" = 1 ] && [ -z "$TEACH_P" ] && [ "${MODE:-quick}" = complete ] && ! over && gate; then
+if [ "$ACTIVE" = 1 ] && [ "${EARLY_DONE:-0}" = 0 ] && [ -z "$TEACH_P" ] && [ "${MODE:-quick}" = complete ] && ! over && gate; then
   log ""
   log "  (no switch held yet -- trying a name-independent inducer to generate the firmware frame)"
   for _ip in "$BATT/constant_charge_current_max" "$PSY/main/constant_charge_current_max" "$PSY/usb/current_max" "$PSY/main/current_max"; do
@@ -2165,7 +2414,7 @@ if [ "$ACTIVE" = 1 ] && [ -z "$TEACH_P" ] && [ "${MODE:-quick}" = complete ] && 
 fi
 log ""
 log "==== LAYER 6e - FIRMWARE TEACHING (induce a known cut, learn every co-moving node, test+verify each as its own switch) ===="
-if [ "$ACTIVE" = 1 ] && q_more && [ "$SKIPALL" = 0 ] && [ -n "$TEACH_P" ] && ex "$TEACH_P" && ! over && gate; then
+if [ "$ACTIVE" = 1 ] && [ "${EARLY_DONE:-0}" = 0 ] && q_more && [ "$SKIPALL" = 0 ] && [ -n "$TEACH_P" ] && ex "$TEACH_P" && ! over && gate; then
   log "  teacher = $TEACH_P (on=$TEACH_ON off=$TEACH_OFF) -- inducing a real charge-stop, then watching every node the firmware moves."
   state_dump "$BK/teach_chg.tsv"
   snap_add "$TEACH_P"; wr "$TEACH_P" "$TEACH_OFF"
@@ -2263,9 +2512,13 @@ if command -v dumpsys >/dev/null 2>&1; then
 fi
 if command -v logcat >/dev/null 2>&1; then
   log "  logcat (battery/charge events, last 20):"
-  { if [ "$HAVE_TO" = 1 ]; then timeout "$TO" logcat -d -t 400 2>/dev/null; else logcat -d -t 400 2>/dev/null; fi; } | grep -iE 'charg|battery|BatteryService|healthd|power_supply' | tail -20 | cut -c1-160 | pclean2 | while read -r l; do log "    $l"; done
+  # Drop our OWN stdout. AccA runs the scan through a shell that tees to logcat as SHELLOUT, so
+  # every line we print comes straight back at us and the "last 20" filled with AMPS quoting
+  # itself -- 18 of 20 lines in the garnet report. Also drop the window-focus spam that battery
+  # apps emit, which matches 'battery' by package name and never says anything about charging.
+  { if [ "$HAVE_TO" = 1 ]; then timeout "$TO" logcat -d -t 400 2>/dev/null; else logcat -d -t 400 2>/dev/null; fi; } | grep -iE 'charg|battery|BatteryService|healthd|power_supply' | grep -vE 'SHELLOUT|input_focus|NotificationListener|auditd' | tail -20 | cut -c1-160 | pclean2 | while read -r l; do log "    $l"; done
   log "  logcat events buffer (battery, last 10):"
-  { if [ "$HAVE_TO" = 1 ]; then timeout "$TO" logcat -d -b events -t 200 2>/dev/null; else logcat -d -b events -t 200 2>/dev/null; fi; } | grep -iE 'battery|power|charg' | tail -10 | cut -c1-160 | pclean2 | while read -r l; do log "    $l"; done
+  { if [ "$HAVE_TO" = 1 ]; then timeout "$TO" logcat -d -b events -t 200 2>/dev/null; else logcat -d -b events -t 200 2>/dev/null; fi; } | grep -iE 'battery|power|charg' | grep -vE 'SHELLOUT|input_focus|NotificationListener|auditd' | tail -10 | cut -c1-160 | pclean2 | while read -r l; do log "    $l"; done
 fi
 for al in /dev/.vr25/acc/accd-*.log; do
   ex "$al" || continue
@@ -2356,8 +2609,6 @@ log "---------------------------------------------------------------------"
 [ -n "$BUILT" ] && { log ""; log "*** BUILT COMBO SWITCH(ES) (firmware-taught nodes that only hold TOGETHER, minimized + verified):"; printf '%s\n' "$BUILT" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "   $l"; done; }
 [ -n "$OBSERVED_ONLY" ] && { log ""; log "*** UNKNOWN switch-like candidates (firmware moved them, or they look switch-like, but the NAME is not in our DB -> READ-only, NEVER written). PLEASE PASTE THESE BACK TO US so we can verify + add the real ones to the DB for your phone: ***"; printf '%s\n' "$OBSERVED_ONLY" | tr '|' '\n' | sed '/^$/d' | while read -r l; do log "   ? $l"; done; }
 [ -n "$ADDLINES" ] && { log ""; log "==== READY-TO-ADD ctrl-files.sh lines (verified <path> <on> <off>) ===="; printf '%s\n' "$ADDLINES" | sed '/^$/d' | while read -r l; do log "  $l"; done; }
-# Selection + artifact: rank working switches (native level > verified bypass > cut > ... ), pick the safest
-# verified one, and emit the machine artifact ($ART) that AccA reads to offer Apply & Lock.
 pick1(){ printf '%s' "$1" | sed 's/^|//' | cut -d'|' -f1; }
 pick_best(){ pbf="$BK/pickbest"; printf '%s\n' "$1" | tr '|' '\n' | sed '/^$/d' > "$pbf" 2>/dev/null
   pb_first=; pb_pick=
@@ -2369,14 +2620,19 @@ pick_best(){ pbf="$BK/pickbest"; printf '%s\n' "$1" | tr '|' '\n' | sed '/^$/d' 
   done < "$pbf"
   printf '%s' "${pb_pick:-$pb_first}"; }
 is_clean(){ case "|$STUCKS|" in *"|$1|"*) return 1;; esac
-  case "$RESUMES" in *"$1=after-reset"*|*"$1=SLOW"*|*"$1=STUCK"*|*"$1=UNKNOWN"*) return 1;; esac
+  # ANCHOR the RESUMES lookup with the leading '|' the field is built with. STUCKS one line up is
+  # anchored; this was not, so a longer label ending in the queried one inherited its verdict:
+  # RESUMES='|battery_charge_control_limit=6=SLOW' made is_clean('charge_control_limit=6') return
+  # unclean, and the shorter switch was discarded for a defect belonging to a different node.
+  case "$RESUMES" in *"|$1=after-reset"*|*"|$1=after-rekick"*|*"|$1=SLOW"*|*"|$1=STUCK"*|*"|$1=UNKNOWN"*) return 1;; esac
   return 0; }
 pick_clean(){ pcf="$BK/pickclean"; printf '%s\n' "$1" | tr '|' '\n' | sed '/^$/d' > "$pcf" 2>/dev/null
   pc_pick=
   while IFS= read -r pc_c; do [ -n "$pc_c" ] || continue; is_clean "$pc_c" && { pc_pick="$pc_c"; break; }; done < "$pcf"
   printf '%s' "$pc_pick"; }
 is_usable(){ case "|$STUCKS|" in *"|$1|"*) return 1;; esac
-  case "$RESUMES" in *"$1=STUCK"*) return 1;; esac
+  # Same anchoring fix as is_clean above: STUCKS anchored, RESUMES was not.
+  case "$RESUMES" in *"|$1=STUCK"*) return 1;; esac
   return 0; }
 pick_usable(){ puf="$BK/pickusable"; printf '%s\n' "$1" | tr '|' '\n' | sed '/^$/d' > "$puf" 2>/dev/null
   pu_pick=
@@ -2414,7 +2670,9 @@ label_path(){ lpp="$1"
   esac
   printf '%s' "${lpp%%=*}"; }
 cfg_lookup(){ clp="$(label_path "$1")"; [ -n "$clp" ] || return
-  printf '%s\n' "$ADDLINES" | sed 's/^[ 	]*//' | grep -F "$clp " | sed -n '1p' | sed 's/ (.*$//'; }
+  _clr="$(printf '%s\n' "$ADDLINES" | sed 's/^[ 	]*//' | grep -F "$clp " | sed -n '1p' | sed 's/ (.*$//')"
+  [ -n "$_clr" ] || { _clb="${clp##* }"; _clb="${_clb##*/}"; [ -n "$_clb" ] && _clr="$(printf '%s\n' "$ADDLINES" | sed 's/^[ 	]*//' | grep -E "/${_clb}( |$)" | sed -n '1p' | sed 's/ (.*$//')"; }
+  printf '%s' "$_clr"; }
 
 acc_current(){
   _accsw="$(grep -m1 '^chargingSwitch=' /data/adb/vr25/acc-data/config.txt 2>/dev/null | sed -e 's/^chargingSwitch=(//' -e 's/).*$//' -e 's/  *--$//')"
@@ -2438,7 +2696,7 @@ emit_alts(){
     case "$_seen" in *"|$_ctrl|"*) continue;; esac
     _seen="$_seen$_ctrl|"
     _an=$((_an+1))
-    _res=ok; case "$RESUMES" in *"|$_lbl=after-reset"*) _res=after-reset;; *"|$_lbl=SLOW"*) _res=slow;; *"|$_lbl=STUCK"*) _res=stuck;; *"|$_lbl=UNKNOWN"*) _res=unknown;; esac
+    _res=ok; case "$RESUMES" in *"|$_lbl=after-reset"*) _res=after-reset;; *"|$_lbl=after-rekick"*) _res=after-rekick;; *"|$_lbl=SLOW"*) _res=slow;; *"|$_lbl=STUCK"*) _res=stuck;; *"|$_lbl=UNKNOWN"*) _res=unknown;; esac
     _lat=no; case "|$STUCKS|" in *"|$_lbl|"*) _lat=yes;; esac; [ "$_stab" = leaky ] && _lat=yes
     case "$_cls" in
       native-accepts) _cf=accepts;;
@@ -2447,6 +2705,7 @@ emit_alts(){
            *) _lo=0; case "|${LONGOK:-}|" in *"|$_lbl|"*) _lo=1;; esac; _cf="$(pump_conf verified "$_cls" "${DRVS:-}" "$_lo")";;
          esac;;
     esac
+    _cf="$(conf_resume "$_cf" "$_cls" "$_res")"
     printf 'alt%s_switch=%s\nalt%s_class=%s\nalt%s_conf=%s\nalt%s_stability=%s\nalt%s_resume=%s\nalt%s_latch=%s\nalt%s_note=%s\n' \
       "$_an" "$_ctrl" "$_an" "$_cls" "$_an" "$_cf" "$_an" "$_stab" "$_an" "$_res" "$_an" "$_lat" "$_an" "$(note_for "$_cls")"
   done < "$REG"
@@ -2467,12 +2726,16 @@ compute_reco(){
 RECO=none; RECO_LATCH=0; RECO_LBL=; RECO_CLS=
 rb="$(pick_usable "$BYPASS")"; rc="$(pick_usable "$CUT")"; rdr="$(pick_usable "$DRAIN")"; rt="$(pick_usable "$THROTTLE")"
 rbh="$(pick_usable "${BYPASS_HELD:-}")"
+# Argument ORDER here is not preference order: reco_pick pairs each slot with a fixed class name
+# ("bypass:$4" is evaluated before "cut:$3"), so bypass already outranks cut. Swapping $rb/$rc to
+# "fix" the ranking only breaks that pairing -- it hands the cut to the bypass slot and the A3
+# then reported input_suspend, a CUT, as "(BYPASS)". Leave the order alone.
 _reco="$(reco_pick "$le_enf" "$rbh" "$rc" "$rb" "$rdr" "" "$rt")"
 if [ -n "$_reco" ]; then
   RECO_LBL="$(_lblof "$_reco")"
   RECO_CLS="$(_clsof "$_reco")"
   case "$RECO_CLS" in
-    native-level) [ "${LVL_BY_ACC:-0}" = 1 ] && RECO="$RECO_LBL (native level limit, confirmed in use by ACC)" || RECO="$RECO_LBL (native level limit, verified)";;
+    native-level) [ "${LVL_BY_ACC:-0}" = 1 ] && RECO="$RECO_LBL (native level limit, confirmed in use by ACC)" || RECO="$RECO_LBL (native level limit)";;
     cut)          RECO="$RECO_LBL (CUT)";;
     bypass)       RECO="$RECO_LBL (BYPASS)";;
     drain)        RECO="$RECO_LBL (CUT, discharges while plugged)";;
@@ -2491,8 +2754,8 @@ if [ -z "$RECO_LBL" ]; then
   fi
 fi
 if [ "$RECO" = none ] && [ -n "$ACC_IDLE1$ACC_DRAIN1" ]; then
-  if [ -n "$ACC_IDLE1" ]; then ACC_FALLBACK="$ACC_IDLE1"; RECO="${ACC_IDLE1%% *} (ACC-verified IDLE from ACC's own history -- tester found no hold this run)"; RECO_LBL="${ACC_IDLE1%% *}"
-  else ACC_FALLBACK="$ACC_DRAIN1"; RECO="${ACC_DRAIN1%% *} (ACC-verified drain from ACC's own history -- tester found no hold this run)"; RECO_LBL="${ACC_DRAIN1%% *}"; fi
+  if [ -n "$ACC_IDLE1" ]; then ACC_FALLBACK="$ACC_IDLE1"; RECO="${ACC_IDLE1%% *} (ACC-verified IDLE from ACC's own history -- tester found no hold this run)"; RECO_LBL="${ACC_IDLE1%% *}"; RECO_CLS=bypass
+  else ACC_FALLBACK="$ACC_DRAIN1"; RECO="${ACC_DRAIN1%% *} (ACC-verified drain from ACC's own history -- tester found no hold this run)"; RECO_LBL="${ACC_DRAIN1%% *}"; RECO_CLS=drain; fi
 fi
 ACC_DEFER=0; _real_found=; [ -n "${BYPASS}${CUT}${DRAIN}${le_enf}" ] && _real_found=1
 _dacc="$(defer_to_acc "$_real_found" "${ACC_SW_NOW:-}" "${STUCKS:-}" "${REASSERT:-}")"
@@ -2505,12 +2768,24 @@ SUGGEST=
 if [ "${ACC_DEFER:-0}" = 1 ] && [ -n "${ACC_SW_NOW_FULL:-}" ]; then SUGGEST="$ACC_SW_NOW_FULL"
 elif [ -n "$RECO_LBL" ]; then SUGGEST="$(cfg_lookup "$RECO_LBL")"; fi
 if [ -z "$SUGGEST" ]; then
+  # This fallback can land on a DIFFERENT switch than RECO_LBL -- e.g. the level node accepted
+  # values but enforcement was never observed, so cfg_lookup finds no line for it and a DRAIN
+  # group gets picked instead. class/conf/resume/stability/latch are ALL derived from RECO_LBL
+  # further down, so it has to follow the switch actually being pinned or the artifact describes
+  # one node while charging_switch= names another (measured on a Pixel 6a: class=level
+  # conf=verified resume=na written for a current-cut group whose real resume was SLOW ~24s).
+  # CFG_<class> is set from the FIRST hit of that class and pick1 returns that same first label.
+  _sg_was="$RECO_LBL"
   if [ -n "$le_enf" ] && [ -n "$CFG_LEVEL" ]; then SUGGEST="$CFG_LEVEL"
-  elif [ -n "${BYPASS_HELD:-}" ] && [ -n "$CFG_BYPASS" ]; then SUGGEST="$CFG_BYPASS"
-  elif [ -n "$CUT" ] && [ -n "$CFG_CUT" ]; then SUGGEST="$CFG_CUT"
-  elif [ -n "$BYPASS" ] && [ -n "$CFG_BYPASS" ]; then SUGGEST="$CFG_BYPASS"
-  elif [ -n "$DRAIN" ] && [ -n "$CFG_DRAIN" ]; then SUGGEST="$CFG_DRAIN"
+  elif [ -n "${BYPASS_HELD:-}" ] && [ -n "$CFG_BYPASS" ]; then SUGGEST="$CFG_BYPASS"; RECO_LBL="$(pick1 "$BYPASS")"; RECO_CLS=bypass
+  elif [ -n "$BYPASS" ] && [ -n "$CFG_BYPASS" ]; then SUGGEST="$CFG_BYPASS"; RECO_LBL="$(pick1 "$BYPASS")"; RECO_CLS=bypass
+  elif [ -n "$CUT" ] && [ -n "$CFG_CUT" ]; then SUGGEST="$CFG_CUT"; RECO_LBL="$(pick1 "$CUT")"; RECO_CLS=cut
+  elif [ -n "$DRAIN" ] && [ -n "$CFG_DRAIN" ]; then SUGGEST="$CFG_DRAIN"; RECO_LBL="$(pick1 "$DRAIN")"; RECO_CLS=drain
   elif [ -n "$ACC_FALLBACK" ]; then SUGGEST="$ACC_FALLBACK"
+  fi
+  if [ -n "$RECO_LBL" ] && [ "$RECO_LBL" != "$_sg_was" ]; then
+    FS_DEMOTED=1
+    RECO="$RECO_LBL ($RECO_CLS -- picked over '$_sg_was', which could not be turned into a pinnable config line)"
   fi
 fi
 }
@@ -2520,7 +2795,7 @@ while [ "$_fsr" -lt 2 ] && [ -n "$RECO_LBL" ] && [ "$RECO_LATCH" = 0 ]; do
   case "$RECO_CLS" in native-level|cut|bypass|drain) ;; *) break;; esac
   _fs_sug="${SUGGEST%%" ("*}"
   if finalist_stress "$RECO_LBL" "$_fs_sug" "$RECO_CLS"; then break; fi
-  _fsr=$(( _fsr + 1 ))
+  _fsr=$(( _fsr + 1 )); FS_DEMOTED=1
   compute_reco
 done
 
@@ -2533,7 +2808,7 @@ vmax="$(rd "$BATT/uevent" | sed -n 's/^POWER_SUPPLY_VOLTAGE_MAX=//p' | sed -n '1
 log "  current reporting: $UNIT, charging reads $([ "$CHGDIR" = p ] && echo POSITIVE || echo NEGATIVE) (confidence $SIGN_CONF)$([ "$CUR_FROZEN" = 1 ] && echo "  -- SENSOR FROZEN at $RAW; proof done BLIND via status/charge_type/voltage")"
 [ -n "$VOLTF" ] && log "  voltage: $(vmv) mV now (baseline V0=${V0}mV, noise +/-${VNOISE}mV, blind cut-threshold ${VDROP}mV)"
 log "  verification method: $([ "$BLINDV" = 1 ] && echo "BLIND (charging-state + charge_type + voltage)" || echo "current delta (sensor live)")"
-log "  battery now: $(rd $BATT/capacity | sed -n '1p' | pclean)% (started ${CAP}%)  $(( $(batt_temp) / 10 )).$(( $(batt_temp) % 10 ))C  status=$(read_st)"
+log "  battery now: $(rd $BATT/capacity | sed -n '1p' | pclean)% (started ${CAP}%)  $(( $(batt_temp) / 10 )).$(( $(batt_temp) % 10 ))C  status=$(read_st) (this instant; may read mid re-arm during restore)"
 log "  control classes found on this phone:"
 log "    native %-limit : $([ -n "$CFG_LEVEL" ] && echo "YES ($CFG_LEVEL)" || { [ -n "$LEVELOK" ] && echo "accepts values (enforcement unproven this run)" || echo no; })"
 log "    bypass (idle)  : $([ -n "$BYPASS" ] && echo "YES -- true battery idle, lowest wear" || echo "not proven")"
@@ -2550,10 +2825,11 @@ if [ -n "$SUGGEST" ]; then
   log ""
   log "==== SUGGESTED ACC SETUP (tested on THIS phone -- copy-paste) ===="
   log "  acc -s charging_switch=\"$SUGGEST\""
+  case "$SUGGEST" in *" pcap") log "  (the literal word 'pcap' here is a percent-cap placeholder tied to your pause_capacity -- leave it as-is; ACC fills in the number.)";; esac
   log "  acc -s pause_capacity=75 resume_capacity=70"
   log "  acc -s cooldown_temp=45 max_temp=50 resume_temp=40"
   [ -n "$BYPASS" ] && log "  acc -s prioritize_batt_idle_mode=true   # this phone supports bypass (battery idle)"
-  case "$SUGGEST" in *soc:google,charger*) log "  note: on this Pixel family ACC 6.5.1+ drives the stop/start pair itself and verifies the hold against the fuel gauge at boot -- expect 'Draining to N%' while it lowers to the limit";; esac
+  case "$SUGGEST" in *google,charger*) log "  note: on this Pixel family ACC 6.5.1+ drives the stop/start pair itself and verifies the hold against the fuel gauge at boot -- expect 'Draining to N%' while it lowers to the limit";; esac
   sugbase="${SUGGEST%% *}"; sugbase="${sugbase##*/}"
   log "  (this pins ACC to the one verified switch -- it will not auto-shift to a broken one)"
   latchw=0; [ "$RECO_LATCH" = 1 ] && latchw=1
@@ -2587,17 +2863,11 @@ else
   log "  (ACC not installed -- install it and re-run to cross-validate against ACC's own detection history.)"
 fi
 
-# ---- re-kick / re-negotiate detection: which resume mechanism does THIS phone have? ----
-# The trigger nodes are write-only, so LAYER 6's value-discovery never lists them -- probe by name.
-# Three real families across tested phones: qcom-smb5 (apsd_rerun/rerun_aicl/dp_dm), MediaTek
-# (en_power_path), and new-Qualcomm glink/UCSI which self-negotiate PD in firmware with NO sysfs
-# kick at all (if fast charge drops there, only a physical replug or reboot resumes it).
 REKICK=no; REKICK_KIND=; REKICK_NODES=
 for _rk in "$PSY/usb/apsd_rerun" "$PSY/battery/apsd_rerun" /sys/class/qcom-battery/apsd_rerun \
            "$BATT/rerun_aicl" "$PSY/usb/rerun_aicl" /sys/class/qcom-battery/rerun_aicl; do
   [ -w "$_rk" ] && { REKICK=yes; REKICK_KIND=qcom-smb5; REKICK_NODES="$REKICK_NODES ${_rk##*/}"; }
 done
-# dp_dm is an extra Qualcomm re-detect trigger -- REPORT it, but never auto-write it (opcode-specific).
 for _rk in "$PSY/battery/dp_dm" "$PSY/usb/dp_dm"; do [ -w "$_rk" ] && REKICK_NODES="$REKICK_NODES dp_dm"; done
 if [ "$REKICK" = no ] && [ -w /proc/mtk_battery_cmd/en_power_path ]; then REKICK=yes; REKICK_KIND=mtk; REKICK_NODES="en_power_path"; fi
 if [ "$REKICK" = no ]; then
@@ -2614,7 +2884,7 @@ case $REKICK in
 esac
 
 log ""
-log "==== DEEP-TEST LAYER RECAP (each layer ran + verified) ===="
+log "==== LAYER RECAP ($_scanmode scan -- what ran) ===="
 log "  L0-3 setup/baseline      : OK ($([ "$BLINDV" = 1 ] && echo "BLIND verify: status/charge_type/voltage" || echo "current-delta verify"))"
 log "  L4/4b known + groups     : tested (hits routed above)"
 log "  L5  native level-limits  : $([ -n "$LEVELOK" ] && echo "present / accepts values" || echo "none")"
@@ -2629,6 +2899,8 @@ log "  fast-charge re-kick      : $REKICK_MSG"
 log ""
 log "=====SUMMARY====="
 log "AMPS v$V (Adaptive Multi-device Probe & Selector)"
+log "SCAN_MODE=$_scanmode"
+log "DATE=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)"
 log "DEVICE=${DB_BRAND}_${DB_DEV}"
 log "DEVICE_SPOOFED=$SPOOF"
 if [ "$SPOOF" = 1 ]; then
@@ -2689,8 +2961,16 @@ if [ "${MODE:-quick}" = complete ]; then
     esac
   done
   if [ -n "$LEAKY$REASSERT$THROTTLE" ]; then
+    # A node that verified into BYPASS/LEVELOK/CUT/DRAIN must not ALSO be listed as risky. On an
+    # A3 run charge_control_limit=6 printed as "+ also works" and "! risky" four lines apart --
+    # opposite advice for one node, which makes the whole list untrustworthy. The working
+    # classification wins: it was verified to hold, whereas the risky lists are earlier
+    # observations that the verify step superseded.
+    _wk="$BYPASS|$LEVELOK|$CUT|$DRAIN"
     printf '%s\n' "$LEAKY|$REASSERT|$THROTTLE" | tr '|' '\n' | sed '/^$/d' | awk '!s[$0]++' | while read -r _sl; do
-      [ -n "$_sl" ] && log "  ! risky         $_sl"
+      [ -n "$_sl" ] || continue
+      case "|$_wk|" in *"|$_sl|"*) continue;; esac
+      log "  ! risky         $_sl"
     done
     log "    (! = re-arms EVEN when re-applied each poll, or only throttles -- can overcharge; pick only if you accept it)"
   fi
@@ -2707,6 +2987,10 @@ case "$RECO" in
   *CUT*) acls=cut;;
   *throttle*) acls=throttle;;
 esac
+case "${RECO_CLS:-}" in
+  native-level) acls=level;;
+  bypass|cut|drain|throttle) acls="$RECO_CLS";;
+esac
 _pnote="$(path_note "$acls")"; [ -n "$_pnote" ] && { log ""; log "  NOTE (charge path): $_pnote"; }
 case "$RECO" in
   none) aconf=none;; *LATCHES*) aconf=latch-needs-rearm;; *"accepts values"*) aconf=unconfirmed;; *history*|*ACC-confirmed*) aconf=from-ACC-history;; *) aconf=verified;;
@@ -2719,12 +3003,14 @@ _advc="$(getprop ro.product.device 2>/dev/null)"; [ -n "$_advc" ] || _advc="$(ge
 _advs="$(getprop ro.board.platform 2>/dev/null)"; [ -n "$_advs" ] || _advs="$(getprop ro.hardware 2>/dev/null)"
 RESUME_OK=na
 [ -n "${RECO_LBL:-}" ] && case "$RESUMES" in
-  *"|$RECO_LBL=OK"*)          RESUME_OK=ok;;
-  *"|$RECO_LBL=after-reset"*) RESUME_OK=after-reset;;
-  *"|$RECO_LBL=SLOW"*)        RESUME_OK=slow;;
-  *"|$RECO_LBL=STUCK"*)       RESUME_OK=stuck;;
+  *"|$RECO_LBL=OK"*)           RESUME_OK=ok;;
+  *"|$RECO_LBL=after-reset"*)  RESUME_OK=after-reset;;
+  *"|$RECO_LBL=after-rekick"*) RESUME_OK=after-rekick;;
+  *"|$RECO_LBL=SLOW"*)         RESUME_OK=slow;;
+  *"|$RECO_LBL=STUCK"*)        RESUME_OK=stuck;;
+  *"|$RECO_LBL=UNKNOWN"*)      RESUME_OK=unknown;;
 esac
-case "$RESUME_OK" in after-reset|slow|stuck) [ "$aconf" = verified ] && aconf=needs-test;; esac
+aconf="$(conf_resume "$aconf" "$acls" "$RESUME_OK")"
 REARM_DONE=no; printf '%s' "${SUGGEST:-}" | grep -Eq "$REARM_RE" && REARM_DONE=yes
 ACCCUR="$(acc_current)"; ALTS="$(emit_alts)"
 _recstab="$(awk -F'\t' -v l="${RECO_LBL:-}" '$1==l{v=$2} END{print v}' "$BK/stab" 2>/dev/null)"; [ -n "$_recstab" ] || _recstab=holds-alone
@@ -2748,23 +3034,9 @@ else
 fi
 _csr(){ cat "$1" 2>/dev/null | sed -n '1p'; }
 _csn(){ _v=$(_csr "$1"); _v=${_v#-}; case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$_v" -gt 100000 ] && echo $((_v/1000)) || echo "$_v";; esac; }
-# v7.1.5: a cap/limit is NEVER negative. A negative raw read is a kernel ERROR code (-22 = -EINVAL
-# "property not supported", -19 = -ENODEV ...), not a value. _csn strips the sign, which is right
-# for a measurement (current_now is signed by direction) but catastrophic for a cap: it turned a
-# -22 into a bogus "IC cap (CCC)=22mA", suppressed the fallback to main/, and could fire a false
-# "IC/THERMAL-CAPPED: CCC 22mA < input 1600mA" verdict. Caps reject negatives and fall through.
 _cscap(){ _v=$(_csr "$1"); case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$_v" -gt 100000 ] && echo $((_v/1000)) || echo "$_v";; esac; }
 _ct="$(_csr $PSY/battery/charge_type)"; _stt="$(_csr $PSY/battery/status)"
 _imax=0; _iin=0; _vbus=0; _src=none
-# v7.1.6: find the energised supply. Three tiers, in order -- a blind "first online supply" scan is
-# NOT safe: Pixel/Tensor exposes VIRTUAL control supplies (gccd, main-charger, rt9471 -- all
-# type=Unknown) that are online=1 too and sort ahead of `usb` alphabetically, and their voltage_now
-# mirrors the BATTERY, not VBUS (it printed Vbus=3996mV on a 9V PD charger). A real port must win.
-#   1. a canonical port name that is online -- usb/ac/main/... (`ac` matters: on Qualcomm/OPLUS the
-#      mains path is `ac` while usb sits at online=0 mid-charge, which used to print "not plugged"
-#      while the phone was charging)
-#   2. any online supply whose TYPE says it is a real port (exotic vendor names)
-#   3. last resort: any online non-battery supply (kernels that report type=Unknown everywhere)
 for _u in usb ac main dc wireless pc_port; do
   [ -r "$PSY/$_u/online" ] || continue
   [ "$(_csr "$PSY/$_u/online")" = 1 ] || continue
@@ -2785,11 +3057,6 @@ if [ "$_src" = none ]; then
     _src=${_d##*/}; break
   done
 fi
-# The telemetry does not always live on the energised supply: `ac` commonly exposes only
-# online+type, while the real limits sit under usb/ and main/ even when those read online=0. Take
-# the first supply that actually carries each reading, source first. Gate the whole sweep on
-# "something is actually plugged": offline supplies keep their LAST values in sysfs, so sweeping
-# them while unplugged invented a phantom 5.3V / 1.6A input on an idle phone.
 if [ "$_src" != none ] || [ "$_stt" = Charging ] || [ "$_stt" = Full ]; then
   for _u in "$_src" usb main pc_port dc wireless; do
     [ "$_u" != none ] && [ -d "$PSY/$_u" ] || continue
@@ -2800,10 +3067,15 @@ if [ "$_src" != none ] || [ "$_stt" = Charging ] || [ "$_stt" = Full ]; then
 fi
 _ccc=$(_cscap $PSY/battery/constant_charge_current_max); [ "$_ccc" = 0 ] && _ccc=$(_cscap $PSY/main/constant_charge_current_max)
 _ib=$(_csn $PSY/battery/current_now); _vb=$(_cscap $PSY/battery/voltage_now)
+_iinbad=0; [ "${_iin:-0}" -gt 0 ] 2>/dev/null && [ "${_vbus:-0}" -gt 0 ] 2>/dev/null && [ "${_ib:-0}" -gt 0 ] 2>/dev/null && [ "${_vb:-0}" -gt 0 ] 2>/dev/null && [ "$(( _iin * _vbus / 1000 ))" -lt "$(( _ib * _vb / 2000 ))" ] 2>/dev/null && _iinbad=1
+# The check above only catches input power far BELOW battery power. A Mi A3 on a 500mA SDP port
+# printed "Imax=500mA Iin=4378mA" and still concluded INPUT-CAPPED ~500mA: an input meter reading
+# many times its own cap is not a real measurement either, so flag that direction too.
+[ "${_imax:-0}" -gt 0 ] 2>/dev/null && [ "${_iin:-0}" -gt "$(( _imax * 2 ))" ] 2>/dev/null && _iinbad=1
 log "+----------------------------------------------------"
 log "|  CHARGER / SPEED"
 log "|  source=$_src  charge_type=${_ct:-?}  status=${_stt:-?}"
-log "|  input:   Imax=${_imax}mA  Iin=${_iin}mA  Vbus=${_vbus}mV"
+log "|  input:   Imax=${_imax}mA  Iin=${_iin}mA$([ "${_iinbad:-0}" = 1 ] && echo ' (stale sample)')  Vbus=${_vbus}mV"
 _cccd="${_ccc}mA"; [ "$_ccc" -gt 0 ] 2>/dev/null || _cccd="n/a"
 log "|  battery: I=${_ib}mA  V=${_vb}mV  (~$((_ib*_vb/1000))mW)   IC cap (CCC)=${_cccd}"
 if [ "$_src" = none ] && [ "$_stt" != Charging ] && [ "$_stt" != Full ]; then
@@ -2814,19 +3086,34 @@ elif [ "$_imax" = 0 ] && [ "$_iin" = 0 ]; then
   log "|     judged from the battery side (~$((_ib*_vb/1000))mW). This is a reporting gap, NOT a fault"
   log "|     and NOT an ACC limit."
 elif [ "$_imax" -gt 0 ] 2>/dev/null && [ "$_imax" -le 510 ] 2>/dev/null; then
+  # _cccd already resolved 0 to "n/a" for the line above; without the same treatment here the
+  # advice reads "the IC can pull 0mA", which is both wrong and the opposite of the point.
+  _cccm="the IC can pull ${_ccc}mA"
+  [ "$_ccc" -gt 0 ] 2>/dev/null || _cccm="this kernel does not publish the IC's own current cap"
   log "|  -> INPUT-CAPPED ~${_imax}mA = USB SDP (PC port / data tether / weak cable). NOT a phone/ACC limit;"
-  log "|     the IC can pull ${_ccc}mA. Use a wall charger + good cable. If it stays low there, the kernel"
+  log "|     ${_cccm}. Use a wall charger + good cable. If it stays low there, the kernel"
   log "|     is not negotiating fast-charge (APSD) -- the real 'custom ROM charges slower' cause."
 elif [ "$_ccc" -gt 0 ] 2>/dev/null && [ "$_imax" -gt 0 ] 2>/dev/null && [ "$_ccc" -lt "$_imax" ] 2>/dev/null; then
   log "|  -> IC/THERMAL-CAPPED: CCC ${_ccc}mA < input ${_imax}mA. The charge IC or thermal mitigation is the ceiling, not the charger."
+elif [ "${_iinbad:-0}" = 1 ]; then
+  log "|  -> battery drawing ~${_ib}mA (~$((_ib*_vb/1000))mW); input negotiated up to ${_imax}mA. (Iin=${_iin}mA is a stale/low sample -- input and battery nodes were not sampled at the same instant; trust the battery-side power.)"
 else
-  log "|  -> input ~${_imax}mA / battery ~${_ib}mA -- source+IC are delivering; compare against the stock-ROM number for the fast-charge target."
+  log "|  -> input ~${_iin}mA (up to ${_imax}mA) / battery ~${_ib}mA -- source+IC are delivering; compare against the stock-ROM number for the fast-charge target."
 fi
 log "+===================================================="
 log "|  VERDICT  (AMPS v$V)"
 log "|  Device:       $(getprop ro.product.model 2>/dev/null) [$_advc / $_advs]"
 log "|  Best switch:  ${SUGGEST:-none}"
 log "|  Type: $acls    Confidence: $aconf"
+[ "${FS_DEMOTED:-0}" = 1 ] && log "|  note: the stress test DEMOTED an earlier pick -- any 'working'/'YES' line higher in this report naming a DIFFERENT switch is overridden by THIS box."
+if [ -n "$SUGGEST" ]; then
+  log "|"
+  case "$aconf" in
+    verified) log "|  ==> USE THIS SWITCH:  $SUGGEST";;
+    *)        log "|  ==> BEST CANDIDATE (see Confidence above):  $SUGGEST";;
+  esac
+  log "|      acc -s charging_switch='$SUGGEST'"
+fi
 case "$aconf" in
   verified) log "|  -> In AccA: tap 'Apply & Lock' -- pins this proven switch directly (no re-test, no 'connect charger')";;
   pump-needs-long-test) log "|  -> Charge-pump device: held 15s but may leak under load -- AccA live-tests; watch for slow drain at the cap";;

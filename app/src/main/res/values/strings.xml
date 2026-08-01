@@ -10,10 +10,19 @@
     <string name="log_report_subject">AccA diagnostics</string>
     <string name="log_export_bundle">Export full log bundle</string>
     <string name="log_export_failed">Export failed (need root / ACC running)</string>
-    <string name="log_capture">Capture charging (20s)</string>
+    <string name="log_capture">Capture charging (60s)</string>
     <string name="log_capturing">Capturing charging activity… keep the charger plugged in</string>
-    <string name="deep_diagnostic">Deep diagnostic (full report)</string>
-    <string name="deep_diagnostic_running">Running full diagnostic… (~1 min, observe-only)</string>
+    <string name="deep_diagnostic">Report a problem</string>
+    <string name="deep_diagnostic_running">Collecting diagnostics… (observe-only, up to ~1 min)</string>
+    <string name="report_dialog_title">Report a problem</string>
+    <string name="report_dialog_message">Quick fixes almost everything — charging not stopping at your limit, wrong level, or the app misbehaving. It gathers your charge settings and logs.\n\nFull is only for a stubborn bug we ask you to capture.\n\nIt only reads your charging setup, ACC\'s own logs, and this app.</string>
+    <string name="report_quick">Quick</string>
+    <string name="report_full">Full</string>
+    <string name="report_ready_title">Report ready</string>
+    <string name="report_ready_message">Send it to us so we can debug your problem. Tap Share, then pick your messaging app or email.</string>
+    <string name="report_share">Share</string>
+    <string name="report_done">Done</string>
+    <string name="report_ready_body">Report ready. Tap Share to send it to us, or tap the report icon anytime to make a new one.</string>
     <string name="diag_saved_downloads">Saved to Downloads — share it with the Share button or your file manager</string>
 
     <!-- ACC Tile Strings -->
@@ -297,6 +306,7 @@
     <string translatable="false" name="lang_zh">中文</string>
     <string translatable="false" name="lang_zh_tw">文言</string>
 
+    <string name="capacity_control_disabled">Capacity control disabled</string>
     <string name="template_capacity_profile">Shutdown: %1$d%% - Resume: %2$d%% - Stop: %3$d%%</string>
     <string name="template_capacity_profile_mv">Shutdown: %1$d mV - Resume: %2$d mV - Stop: %3$d mV</string>
     <string name="template_temperature_profile">Cool: %1$d&#176;C - Max: %2$d&#176;C - Resume: %3$d&#176;C</string>
@@ -579,6 +589,19 @@
     <string name="import_toast_no_selected_profiles">Please select Profiles to Import</string>
     <string name="import_profile_success">Successfully imported %d profiles</string>
 
+    <!-- Scripts: export/import, expand/collapse, reorder -->
+    <string name="export_scripts_title">Export scripts</string>
+    <string name="import_scripts_title">Import scripts</string>
+    <string name="export_no_scripts">There are no scripts to export</string>
+    <string name="import_toast_no_valid_script_json_clipboard">Valid AccA script JSON not in clipboard</string>
+    <string name="import_toast_no_selected_scripts">Please select scripts to import</string>
+    <string name="import_script_success">Successfully imported %d scripts</string>
+    <string name="script_run">Run script</string>
+    <string name="script_expand">Show the whole script</string>
+    <string name="script_collapse">Show less</string>
+    <string name="menu_option_move_up">Move up</string>
+    <string name="menu_option_move_down">Move down</string>
+
     <!-- Config Parse Error -->
     <string name="parse_failed_title">Failed to Parse ACC Config</string>
     <string name="parse_failed_body">You may try to load the default configuration by pressing \'Load Default\'. Please note that AccA will not be functional.
@@ -624,7 +647,7 @@
     <!-- Verified-switch cockpit -->
     <string name="verified_switch_title">Recommended charging switch</string>
     <string name="verified_switch_for_device">Verified switch for your device: %1$s (%2$s)</string>
-    <string name="verified_switch_needs_test_caveat">This switch was detected but not fully verified — it needs a live test and may leak charge under load on some pump-charger devices. Apply &amp; Lock will run a live test first.</string>
+    <string name="verified_switch_needs_test_caveat">Apply &amp; Lock runs a quick live test (a few seconds), then pins this switch.</string>
     <string name="verified_switch_apply_lock">Apply &amp; Lock</string>
     <string name="verified_switch_testing">Testing the recommended switch…</string>
     <string name="verified_switch_applied">Verified switch applied and locked.</string>
@@ -633,10 +656,19 @@
     <!-- TASK 4: inline Apply &amp; Lock progress (spinner + status) shown in the card -->
     <string name="verified_switch_testing_live">Testing the switch live…</string>
     <string name="verified_switch_locked">Locked ✓</string>
+    <string name="verified_switch_level_rerun">This is a percentage cap. It can only be checked while the battery sits above the cap, so re-run \"Find my charging switch\" at a lower level (best between 40 and 80 percent) to confirm it, then Apply.</string>
+    <string name="verified_switch_pump_note">Pinned. The live test confirmed it engages, but on a charge-pump device a cap can still leak under load. Watch for slow drain at the limit, and re-run with Highest accuracy to soak-test it.</string>
     <!-- A3: show-all-working-switches list (recommended + alternatives, tap one to lock) -->
     <string name="verified_switch_all_title">All working switches</string>
     <string name="verified_switch_acc_current">ACC is using now: %1$s</string>
     <string name="verified_switch_tap_all">Tap to see all %1$d working switches and choose one to lock</string>
+    <!-- Flow-spec states: the card has a terminal LOCKED state + a distinct FAILED hint + a pump caveat -->
+    <string name="verified_switch_title_locked">Your charging switch</string>
+    <string name="verified_switch_locked_body">✓ %1$s (%2$s). Active and locked.</string>
+    <string name="verified_switch_pump_caveat">Charge-pump device: Apply &amp; Lock live-tests it, then watch for slow drain at the cap under heavy load.</string>
+    <string name="verified_switch_failed_hint">The live test did not hold, so nothing was applied. Pick another switch, or re-scan.</string>
+    <string name="verified_switch_change">Change switch</string>
+    <string name="verified_switch_rescan">Re-scan</string>
 
     <!-- Find my charging switch (runs the bundled AMPS tester with a live log) -->
     <string name="find_switch_title">Find my charging switch</string>
@@ -647,6 +679,7 @@
     <string name="find_switch_choose_hint">▾ Tap to choose from all %1$d working switches</string>
     <string name="find_switch_see_all">See all %1$d switches</string>
     <string name="find_switch_none">No reliable switch found — try a stronger charger, or see the log above.</string>
+    <string name="find_switch_device_mismatch">The saved result belongs to a different device. Run the finder on THIS phone to get a fresh recommendation.</string>
     <string name="find_switch_apply_testing">Testing the switch live…</string>
     <string name="find_switch_apply_locked">Locked ✓</string>
     <string name="find_switch_extract_failed">Could not extract AMPS. Make sure root access is granted, then try again.</string>
@@ -689,4 +722,73 @@
     <string name="relock_v117_done">Charging switch re-locked for safety (1.1.7).</string>
 
 
+    <string name="blocked_settings">Blocked settings</string>
+    <string name="blocked_none">Nothing is blocked.</string>
+    <string name="blocked_intro">Never written. Tap one to edit or remove it.</string>
+    <string name="blocked_remove_title">Remove from blocked list?</string>
+    <string name="blocked_remove_body">%1$s
+
+This restarted your phone before. Removing it means a future scan can test it again.</string>
+    <string name="blocked_remove_confirm">Remove</string>
+    <string name="blocked_removed">Removed from the blocked list</string>
+    <string name="blocked_remove_failed">Could not remove it. Root access is required.</string>
+    <string name="blocked_add">Block a setting</string>
+    <string name="blocked_banner_icon">⚠</string>
+    <string name="blocked_noroot">This list could not be read, because the app has no root access. It is not necessarily empty. Grant root to ACC and open this screen again.</string>
+    <string name="blocked_noroot_banner">No root access, so the blocked list cannot be read or changed.</string>
+    <string name="blocked_none_banner">Nothing blocked. Anything added here is never written.</string>
+    <string name="blocked_src_amps">crashed a scan</string>
+    <string name="blocked_src_amps_value">crashed a scan while writing %1$s</string>
+    <string name="blocked_src_amps_detail">crashed a scan while writing %1$s, %2$s</string>
+    <string name="blocked_src_acc">blocked by ACC</string>
+    <string name="blocked_selected">Selected</string>
+    <string name="blocked_select_all">Select all / none</string>
+    <string name="blocked_selected_n">%1$d selected</string>
+    <string name="blocked_remove_selected">Unblock selected</string>
+    <string name="blocked_already">(already blocked)</string>
+    <string name="blocked_add_choose">Pick one of the charge settings found on your phone, or type a path.</string>
+    <string name="blocked_add_pick">Pick from this phone</string>
+    <string name="blocked_add_type">Type a path</string>
+    <string name="blocked_pick_title">Charge settings on this phone</string>
+    <string name="blocked_pick_body">These are the charge-control settings found on your phone. Tap one to block it.</string>
+    <string name="blocked_edit_title">Edit blocked setting</string>
+    <string name="blocked_edit_body">Change the path. Example: /sys/class/power_supply/battery/input_suspend</string>
+    <string name="blocked_edited">Blocked setting updated</string>
+    <string name="blocked_remove_many">Unblock %1$d setting(s)?
+
+%2$s
+
+They can be written again. Anything that crashed your phone before can crash it again.</string>
+    <string name="blocked_add_title">Block a setting</string>
+    <string name="blocked_add_body">Nothing here will ever be written while it is on this list. Use it if you already know a setting is unsafe on your phone.</string>
+    <string name="blocked_add_hint">battery/input_suspend, or a full path</string>
+    <string name="blocked_added">Added to the blocked list</string>
+    <string name="blocked_add_failed">Could not add it. Root access is required.</string>
+    <string name="blocked_clear_all">Clear all</string>
+    <string name="blocked_clear_title">Clear the blocked list?</string>
+    <string name="blocked_clear_body">All %1$d of them become writable again. Anything that crashed your phone before can crash it again.</string>
+    <string name="blocked_clear_confirm">Clear all</string>
+    <string name="blocked_cleared">Blocked list cleared</string>
+    <plurals name="blocked_count">
+        <item quantity="one">%d blocked</item>
+        <item quantity="other">%d blocked</item>
+    </plurals>
+    <string name="ui_refresh_pref_title">State refresh interval</string>
+    <string name="ui_refresh_pref_summary">How often the daemon republishes the data this app shows. Longer means less battery used by ACC. Charging is never affected, and a level or status change always shows within seconds.</string>
+    <string name="ui_refresh_pref_summary_fmt">%1$s</string>
+    <string name="ui_refresh_failed">Could not apply. Is the ACC daemon running?</string>
+    <string-array name="ui_refresh_entries">
+        <item>15s - most live, costs the most</item>
+        <item>30s - previous default</item>
+        <item>60s - recommended, about a third less CPU</item>
+        <item>120s - saver, about half</item>
+        <item>Off - only update when something changes</item>
+    </string-array>
+    <string-array name="ui_refresh_values">
+        <item>15</item>
+        <item>30</item>
+        <item>60</item>
+        <item>120</item>
+        <item>0</item>
+    </string-array>
 </resources>

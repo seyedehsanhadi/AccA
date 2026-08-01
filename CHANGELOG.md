@@ -2,7 +2,13 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
-## [2.0.1-rc20] - 2026-07-20
+## 2.0.1-rc20 (220)
+
+Everything since rc19, in one release.
+
+- Blocked settings could not show or remove anything once ACC started recording what a setting was doing when it crashed the phone. The list file gained two extra fields per line and the app was still reading the whole line as the setting's name, so every entry looked like a path that does not exist: nothing appeared in the list, and removing or editing silently did nothing. It now reads the name from the first field and shows the rest, so an entry says what it was writing and when it happened rather than only that it is blocked.
+
+- Blocked settings can now add, remove and clear, not only read. A setting you already know is unsafe on your phone can be blocked by name (a bare node name is resolved to its full path), any entry can be removed, and the whole list cleared in one step with a count shown before you confirm. The list reopens after every action, so a change is visible instead of leaving you looking at the old contents.
 
 Pairs with ACC v2025.5.18-6.5.1-rc21. Install both.
 

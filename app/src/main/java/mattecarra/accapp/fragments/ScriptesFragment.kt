@@ -51,6 +51,8 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
     // Held so the long-running run-script dialog can be dismissed on view teardown
     // (the script coroutine can run up to 180s; without this the dialog leaks).
     private var mRunDialog: MaterialDialog? = null
+    // True between drag start and drop, so the LiveData observer leaves the list alone.
+    private var mIsDragging = false
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View?
     {
@@ -76,6 +78,11 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
         // Observe data
         mScriptsViewModel.getLiveData().observe(viewLifecycleOwner, Observer { scripts ->
 
+            // Ignore database updates while a drag is in flight. The adapter already holds the
+            // order the finger is drawing, and rebuilding the list underneath it would drop the
+            // row being moved. The write on drop re-emits, so nothing is missed.
+            if (mIsDragging) return@Observer
+
             if (scripts.isEmpty())
             {
                 binding.scriptsEmptyTextview.visibility = View.VISIBLE
@@ -99,8 +106,10 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
         addFab.setOnClickListener{ onAddScript() }
         addFab.visibility = if (allowCustomScripts) View.VISIBLE else View.GONE
 
+        // UP or DOWN enables long-press drag to reorder; the swipe directions are unchanged, so
+        // swipe-to-run still behaves exactly as before.
         val itemTouchCallback = object : ItemTouchHelper.SimpleCallback(
-            0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
         )
         {
 
@@ -122,7 +131,24 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
                 recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder
             ): Boolean
             {
-                return false // No up and down movement
+                mIsDragging = true
+                return mScriptesAdapter.onItemMove(viewHolder.adapterPosition, target.adapterPosition)
+            }
+
+            override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int)
+            {
+                if (actionState == ItemTouchHelper.ACTION_STATE_DRAG) mIsDragging = true
+                super.onSelectedChanged(viewHolder, actionState)
+            }
+
+            override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder)
+            {
+                super.clearView(recyclerView, viewHolder)
+                // Drop: write the arrangement once, then let LiveData resume driving the list.
+                if (mIsDragging) {
+                    mIsDragging = false
+                    mScriptsViewModel.reorderScripts(mScriptesAdapter.currentOrder())
+                }
             }
 
             override fun onChildDraw(
@@ -258,12 +284,27 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
         // acc dir on PATH so `acc`/`acca` also resolve when they appear mid-line (e.g. a
         // multi-command user script `sleep 2; acc -D restart`). Absolute `sh /data/adb/...` lines
         // pass through untouched. PATH is prepended in the executed command, not exported globally.
+        // Rewrite to `acc`, the FULL front-end, not `acca`.
+        //
+        // acca is the slim front-end the daemon calls: it stubs out at()/online() and replaces
+        // daemon_ctrl, which means some commands run correctly but print NOTHING. Measured on a
+        // real device: `acc -d` prints "accd stopped / Charging disabled" while `acca -d` prints
+        // zero bytes, and `acc -D` reports the daemon while `acca -D` is silent. Both looked to a
+        // user like the script had failed. Every other command produced byte-identical output, so
+        // this only ever adds the missing lines back.
+        //
+        // The choice is made INSIDE the root shell, not here. /dev/.vr25/acc is root-only, so
+        // File.exists() from the app process always answered false and silently fell back to the
+        // very front-end this is meant to avoid. Let the shell pick, and fall back to acca for a
+        // phone on an older module that does not create the acc symlink.
         val rewritten = when {
-            script.scBody.startsWith("acca ") -> "/dev/.vr25/acc/acca " + script.scBody.substring(5)
-            script.scBody.startsWith("acc ")  -> "/dev/.vr25/acc/acca " + script.scBody.substring(4)
+            script.scBody.startsWith("acca ") -> "\$ACCBIN " + script.scBody.substring(5)
+            script.scBody.startsWith("acc ")  -> "\$ACCBIN " + script.scBody.substring(4)
             else -> script.scBody
         }
-        val body = "export PATH=/dev/.vr25/acc:\$PATH\n$rewritten"
+        val body = "export PATH=/dev/.vr25/acc:\$PATH\n" +
+                   "ACCBIN=/dev/.vr25/acc/acc; [ -e \"\$ACCBIN\" ] || ACCBIN=/dev/.vr25/acc/acca\n" +
+                   rewritten
 
         val sr = if (isTest) {
             val tmp = java.io.File(mContext.cacheDir, "acca_run.sh")
@@ -445,6 +486,20 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
     {
         mScriptsViewModel.deleteScript(script)
         Toast.makeText(mContext, "deleteScript:\n"+script.scName, Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onMoveScript(script: AccaScript, up: Boolean)
+    {
+        // Same result as a drag, reachable without one: needed for TalkBack, and easier than
+        // dragging across a long list. The adapter is the source of truth for the visible
+        // order, so ask it where the script currently sits rather than trusting a stale index.
+        val from = mScriptesAdapter.positionOf(script)
+        if (from < 0) return
+        val to = if (up) from - 1 else from + 1
+        if (to < 0 || to >= mScriptesAdapter.itemCount) return
+
+        if (mScriptesAdapter.onItemMove(from, to))
+            mScriptsViewModel.reorderScripts(mScriptesAdapter.currentOrder())
     }
 
 }

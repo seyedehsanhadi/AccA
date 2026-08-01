@@ -4,17 +4,13 @@
 
     <item
         android:id="@+id/menu_deep_diag"
+        android:icon="@drawable/ic_report_problem"
         android:title="@string/deep_diagnostic"
-        app:showAsAction="never" />
+        app:showAsAction="always" />
 
     <item
         android:id="@+id/menu_capture"
         android:title="@string/log_capture"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/menu_export_bundle"
-        android:title="@string/log_export_bundle"
         app:showAsAction="never" />
 
 </menu>

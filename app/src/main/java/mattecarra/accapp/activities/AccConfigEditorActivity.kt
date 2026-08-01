@@ -457,38 +457,144 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             verifiedSwitch = result
             when (result)
             {
-                is VerifiedSwitch.Verified ->
-                {
-                    content.verifiedSwitchTextview.text =
-                        getString(R.string.verified_switch_for_device, result.switch, result.klass)
-                    content.verifiedSwitchCaveat.visibility = View.GONE
-                    content.verifiedSwitchCard.visibility = View.VISIBLE
-                }
-                is VerifiedSwitch.NeedsTest ->
-                {
-                    content.verifiedSwitchTextview.text =
-                        getString(R.string.verified_switch_for_device, result.switch, result.klass)
-                    content.verifiedSwitchCaveat.visibility = View.VISIBLE
-                    content.verifiedSwitchCard.visibility = View.VISIBLE
-                }
+                is VerifiedSwitch.Verified  -> renderDetectOrLocked(result.switch, result.klass, result.conf, result.alts)
+                is VerifiedSwitch.NeedsTest -> renderDetectOrLocked(result.switch, result.klass, result.conf, result.alts)
+                is VerifiedSwitch.Precondition -> renderPrecondition(result.reason)
                 else -> content.verifiedSwitchCard.visibility = View.GONE
             }
+        }
+    }
 
-            // A3: if the tester reported other working switches too, make the card tappable to open the
-            // full list (recommended + alternatives), so the user can SEE every working switch and pick
-            // which one to lock -- not just the single auto-recommended one.
-            val altCount = when (result)
+    /** Flow-spec state selection. If the pinned + user-locked switch is one of the artifact's
+     *  switches (recommended OR an alt), show the terminal LOCKED state for THAT switch -- this is
+     *  what stops the "not fully verified" caveat from lingering after a successful Apply & Lock.
+     *  Otherwise show the DETECTED state routed by applyMode. */
+    private fun renderDetectOrLocked(spec: String, klass: String, conf: String, alts: List<VerifiedSwitch.Alt>)
+    {
+        val pinned = pinnedLockedNode()
+        if (pinned != null)
+        {
+            if (spec.trim().substringBefore(' ') == pinned) { renderLocked(spec, klass, alts.size); return }
+            val a = alts.firstOrNull { it.switch.trim().substringBefore(' ') == pinned }
+            if (a != null) { renderLocked(a.switch, a.klass, alts.size); return }
+        }
+        renderSwitchState(spec, klass, conf, alts.size)
+    }
+
+    /** DETECTED state: a suggestion to apply. Caveat matches what Apply will actually DO (verified =
+     *  none; pump = leak note; other live-test = a quick-test note; level-unproven = re-run). */
+    private fun renderSwitchState(spec: String, klass: String, conf: String, altCount: Int)
+    {
+        content.verifiedSwitchTitleTv.setText(R.string.verified_switch_title)
+        content.verifiedSwitchTextview.text = getString(R.string.verified_switch_for_device, spec, klass)
+        content.verifiedSwitchApplyProgress.visibility = View.GONE
+        when (VerifiedSwitch.applyMode(klass, conf))
+        {
+            VerifiedSwitch.ApplyMode.PIN_DIRECT ->
             {
-                is VerifiedSwitch.Verified -> result.alts.size
-                is VerifiedSwitch.NeedsTest -> result.alts.size
-                else -> 0
+                content.verifiedSwitchCaveat.visibility = View.GONE
+                setApplyButton(R.string.verified_switch_apply_lock) { onApplyAndLockClick() }
             }
-            if (altCount > 0)
+            VerifiedSwitch.ApplyMode.LIVE_TEST ->
             {
-                content.verifiedSwitchTextview.append("\n\n" + getString(R.string.verified_switch_tap_all, altCount + 1))
-                content.verifiedSwitchTextview.setOnClickListener { showAllSwitchesDialog() }
+                content.verifiedSwitchCaveat.setText(
+                    if (conf == "pump-needs-long-test") R.string.verified_switch_pump_caveat
+                    else R.string.verified_switch_needs_test_caveat)
+                content.verifiedSwitchCaveat.visibility = View.VISIBLE
+                setApplyButton(R.string.verified_switch_apply_lock) { onApplyAndLockClick() }
+            }
+            VerifiedSwitch.ApplyMode.LEVEL_RERUN ->
+            {
+                content.verifiedSwitchCaveat.setText(R.string.verified_switch_level_rerun)
+                content.verifiedSwitchCaveat.visibility = View.VISIBLE
+                setApplyButton(R.string.verified_switch_rescan) { onFindSwitchClick(content.verifiedSwitchApplyButton) }
             }
         }
+        content.verifiedSwitchApplyButton.visibility = View.VISIBLE
+        content.verifiedSwitchApplyButton.isEnabled = true
+        attachTapAll(altCount)
+        content.verifiedSwitchCard.visibility = View.VISIBLE
+    }
+
+    /** Terminal LOCKED state: this switch is ACC's active, user-locked switch. No caveat, nothing
+     *  to apply -- "Change switch" opens the picker. The state the card was missing. */
+    private fun renderLocked(spec: String, klass: String, altCount: Int)
+    {
+        content.verifiedSwitchTitleTv.setText(R.string.verified_switch_title_locked)
+        content.verifiedSwitchTextview.text = getString(R.string.verified_switch_locked_body, spec, klass)
+        content.verifiedSwitchCaveat.visibility = View.GONE
+        content.verifiedSwitchApplyProgress.visibility = View.GONE
+        if (altCount > 0)
+        {
+            setApplyButton(R.string.verified_switch_change) { showAllSwitchesDialog() }
+            content.verifiedSwitchApplyButton.visibility = View.VISIBLE
+            content.verifiedSwitchApplyButton.isEnabled = true
+        }
+        else content.verifiedSwitchApplyButton.visibility = View.GONE
+        attachTapAll(altCount)
+        content.verifiedSwitchCard.visibility = View.VISIBLE
+    }
+
+    /** FAILED state: the live test did not hold, nothing was pinned. Reason + a forward action. */
+    private fun renderFailed(spec: String, klass: String, altCount: Int)
+    {
+        content.verifiedSwitchTitleTv.setText(R.string.verified_switch_title)
+        content.verifiedSwitchTextview.text = getString(R.string.verified_switch_for_device, spec, klass)
+        content.verifiedSwitchApplyProgress.visibility = View.GONE
+        content.verifiedSwitchCaveat.setText(R.string.verified_switch_failed_hint)
+        content.verifiedSwitchCaveat.visibility = View.VISIBLE
+        if (altCount > 0) setApplyButton(R.string.verified_switch_change) { showAllSwitchesDialog() }
+        else setApplyButton(R.string.verified_switch_rescan) { onFindSwitchClick(content.verifiedSwitchApplyButton) }
+        content.verifiedSwitchApplyButton.visibility = View.VISIBLE
+        content.verifiedSwitchApplyButton.isEnabled = true
+        attachTapAll(altCount)
+        content.verifiedSwitchCard.visibility = View.VISIBLE
+    }
+
+    /** PRECONDITION state: the tester stopped before touching anything. Show why + a Re-scan action
+     *  (a visible Apply would silently no-op since verifiedSwitchSpec() is null here). */
+    private fun renderPrecondition(reason: String)
+    {
+        content.verifiedSwitchTitleTv.setText(R.string.verified_switch_title)
+        content.verifiedSwitchTextview.text = reason.ifBlank { getString(R.string.find_switch_status_precondition) }
+        content.verifiedSwitchTextview.setOnClickListener(null)
+        content.verifiedSwitchCaveat.visibility = View.GONE
+        content.verifiedSwitchApplyProgress.visibility = View.GONE
+        setApplyButton(R.string.verified_switch_rescan) { onFindSwitchClick(content.verifiedSwitchApplyButton) }
+        content.verifiedSwitchApplyButton.visibility = View.VISIBLE
+        content.verifiedSwitchApplyButton.isEnabled = true
+        content.verifiedSwitchCard.visibility = View.VISIBLE
+    }
+
+    private fun setApplyButton(textRes: Int, action: () -> Unit)
+    {
+        content.verifiedSwitchApplyButton.setText(textRes)
+        content.verifiedSwitchApplyButton.setOnClickListener { action() }
+    }
+
+    /** When the tester ranked more than one working switch, make the body tappable to open the full
+     *  picker; otherwise clear the listener so a stale one can't fire. */
+    private fun attachTapAll(altCount: Int)
+    {
+        if (altCount > 0)
+        {
+            content.verifiedSwitchTextview.append("\n\n" + getString(R.string.verified_switch_tap_all, altCount + 1))
+            content.verifiedSwitchTextview.setOnClickListener { showAllSwitchesDialog() }
+        }
+        else content.verifiedSwitchTextview.setOnClickListener(null)
+    }
+
+    /** The control node of the currently pinned switch IF it is user-locked (automatic OFF = " --"),
+     *  else null. Compares only the first /path token so short/full forms of the same node match. */
+    private fun pinnedLockedNode(): String? =
+        if (viewModel.isAutomaticSwitchEanbled) null
+        else viewModel.chargeSwitch?.trim()?.substringBefore(' ')?.takeIf { it.isNotEmpty() }
+
+    private fun verifiedSwitchAltCount(): Int = when (val v = verifiedSwitch)
+    {
+        is VerifiedSwitch.Verified -> v.alts.size
+        is VerifiedSwitch.NeedsTest -> v.alts.size
+        else -> 0
     }
 
     /**
@@ -542,17 +648,22 @@ class AccConfigEditorActivity : ScopedAppActivity(),
     private fun onApplyAndLockClick()
     {
         val switch = verifiedSwitchSpec() ?: return
-        applyVerifiedSpec(switch, verifiedSwitch is VerifiedSwitch.Verified)
+        val v = verifiedSwitch
+        val klass = when (v) { is VerifiedSwitch.Verified -> v.klass; is VerifiedSwitch.NeedsTest -> v.klass; else -> "" }
+        val conf = when (v) { is VerifiedSwitch.Verified -> v.conf; is VerifiedSwitch.NeedsTest -> v.conf; else -> "" }
+        applyVerifiedSpec(switch, klass, conf)
     }
 
     /**
-     * Single pin path for ANY switch the user picks -- the recommended one OR a row from the
-     * "all working switches" list. trustVerified == the picked spec's own conf was "verified", so we
-     * lock it directly (no charger gate, no `acca -t` retest, A1); otherwise we live-test first.
+     * Single pin path for ANY switch the user picks -- the recommended one OR a row from the "all
+     * working switches" list. [VerifiedSwitch.applyMode] decides from class+conf: PIN_DIRECT locks
+     * with no acc -t; LEVEL_RERUN asks for a lower-% re-run (acc -t can only false-fail a %-cap);
+     * LIVE_TEST runs acc -t first, then pins on a pass.
      */
-    private fun applyVerifiedSpec(switch: String, trustVerified: Boolean)
+    private fun applyVerifiedSpec(switch: String, klass: String, conf: String)
     {
         launch {
+            val mode = VerifiedSwitch.applyMode(klass, conf)
             // A1: a Verified artifact means the acc-compat tester ALREADY live-proved THIS exact switch on
             // THIS device (device+soc fingerprint matched AND it survived the long leak/re-arm test). Trust
             // it: lock directly with NO "plug in the charger" gate and NO second daemon-stopping `acca -t`
@@ -560,22 +671,35 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             // bug) only made sense before the tester verified holds. A cheap `[ -e node ]` recheck (instant,
             // NOT a charge test) guards a charger-path/ROM change; NeedsTest and a vanished node fall through
             // to the live-test path below unchanged.
-            if (trustVerified)
+            if (mode == VerifiedSwitch.ApplyMode.PIN_DIRECT)
             {
-                val node = switch.trim().substringBefore(' ')
-                val present = try { withContext(Dispatchers.IO) { Shell.su("[ -e \"$node\" ]").exec().isSuccess } }
+                // Check EVERY node of the spec, not only the first: a grouped multi-path switch with
+                // vanished later paths must fall through to the live test, not pin blind.
+                val nodes = switch.trim().split(' ').filter { it.startsWith("/") }
+                    .ifEmpty { listOf(switch.trim().substringBefore(' ')) }
+                val check = nodes.joinToString(" && ") { "[ -e \"$it\" ]" }
+                val present = try { withContext(Dispatchers.IO) { Shell.su(check).exec().isSuccess } }
                 catch (ex: Exception) { false }
                 if (present)
                 {
                     content.verifiedSwitchApplyButton.isEnabled = false
                     content.verifiedSwitchApplySpinner.visibility = View.VISIBLE
                     content.verifiedSwitchApplyProgress.visibility = View.VISIBLE
-                    content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_locked)
+                    content.verifiedSwitchApplyStatus.text = ""
                     val ok = try { withContext(Dispatchers.IO) {
                         val w = Acc.instance.updateAccChargingSwitch(switch, false)
                         // A2: kick the daemon so the pin takes effect NOW (charging actually stops). The
                         // `--` write already made ACC set .user-locked; safe post-D2 (no un-cap on restart).
-                        if (w) try { Shell.su(Acc.instance.getAccRestartDaemon()).exec() } catch (_: Exception) {}
+                        // Then VERIFY it came back: a failed restart would leave the pin written but
+                        // unenforced until ACC's next natural cycle while the UI says Locked.
+                        if (w) try
+                        {
+                            Shell.su(Acc.instance.getAccRestartDaemon()).exec()
+                            Thread.sleep(2500)
+                            val d = Shell.su("/dev/.vr25/acc/acca -D").exec().code
+                            if (d != 0 && d != 8) Shell.su("/dev/.vr25/acc/acca -D restart").exec()
+                        }
+                        catch (_: Exception) {}
                         w
                     } }
                     catch (ex: Exception)
@@ -589,8 +713,8 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     {
                         viewModel.chargeSwitch = switch
                         viewModel.isAutomaticSwitchEanbled = false
-                        content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_locked)
                         Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_applied, Toast.LENGTH_LONG).show()
+                        renderLocked(switch, klass, verifiedSwitchAltCount())   // terminal state, caveat gone
                     }
                     else
                     {
@@ -600,6 +724,17 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     }
                     return@launch
                 }
+            }
+
+            if (mode == VerifiedSwitch.ApplyMode.LEVEL_RERUN)
+            { // an unproven %-cap: acc -t writes off=pause% and, below that %, charging never stops,
+              // so it can only FALSE-fail. Ask for a lower-% re-run instead of a doomed live test.
+                MaterialDialog(this@AccConfigEditorActivity).show {
+                    title(R.string.verified_switch_title)
+                    message(R.string.verified_switch_level_rerun)
+                    positiveButton(android.R.string.ok)
+                }
+                return@launch
             }
 
             val charging = try { Acc.instance.isChargerPlugged() }
@@ -638,9 +773,8 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             if (!passed)
             {
                 content.verifiedSwitchApplySpinner.visibility = View.GONE
-                content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_failed_live_test)
-                content.verifiedSwitchApplyButton.isEnabled = true
                 Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_failed_live_test, Toast.LENGTH_LONG).show()
+                renderFailed(switch, klass, verifiedSwitchAltCount())   // reason + a forward action
                 return@launch
             }
 
@@ -650,8 +784,16 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             {
                 withContext(Dispatchers.IO) {
                     val w = Acc.instance.updateAccChargingSwitch(switch, false)
-                    // A2: kick the daemon so the new switch takes effect immediately (safe post-D2).
-                    if (w) try { Shell.su(Acc.instance.getAccRestartDaemon()).exec() } catch (_: Exception) {}
+                    // A2: kick the daemon so the new switch takes effect immediately (safe post-D2),
+                    // then verify it came back (same guarantee as the PIN_DIRECT path).
+                    if (w) try
+                    {
+                        Shell.su(Acc.instance.getAccRestartDaemon()).exec()
+                        Thread.sleep(2500)
+                        val d = Shell.su("/dev/.vr25/acc/acca -D").exec().code
+                        if (d != 0 && d != 8) Shell.su("/dev/.vr25/acc/acca -D restart").exec()
+                    }
+                    catch (_: Exception) {}
                     w
                 }
             }
@@ -672,8 +814,10 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 // them on read.)
                 viewModel.chargeSwitch = switch
                 viewModel.isAutomaticSwitchEanbled = false
-                content.verifiedSwitchApplyStatus.setText(R.string.verified_switch_locked)
                 Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_applied, Toast.LENGTH_LONG).show()
+                if (conf == "pump-needs-long-test")
+                    Toast.makeText(this@AccConfigEditorActivity, R.string.verified_switch_pump_note, Toast.LENGTH_LONG).show()
+                renderLocked(switch, klass, verifiedSwitchAltCount())   // terminal state, caveat gone
             }
             else
             {
@@ -745,7 +889,21 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             title(text = titleTxt)
             listItems(items = labels) { _, index, _ ->
                 val pick = all[index]
-                applyVerifiedSpec(pick.switch, pick.conf == "verified")
+                // Reflect the picked row in the card AND in the verifiedSwitch field, so every later
+                // reader (the main Apply & Lock button via verifiedSwitchSpec(), the B18 drain-class
+                // warning via isSelectedSwitchDrainClass()) sees the SAME switch the card shows --
+                // updating only the TextView left them reading the old recommended pick.
+                verifiedSwitch = when (val v = verifiedSwitch)
+                {
+                    is VerifiedSwitch.Verified -> v.copy(switch = pick.switch, klass = pick.klass, conf = pick.conf)
+                    is VerifiedSwitch.NeedsTest -> v.copy(switch = pick.switch, klass = pick.klass, conf = pick.conf)
+                    else -> v
+                }
+                content.verifiedSwitchTextview.text =
+                    getString(R.string.verified_switch_for_device, pick.switch, pick.klass)
+                content.verifiedSwitchCaveat.visibility =
+                    if (VerifiedSwitch.applyMode(pick.klass, pick.conf) == VerifiedSwitch.ApplyMode.PIN_DIRECT) View.GONE else View.VISIBLE
+                applyVerifiedSpec(pick.switch, pick.klass, pick.conf)
             }
         }
     }
@@ -810,6 +968,36 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
         return super.onOptionsItemSelected(item)
     }
+
+    /**
+     * Blocked settings: nodes AMPS refuses to write because writing one previously took the phone
+     * down mid-scan. The tester records the node before touching it and, on the next start, puts it
+     * back and blocks it permanently, so a crash costs one reboot rather than a loop.
+     *
+     * Two lists are shown together because both are enforced: AMPS's own (.acc-compat-blacklist,
+     * absolute paths) and ACC's older crash journal (.probe-blacklist, switch lines relative to the
+     * power-supply dir, from the upstream #305/#308 fix).
+     *
+     * Removal deliberately goes through the tester's own `--blacklist rm`, not a file edit here:
+     * that path is already covered by the on-device test matrix, and one implementation cannot
+     * drift from the other.
+     */
+    private val BLOCK_DATA_DIR = "/data/adb/vr25/acc-data"       // both crash blacklists live here
+    // The module's own copy, NOT /data/local/tmp: the finder only extracts the tmp one when a scan
+    // actually runs, so on a phone that has never scanned it does not exist and removal silently did
+    // nothing. The module copy is present whenever ACC is installed.
+    private val BLOCK_TESTER = "/data/adb/vr25/acc/acc-compat.sh"
+
+    /**
+     * Wired from the "Blocked settings" button under Find my switch in the capacity card.
+     * The list outgrew a dialog once it had to support add, edit, multi-select and clear, so it
+     * lives in its own screen now.
+     */
+    fun onBlockedSettingsClick(v: View)
+    {
+        startActivity(Intent(this, BlockedSettingsActivity::class.java))
+    }
+
 
     override fun onBackPressed()
     {

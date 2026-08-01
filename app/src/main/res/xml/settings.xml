@@ -187,6 +187,15 @@
             android:summary="@string/experimental_pref_summary"
             app:iconSpaceReserved="false" />
 
+        <ListPreference
+            android:defaultValue="60"
+            android:entries="@array/ui_refresh_entries"
+            android:entryValues="@array/ui_refresh_values"
+            android:key="ui_refresh"
+            android:summary="@string/ui_refresh_pref_summary"
+            android:title="@string/ui_refresh_pref_title"
+            app:iconSpaceReserved="false" />
+
         <CheckBoxPreference
             android:defaultValue="true"
             android:key="cueCurrMax"

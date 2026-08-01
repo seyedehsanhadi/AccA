@@ -22,6 +22,31 @@ class AccBootReceiver: BroadcastReceiver() {
         // caught it eventually - just not right away, and not at all for someone who updates while
         // already charging and doesn't unplug for hours).
         val action = intent.action
+
+        // LOCKED_BOOT_COMPLETED (directBootAware): fires BEFORE the first unlock on FBE phones.
+        // Credential-encrypted storage (SharedPreferences, filesDir) is still locked here, so this
+        // branch must not touch Preferences or app files. Both daemons live in /data/adb (device
+        // storage, readable by root at boot) and their init is idempotent, so start them from pure
+        // filesystem checks. This is what makes ACC settings apply on reboot WITHOUT waiting for
+        // the user to unlock (the "settings do not apply until unlocked" report). The later
+        // BOOT_COMPLETED branch then no-ops for anything already running.
+        if ("android.intent.action.LOCKED_BOOT_COMPLETED" == action) {
+            val pendingResult = goAsync()
+            Thread {
+                try {
+                    if (Shell.rootAccess()) {
+                        Shell.su("[ -e /dev/.vr25/acc/acca ] || { [ -f /data/adb/vr25/acc/service.sh ] && sh /data/adb/vr25/acc/service.sh; } || true").exec()
+                        Shell.su("[ -f /dev/.vr25/djs/djsc ] || { [ -f /data/adb/vr25/djs/service.sh ] && sh /data/adb/vr25/djs/service.sh; } || true").exec()
+                    }
+                } catch (e: Exception) {
+                    Log.e(LOG_TAG, "locked-boot init failed: $e")
+                } finally {
+                    pendingResult.finish()
+                }
+            }.start()
+            return
+        }
+
         if (Intent.ACTION_BOOT_COMPLETED == action
             || "android.intent.action.QUICKBOOT_POWERON" == action
             || "com.htc.intent.action.QUICKBOOT_POWERON" == action

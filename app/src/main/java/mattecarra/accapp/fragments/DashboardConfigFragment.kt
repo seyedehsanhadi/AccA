@@ -99,12 +99,55 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
             startAccConfigEditorActivity()
         }
 
+        // Single source of truth for what this panel shows.
+        //
+        // Before this, the panel refreshed only on resume and on PROFILE_KEY changing. Applying a
+        // profile sets PROFILE_KEY BEFORE its ACC write completes (the "A1" race documented in
+        // ProfilesFragment), so checkProfile() read the config as it was a moment earlier and
+        // nothing ever re-read it. Users applied a profile of 100/40 and the dashboard kept
+        // showing 75/70 - not stale rendering, but a genuinely stale read.
+        //
+        // SharedViewModel.config is posted after every apply, by every writer (profile apply,
+        // config editor, schedules), so observing it means the panel cannot miss a change and
+        // cannot show a value ACC does not hold. checkProfile() stays for the profile NAME, which
+        // is a database lookup rather than a config read.
+        mSharedViewModel.observeConfig(viewLifecycleOwner) { (config, _) ->
+            if (config == null || _binding == null || !isAdded) return@observeConfig
+            val profileId = ProfileUtils.getCurrentProfile(mPrefs)
+            launch {
+                val name = if (profileId != -1) mViewModel.getProfileById(profileId)?.profileName
+                                                ?: getString(R.string.profile_not_selected)
+                           else getString(R.string.profile_not_selected)
+                if (_binding == null || !isAdded) return@launch
+                updateInfo(name, config)
+            }
+        }
+
         checkProfile()
     }
 
     private fun startAccConfigEditorActivity()
     {
-        startActivityForResult(Intent(context, AccConfigEditorActivity::class.java), 7)
+        // When a profile is active the gear must edit THAT profile, not the global config behind
+        // it. Editing the global config while a profile is selected silently diverges the two:
+        // the dashboard shows one thing, the profile stores another, and re-applying the profile
+        // throws the edit away. Passing the profile makes the editor operate on the object the
+        // user believes they are editing.
+        val profileId = ProfileUtils.getCurrentProfile(mPrefs)
+        val intent = Intent(context, AccConfigEditorActivity::class.java)
+        if (profileId != -1) {
+            launch {
+                val profile = mViewModel.getProfileById(profileId)
+                if (profile != null) {
+                    intent.putExtra(Constants.PROFILE_ID_KEY, profile.uid)
+                        .putExtra(Constants.PROFILE_CONFIG_KEY, profile)
+                        .putExtra(Constants.TITLE_KEY, profile.profileName)
+                }
+                startActivityForResult(intent, 7)
+            }
+            return
+        }
+        startActivityForResult(intent, 7)
     }
 
     fun checkProfile()
@@ -140,7 +183,13 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
         LogExt().d(javaClass.simpleName, "updateInfo(): name=$nameTitle , accConfig=$accConfig")
 
         binding.itemProfileTitleTextView.text = nameTitle
+        // Capacity was the only row rendered unconditionally: every sibling below has an
+        // isGone/isVisible guard, so a user who turned capacity control off still saw a live-
+        // looking "Shutdown 5% - Resume 70% - Stop 75%" line reporting a limit ACC was not
+        // enforcing. Show the disabled text rather than hiding the row outright, so the state is
+        // explicit instead of the setting simply vanishing.
         binding.itemProfileCapacityTv.text = accConfig.configCapacity.toString(mContext)
+        binding.itemProfileCapacityTv.isEnabled = accConfig.configCapacity.isEnabled
 
         binding.itemProfileSwitchLl.isGone = accConfig.configChargeSwitch.isNullOrEmpty()
         binding.itemProfileSwitchDataTv.text = accConfig.configChargeSwitch ?: mContext.getString(R.string.automatic)

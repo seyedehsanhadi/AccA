@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ replacement for fullBackupContent. Two separate transfers, and they deserve
+  different answers:
+
+    cloud-backup    off-device. Scripts are shell commands run as root, so they are content
+                    worth keeping but not worth uploading by default. Only the database and
+                    preferences go, nothing else.
+    device-transfer phone to phone, staying in the user's hands. Same set; there is no reason
+                    to make someone rebuild their scripts after switching devices.
+
+  -wal and -shm are excluded for the same reason as in backup_rules.xml: restoring a stale
+  write-ahead log next to a newer database risks corrupting it.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="acca_database" />
+        <exclude domain="database" path="acca_database-wal" />
+        <exclude domain="database" path="acca_database-shm" />
+        <include domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="acca_database" />
+        <exclude domain="database" path="acca_database-wal" />
+        <exclude domain="database" path="acca_database-shm" />
+        <include domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

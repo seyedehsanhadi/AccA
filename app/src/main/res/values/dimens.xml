@@ -31,6 +31,10 @@
     <dimen name="item_profile_info_two_lp">8dp</dimen>
     <dimen name="item_profile_info_block_lp">8dp</dimen>
     <dimen name="item_profile_info_block_rp">8dp</dimen>
-    <dimen name="item_profile_info_block_tp">8dp</dimen>
-    <dimen name="item_profile_info_block_bp">8dp</dimen>
+    <!-- Profile cards are a scrolling list, so vertical space is the scarce resource: every dp
+         here is paid nine times over per card (one per info row) and again per profile. Trimmed
+         from 8dp so more of the list is visible at once without touching text size or the
+         horizontal rhythm, which is what keeps it readable. -->
+    <dimen name="item_profile_info_block_tp">4dp</dimen>
+    <dimen name="item_profile_info_block_bp">4dp</dimen>
 </resources>

@@ -49,6 +49,8 @@ class SwitchFinderActivity : ScopedAppActivity()
     // True iff the artifact's conf was exactly "verified" (long-tested on THIS device): the tester
     // already proved it, so Apply locks it directly -- no "connect charger" gate, no second retest (A1).
     private var foundVerified: Boolean = false
+    private var foundKlass: String = ""
+    private var foundConf: String = ""
     // v6.4.3: every working switch the tester ranked (recommended + alts incl risky), so the finder's
     // result card can offer the FULL tagged list -- the user picks ANY of them, no exception.
     private var foundAlts: List<VerifiedSwitch.Alt> = emptyList()
@@ -69,6 +71,7 @@ class SwitchFinderActivity : ScopedAppActivity()
     private val ASSET = "acc-compat.sh"
     private val TESTER_PATH = "/data/local/tmp/acc-compat.sh"
     private val STOPF = "/data/local/tmp/.acc-compat-stop"   // cooperative cancel flag the tester polls
+    private val DATA_DIR = "/data/adb/vr25/acc-data"         // both crash blacklists live here
 
     // libsu runs EVERY Shell.su() job on ONE shared global root shell. The tester is .submit()'d to that
     // shell and holds it (streaming) for the whole run, so a Shell.su(...) cancel/kill command QUEUES behind
@@ -188,7 +191,10 @@ class SwitchFinderActivity : ScopedAppActivity()
         outState.putBoolean(KEY_STARTED, started)
         outState.putBoolean(KEY_RUNNING, running)
         outState.putString(KEY_MODE, runMode)
-        outState.putString(KEY_LOG, logBuffer.toString())
+        // Tail only: a deep scan's full log can approach the ~1MB binder transaction ceiling and a
+        // TransactionTooLargeException here would lose ALL saved state (incl. the started flag),
+        // stranding a still-running root scan. The live TextView keeps the full scrollback.
+        outState.putString(KEY_LOG, logBuffer.toString().takeLast(50_000))
         outState.putString(KEY_HEADER, binding.switchFinderStatus.text?.toString())
         outState.putString(KEY_FOUND, foundSwitch)
         outState.putBoolean(KEY_VERIFIED, foundVerified)
@@ -323,9 +329,11 @@ class SwitchFinderActivity : ScopedAppActivity()
                 setHeader(getString(R.string.find_switch_status_resetting))
             line.contains("weak_charger=1") || line.contains("WEAK CHARGER", ignoreCase = true) ->
                 setHeader(getString(R.string.find_switch_status_weak_charger))
-            line.startsWith("==== LAYER 4") || line.startsWith("==== LAYER 6") ->
+            // contains, not startsWith: since 7.1.9 the engine stamps "[t+Ns d+Ns] " in front of
+            // every "==== LAYER" header for per-step timing, so a prefix match never fires.
+            line.contains("==== LAYER 4") || line.contains("==== LAYER 6") ->
                 setHeader(getString(R.string.find_switch_status_testing))
-            line.startsWith("==== LAYER") ->
+            line.contains("==== LAYER") ->
                 setHeader(getString(R.string.find_switch_status_probing))
             line.contains("RESTORING", ignoreCase = true) ->
                 setHeader(getString(R.string.find_switch_status_verifying))
@@ -413,6 +421,15 @@ class SwitchFinderActivity : ScopedAppActivity()
                     binding.switchFinderApplyButton.visibility = View.GONE
                     binding.switchFinderResultCard.visibility = View.VISIBLE
                 }
+                is VerifiedSwitch.DeviceMismatch ->
+                { // a real artifact exists but belongs to ANOTHER device -- "try a stronger charger"
+                  // advice would be wrong here; say what actually happened.
+                    setHeader(getString(R.string.find_switch_status_no_switch))
+                    binding.switchFinderResultText.text = getString(R.string.find_switch_device_mismatch)
+                    binding.switchFinderResultCaveat.visibility = View.GONE
+                    binding.switchFinderApplyButton.visibility = View.GONE
+                    binding.switchFinderResultCard.visibility = View.VISIBLE
+                }
                 else ->
                 {
                     setHeader(getString(R.string.find_switch_status_no_switch))
@@ -433,6 +450,8 @@ class SwitchFinderActivity : ScopedAppActivity()
     {
         foundSwitch = switch
         foundVerified = (conf == "verified")
+        foundKlass = klass
+        foundConf = conf
         binding.switchFinderResultText.text = getString(R.string.find_switch_found, switch, klass, conf)
         binding.switchFinderResultCaveat.visibility = if (caveat) View.VISIBLE else View.GONE
         binding.switchFinderApplyButton.visibility = View.VISIBLE
@@ -535,19 +554,25 @@ class SwitchFinderActivity : ScopedAppActivity()
         val switch = foundSwitch ?: return
 
         launch {
-            // A1: a Verified artifact (conf=verified) was already long-tested on THIS device by the
-            // tester. Lock it DIRECTLY -- no "connect charger" gate, no second daemon-stopping retest.
-            // Only a NeedsTest/pump result, or a node that vanished since the test, live-tests below.
-            if (foundVerified)
+            // Decide from class+conf (single source of truth in VerifiedSwitch.applyMode):
+            // PIN_DIRECT (verified, or an engage-proven level cap that is only slow to re-arm) locks
+            // with no acc -t; LEVEL_RERUN (an unproven %-cap acc -t can only FALSE-fail) asks for a
+            // lower-% re-run; LIVE_TEST (cut / bypass / drain) runs acc -t first.
+            val mode = VerifiedSwitch.applyMode(foundKlass, foundConf)
+            if (mode == VerifiedSwitch.ApplyMode.PIN_DIRECT)
             {
-                val node = switch.trim().substringBefore(' ')
-                val present = try { withContext(Dispatchers.IO) { Shell.su("[ -e \"$node\" ]").exec().isSuccess } }
+                // Check EVERY node of the spec, not just the first: a grouped multi-path switch with
+                // vanished later paths must fall through to the live test, not pin blind.
+                val nodes = switch.trim().split(' ').filter { it.startsWith("/") }
+                    .ifEmpty { listOf(switch.trim().substringBefore(' ')) }
+                val check = nodes.joinToString(" && ") { "[ -e \"$it\" ]" }
+                val present = try { withContext(Dispatchers.IO) { Shell.su(check).exec().isSuccess } }
                 catch (ex: Exception) { false }
                 if (present)
                 {
                     binding.switchFinderApplyButton.isEnabled = false
                     binding.switchFinderApplyProgress.visibility = View.VISIBLE
-                    binding.switchFinderApplyStatus.setText(R.string.find_switch_apply_locked)
+                    binding.switchFinderApplyStatus.text = ""
                     val ok = try { withContext(Dispatchers.IO) { pinAndKick(switch) } }
                     catch (ex: Exception) { LogExt().e(javaClass.simpleName, "verified pin failed: $ex"); false }
                     if (isFinishing || isDestroyed) return@launch
@@ -564,6 +589,16 @@ class SwitchFinderActivity : ScopedAppActivity()
                     }
                     return@launch
                 }
+            }
+
+            if (mode == VerifiedSwitch.ApplyMode.LEVEL_RERUN)
+            { // an unproven %-cap: acc -t can only FALSE-fail it from below the cap. Ask for a re-run.
+                MaterialDialog(this@SwitchFinderActivity).show {
+                    title(R.string.find_switch_title)
+                    message(R.string.verified_switch_level_rerun)
+                    positiveButton(android.R.string.ok)
+                }
+                return@launch
             }
 
             val charging = try { Acc.instance.isChargerPlugged() }
@@ -622,6 +657,8 @@ class SwitchFinderActivity : ScopedAppActivity()
             {
                 binding.switchFinderApplyStatus.setText(R.string.find_switch_apply_locked)
                 Toast.makeText(this@SwitchFinderActivity, R.string.verified_switch_applied, Toast.LENGTH_LONG).show()
+                if (foundConf == "pump-needs-long-test")
+                    Toast.makeText(this@SwitchFinderActivity, R.string.verified_switch_pump_note, Toast.LENGTH_LONG).show()
             }
             else
             {
@@ -641,7 +678,16 @@ class SwitchFinderActivity : ScopedAppActivity()
     private suspend fun pinAndKick(switch: String): Boolean
     {
         val w = Acc.instance.updateAccChargingSwitch(switch, false)
-        if (w) try { Shell.su(Acc.instance.getAccRestartDaemon()).exec() } catch (_: Exception) {}
+        if (w) try
+        {
+            Shell.su(Acc.instance.getAccRestartDaemon()).exec()
+            // Verify the daemon actually came back before the UI claims Locked: a failed restart
+            // would leave the pin written but unenforced until ACC's next natural cycle.
+            Thread.sleep(2500)
+            val d = Shell.su("/dev/.vr25/acc/acca -D").exec().code
+            if (d != 0 && d != 8) Shell.su("/dev/.vr25/acc/acca -D restart").exec()
+        }
+        catch (_: Exception) {}
         return w
     }
 
@@ -680,7 +726,10 @@ class SwitchFinderActivity : ScopedAppActivity()
             controlExec("echo 1 > $STOPF")
             try { Thread.sleep(6000) } catch (_: InterruptedException) {}
             controlExec("for p in \$(pgrep -f acc-compat 2>/dev/null); do for c in \$(pgrep -P \$p 2>/dev/null); do kill -TERM \$c 2>/dev/null; done; kill -TERM \$p 2>/dev/null; done")
-            try { Thread.sleep(3000) } catch (_: InterruptedException) {}
+            // 15s (not 3s): the engine's EXIT-trap restore replays the whole node snapshot in up to
+            // 3 timeout-guarded passes and can legitimately run >3s on a deep scan; a SIGKILL landing
+            // mid-replay leaves the last tested node in its off/test state.
+            try { Thread.sleep(15000) } catch (_: InterruptedException) {}
             controlExec("pkill -KILL -f acc-compat 2>/dev/null; /data/adb/vr25/acc/acca.sh -D restart 2>/dev/null || /dev/.vr25/acc/acca -D restart 2>/dev/null || acc -D restart 2>/dev/null || true")
         }.start()
     }
@@ -698,7 +747,9 @@ class SwitchFinderActivity : ScopedAppActivity()
             controlExec("echo 1 > $STOPF")
             Thread.sleep(6000)
             controlExec("for p in \$(pgrep -f acc-compat 2>/dev/null); do for c in \$(pgrep -P \$p 2>/dev/null); do kill -TERM \$c 2>/dev/null; done; kill -TERM \$p 2>/dev/null; done")
-            Thread.sleep(3000)
+            // 15s, matching killTester(): give the EXIT-trap snapshot-restore time to finish before
+            // the last-resort SIGKILL so a node is never left in its test state.
+            Thread.sleep(15000)
             controlExec("pkill -KILL -f acc-compat 2>/dev/null; /data/adb/vr25/acc/acca.sh -D restart 2>/dev/null || /dev/.vr25/acc/acca -D restart 2>/dev/null || acc -D restart 2>/dev/null || true")
         }
         catch (ex: Exception) { LogExt().e(javaClass.simpleName, "killTesterAndRecover() failed: $ex") }

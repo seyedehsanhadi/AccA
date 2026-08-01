@@ -39,6 +39,7 @@ import mattecarra.accapp.models.*
 import mattecarra.accapp.utils.*
 import mattecarra.accapp.viewmodel.ProfilesViewModel
 import mattecarra.accapp.viewmodel.SchedulesViewModel
+import mattecarra.accapp.viewmodel.ScriptsViewModel
 import mattecarra.accapp.viewmodel.SharedViewModel
 import xml.BatteryInfoWidget
 import xml.WIDGET_ALL_UPDATE
@@ -55,12 +56,14 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
     val ACC_ADD_PROFILE_SCHEDULER_REQUEST = 4
     val ACC_EDIT_PROFILE_SCHEDULER_REQUEST = 5
     val ACC_IMPORT_PROFILE_REQUEST = 6
+    val ACC_IMPORT_SCRIPT_REQUEST = 7
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var _preferences: Preferences
     private lateinit var _sharedViewModel: SharedViewModel
     private lateinit var _schedulesViewModel: SchedulesViewModel
     private lateinit var _profilesViewModel: ProfilesViewModel
+    private lateinit var _scriptsViewModel: ScriptsViewModel
 
     // initUi() now runs after an async ACC detect, so the toolbar/bottom-nav can exist before
     // the (lateinit) ViewModels do. Guards below ignore nav/menu taps until init completes,
@@ -80,6 +83,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         _sharedViewModel = ViewModelProvider(this).get(SharedViewModel::class.java)
         _profilesViewModel = ViewModelProvider(this).get(ProfilesViewModel::class.java)
         _schedulesViewModel = ViewModelProvider(this).get(SchedulesViewModel::class.java)
+        _scriptsViewModel = ViewModelProvider(this).get(ScriptsViewModel::class.java)
         val firstInit = !isUiInitialized
         isUiInitialized = true   // ViewModels exist -> nav/menu handlers are safe now
 
@@ -275,14 +279,31 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             AboutActivity.launch(this)
             true
         }
+        // Export/Import act on the tab you are looking at. They used to always mean "profiles",
+        // whichever tab was open, so a user on Scripts tapped Export and got their profiles --
+        // which read as "my scripts cannot be exported" (they could not: there was no path at all).
         R.id.menu_appbar_import -> {
-            startActivityForResult(Intent(this, ImportProfilesActivity::class.java), ACC_IMPORT_PROFILE_REQUEST)
+            if (selectedNavBarItem == R.id.botNav_scriptes)
+                startActivityForResult(Intent(this, ImportScriptsActivity::class.java), ACC_IMPORT_SCRIPT_REQUEST)
+            else
+                startActivityForResult(Intent(this, ImportProfilesActivity::class.java), ACC_IMPORT_PROFILE_REQUEST)
             true
         }
 
         R.id.menu_appbar_export ->
         {
-            if (isUiInitialized) {   // _profilesViewModel may not exist yet during async init
+            if (selectedNavBarItem == R.id.botNav_scriptes) {
+                launch {
+                    val scripts = ArrayList(_scriptsViewModel.getScripts())
+                    if (scripts.isEmpty()) {
+                        Toast.makeText(this@MainActivity, getString(R.string.export_no_scripts), Toast.LENGTH_SHORT).show()
+                    } else {
+                        startActivity(Intent(this@MainActivity, ExportScriptsActivity::class.java)
+                            .putExtra("list", scripts))
+                    }
+                }
+            }
+            else if (isUiInitialized) {   // _profilesViewModel may not exist yet during async init
                 // Generate list of ExportEntries TODO: maybe move this to the actual activity to make new ProfileEntries from AccaProfiles
                 var profileList: ArrayList<ProfileEntry> = ArrayList()
                 launch {
@@ -353,6 +374,27 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
      */
     private fun detectAccAndInit() {
         launch {
+            // Drop a cached NON-ROOT shell before re-checking, or "Retry" can never succeed.
+            //
+            // libsu caches one Shell per process. If the very first shell was built while root
+            // was unavailable -- denied, or the KernelSU prompt not answered yet -- that shell is
+            // non-root forever, and Shell.rootAccess() keeps reporting false no matter what the
+            // user does afterwards. Reported on KernelSU: granting root inside the KernelSU app
+            // and pressing Retry still said "no root", because Retry re-asked the same dead
+            // shell. Only a full app restart cleared it.
+            //
+            // Closing the cached shell makes the next rootAccess() build a fresh one, which
+            // re-requests root and picks up a grant made since. Guarded so a WORKING root shell
+            // is never torn down (that would re-prompt on every retry), and close() is wrapped
+            // because libsu throws if the shell is already dead.
+            withContext(Dispatchers.IO) {
+                try {
+                    val cached = Shell.getCachedShell()
+                    if (cached != null && cached.status < Shell.ROOT_SHELL) {
+                        try { cached.close() } catch (_: Exception) {}
+                    }
+                } catch (_: Exception) {}
+            }
             // ALL blocking root work runs off the main thread: Shell.rootAccess() (the first
             // call spawns the su daemon / shows the root prompt) AND Acc/Djs detection +
             // instance warm-up (their getters do blocking Shell.su). Doing any of these on
@@ -377,6 +419,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                     }
                 }
             } ?: "stuck"
+            Breadcrumbs.add("startup: root+acc detection = $state")
             if (isFinishing) return@launch
             when (state) {
                 "noroot" -> showNoRoot()
@@ -591,6 +634,10 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
         setTheme(R.style.AccaTheme_DayNight)
         super.onCreate(savedInstanceState)
         LogExt().d(javaClass.simpleName, "onCreate()")
+        // rc20 diagnostics: install the crash handler as early as possible + drop a launch breadcrumb.
+        // In-memory ring, foreground-only, written to disk only on collect or crash -> zero background.
+        Breadcrumbs.installCrashHandler(filesDir)
+        Breadcrumbs.add("app launch")
 
         //--------------------------------------------------
 
@@ -817,6 +864,27 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                         Toast.makeText(
                             this,
                             getString(R.string.import_profile_success, imports.size),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+            ACC_IMPORT_SCRIPT_REQUEST -> {
+                if (resultCode == Activity.RESULT_OK) {
+                    @Suppress("UNCHECKED_CAST")
+                    val imports =
+                        data?.getSerializableExtra(Constants.DATA_KEY) as? List<AccaScript>
+                    if (!imports.isNullOrEmpty()) {
+                        // copyScript inserts with uid 0 and puts the row at the top, so an import
+                        // never overwrites an existing script and never lands mid-list.
+                        for (script: AccaScript in imports) {
+                            script.scOutput = ""
+                            script.scExitCode = 0
+                            _scriptsViewModel.copyScript(script)
+                        }
+                        Toast.makeText(
+                            this,
+                            getString(R.string.import_script_success, imports.size),
                             Toast.LENGTH_SHORT
                         ).show()
                     }

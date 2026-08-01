@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.FileProvider
+import androidx.activity.viewModels
 import android.os.Build
 import android.os.Bundle
 import android.view.Menu
@@ -17,8 +19,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp.databinding.ActivityLogViewerBinding
+import com.afollestad.materialdialogs.MaterialDialog
+import mattecarra.accapp.utils.Breadcrumbs
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ScopedAppActivity
+import mattecarra.accapp.viewmodel.ChargeCaptureViewModel
 import java.io.File
 
 /**
@@ -38,6 +43,7 @@ class LogViewerActivity : ScopedAppActivity()
 {
     private lateinit var binding: ActivityLogViewerBinding
     private var report: String = ""
+    private val capVM: ChargeCaptureViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?)
     {
@@ -55,7 +61,16 @@ class LogViewerActivity : ScopedAppActivity()
         binding.logButtonShare.setOnClickListener { shareReport() }
         binding.logButtonRefresh.setOnClickListener { loadReport() }
 
-        loadReport()
+        // Live charge capture streams here and survives rotation/screen-off (it lives in the ViewModel).
+        // Re-observing on recreate restores the growing text and the still-running capture.
+        capVM.state().observe(this) { s ->
+            if (s.text.isNotEmpty()) {
+                binding.logReportText.text = s.text
+                report = s.text
+                binding.logReportText.post { binding.logScroll?.fullScroll(View.FOCUS_DOWN) }
+            }
+        }
+        if (capVM.isRunning) setBusy(false) else loadReport()
     }
 
     private fun setBusy(busy: Boolean)
@@ -78,40 +93,76 @@ class LogViewerActivity : ScopedAppActivity()
         }
     }
 
+    // The app used to carry its OWN bundled acc-diag.sh asset and run that. It was left
+    // unreachable when the menu moved to showReportDialog(), so the APK was shipping a second,
+    // older collector that could never run and could silently drift from the module's canonical
+    // one. Removed: there is exactly ONE diagnostic now, the module's diag-collect.sh reached
+    // through `acc --diag`, so app users and CLI users always send the identical bundle.
+
     /**
-     * Deep diagnostic: runs the bundled comprehensive acc-diag (device + the FULL charge-control node
-     * inventory, so unknown phones are covered, + the daemon flight recorder + a computed failure
-     * verdict), observe-only, and shows it here so the existing Copy / Share buttons work on it. The
-     * script also auto-saves a copy to Downloads. This is the bundle a user sends us to get supported.
+     * THE ONE diagnostic. Runs the module's canonical passive collector (`acc --diag` -> diag-collect.sh),
+     * which gathers EVERYTHING into a single .tgz -- identity, config, live state, ACC's own logs, plus
+     * Android's own logcat / pstore-panic / crash / ANR / persistent reboot-archive records + a manifest
+     * of what was captured -- then shares that one file. Nothing runs in the background; this executes
+     * only on tap. Same collector the CLI `acc --diag` uses, so app users and CLI users send the identical
+     * bundle. The file is copied into app-private storage so it can be shared via FileProvider.
      */
-    private fun runDeepDiag()
+    /** Ask which report to collect before running: Quick (core, default) or Full (--full, everything). */
+    private fun showReportDialog()
     {
-        setBusy(true)
-        binding.logReportText.text = getString(R.string.deep_diagnostic_running)
-        launch {
-            val text = withContext(Dispatchers.IO) { gatherDeepDiag() }
-            report = text
-            binding.logReportText.text = text
-            setBusy(false)
-            if (text.contains("schema=diag") && text.contains("ok=1"))
-                Toast.makeText(this@LogViewerActivity, R.string.diag_saved_downloads, Toast.LENGTH_LONG).show()
+        MaterialDialog(this).show {
+            title(R.string.report_dialog_title)
+            message(R.string.report_dialog_message)
+            positiveButton(R.string.report_quick) { collectAndShare(false) }
+            neutralButton(R.string.report_full) { collectAndShare(true) }
         }
     }
 
-    private fun gatherDeepDiag(): String
+    private fun collectAndShare(full: Boolean)
     {
-        if (!Shell.rootAccess())
-            return "root: NOT GRANTED\n\nThe deep diagnostic needs root to read ACC's data.\n"
-        return try {
-            val appFile = File(filesDir, "acc-diag.sh")
-            assets.open("acc-diag.sh").use { input -> appFile.outputStream().use { output -> input.copyTo(output) } }
-            Shell.su("cp ${appFile.absolutePath} /data/local/tmp/acc-diag.sh && chmod 0755 /data/local/tmp/acc-diag.sh").exec()
-            Shell.su("sh /data/local/tmp/acc-diag.sh >/dev/null 2>&1").exec()
-            val out = Shell.su("cat \$(ls -t /data/local/tmp/acc-diag-*.txt 2>/dev/null | head -1)").exec().out.joinToString("\n")
-            if (out.isBlank()) "Deep diagnostic produced no output (is ACC installed?)." else out
-        } catch (e: Exception) {
-            LogExt().e(javaClass.simpleName, "acc-diag failed: $e")
-            "Deep diagnostic failed: ${e.message}\n"
+        setBusy(true)
+        // capture the app-side event trail so the (root) collector bundles it
+        Breadcrumbs.add("diagnostics: collect & share (" + (if (full) "full" else "quick") + ")")
+        Breadcrumbs.flush(filesDir)
+        binding.logReportText.text = getString(R.string.deep_diagnostic_running)
+        launch {
+            val file = withContext(Dispatchers.IO) {
+                if (!Shell.rootAccess()) return@withContext null
+                // canonical collector (Quick=core; Full=--full); fall back to the module path if `acc` is not on PATH (e.g. Tensor)
+                val arg = if (full) " --full" else ""
+                val out = Shell.su(
+                    "b=\$(acc --diag$arg 2>&1 | grep -m1 '^bundle:'); " +
+                    "[ -z \"\$b\" ] && [ -f /data/adb/vr25/acc/diag-collect.sh ] && b=\$(sh /data/adb/vr25/acc/diag-collect.sh$arg 2>&1 | grep -m1 '^bundle:'); " +
+                    "echo \"\$b\""
+                ).exec().out.joinToString("\n")
+                // accept any extension: the collector picks bzip2 (.tar.bz2) when present, else gzip (.tgz)
+                val src = Regex("""bundle:\s*(\S+)""").find(out)?.groupValues?.get(1) ?: return@withContext null
+                val dir = File(filesDir, "logs").apply { mkdirs() }
+                val dest = File(dir, src.substringAfterLast('/'))
+                Shell.su("cp -f '$src' '${dest.absolutePath}' && chmod 0644 '${dest.absolutePath}'").exec()
+                if (dest.exists() && dest.length() > 0) dest else null
+            }
+            setBusy(false)
+            if (file != null) {
+                val uri = FileProvider.getUriForFile(this@LogViewerActivity, "$packageName.fileprovider", file)
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/octet-stream"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, "ACC diagnostic (${file.name})")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                binding.logReportText.text = getString(R.string.report_ready_body)
+                // clear "ready" dialog with a big Share button, so a non-technical user never has to hunt in Downloads
+                MaterialDialog(this@LogViewerActivity).show {
+                    title(R.string.report_ready_title)
+                    message(R.string.report_ready_message)
+                    positiveButton(R.string.report_share) { startActivity(Intent.createChooser(shareIntent, getString(R.string.log_share))) }
+                    negativeButton(R.string.report_done)
+                }
+            } else {
+                binding.logReportText.text = getString(R.string.log_export_failed)
+                Toast.makeText(this@LogViewerActivity, R.string.log_export_failed, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -141,36 +192,61 @@ class LogViewerActivity : ScopedAppActivity()
         }
         sb.append("root         : ok\n")
 
-        // Single shell call emits all sections with clear separators.
+        // Clean, human-readable summary only. The full detail (every candidate switch, the raw config,
+        // the daemon trace) lives in the shared diagnostic bundle, NOT on this screen -- the old
+        // "Charging switches (available)" list read as "these are YOUR switches" and confused users.
         val script = """
             echo "@@VERSION"; $acca -v 2>/dev/null
-            echo "@@KERNEL";  uname -a 2>/dev/null
             echo "@@DAEMON";  ( $acca -D >/dev/null 2>&1 && echo "running" || echo "stopped" )
-            echo "@@CURSW";   sed -n 's/^chargingSwitch=//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null; { [ -f /data/adb/vr25/acc-data/.user-locked ] && echo "pinned by user (Apply and Lock / manual): yes" || echo "pinned by user (Apply and Lock / manual): no"; }
-            echo "@@BATTERY"; $acca -i 2>/dev/null
-            echo "@@CONFIG";  $acca -sp 2>/dev/null
-            echo "@@SWITCH";  $acca -s s: 2>/dev/null
-            echo "@@SWITCHTEST"; cat /data/adb/vr25/acc-data/logs/switch-test.log 2>/dev/null; printf '\n-- daemon-confirmed working switches --\n'; cat /data/adb/vr25/acc-data/logs/working-switches.log 2>/dev/null
-            echo "@@LOGTAIL"; tail -n 40 /dev/.vr25/acc/accd-*.log 2>/dev/null | sed -E 's/^[0-9]+:[[:space:]]*//'
+            echo "@@KERNEL";  uname -r 2>/dev/null
+            echo "@@BATTERY"; $acca -i 2>/dev/null | grep -iE 'level|status|temp|current|voltage|charge_type|power'
+            echo "@@CAP";     sed -n 's/^capacity=//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null
+            echo "@@TEMP";    sed -n 's/^temperature=//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null
+            echo "@@SWITCH";  sed -n 's/^chargingSwitch=//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null
+            echo "@@WORKING"; cat /data/adb/vr25/acc-data/logs/working-switches.log 2>/dev/null
             echo "@@END"
         """.trimIndent()
 
         val out = Shell.su(script).exec().out.joinToString("\n")
 
-        sb.append(section(out, "@@VERSION", "@@KERNEL", "ACC version"))
-        sb.append(section(out, "@@KERNEL", "@@DAEMON", "Kernel"))
-        sb.append(section(out, "@@DAEMON", "@@CURSW", "Daemon"))
-        // The bare */online tail of `acca -i` reads like a switch tuple (e.g. "sm7250_bms/online 1")
-        // and got field-reported as "Diagnostics shows my old charging switch". Surface the real,
-        // current switch from the config in its own section and label the Battery dump for what it is.
-        sb.append(section(out, "@@CURSW", "@@BATTERY", "Charging switch (current, from ACC config)"))
-        sb.append(section(out, "@@BATTERY", "@@CONFIG", "Battery (kernel power-supply readout; */online lines are supply status, not the switch)"))
-        sb.append(section(out, "@@CONFIG", "@@SWITCH", "Config"))
-        sb.append(section(out, "@@SWITCH", "@@SWITCHTEST", "Charging switches (available)"))
-        sb.append(section(out, "@@SWITCHTEST", "@@LOGTAIL", "Switch test results (which method works on this phone)"))
-        sb.append(section(out, "@@LOGTAIL", "@@END", "Daemon log (recent)"))
+        sb.append(section(out, "@@VERSION", "@@DAEMON", "ACC version"))
+        sb.append(section(out, "@@DAEMON", "@@KERNEL", "Daemon"))
+        sb.append(section(out, "@@KERNEL", "@@BATTERY", "Kernel"))
+        sb.append(section(out, "@@BATTERY", "@@CAP", "Charging now"))
+
+        sb.append("\n## Your charge limit\n")
+        sb.append(friendlyCap(between(out, "@@CAP", "@@TEMP"))).append('\n')
+        val temp = between(out, "@@TEMP", "@@SWITCH")
+        if (temp.isNotBlank()) sb.append("temperature limits (°C): ").append(temp).append('\n')
+
+        val sw = between(out, "@@SWITCH", "@@WORKING")
+        val working = between(out, "@@WORKING", "@@END")
+        sb.append("\n## Charging switch\n")
+        sb.append("active: ").append(if (sw.isBlank()) "(none set)" else sw).append('\n')
+        sb.append("confirmed working here: ").append(if (working.isBlank()) "not tested yet — use Switch Finder" else working).append('\n')
 
         return sb.toString().trimEnd() + "\n"
+    }
+
+    /** Raw body between two markers (no heading). */
+    private fun between(all: String, start: String, end: String): String {
+        val s = all.indexOf(start); if (s < 0) return ""
+        val from = s + start.length; val e = all.indexOf(end, from)
+        return (if (e < 0) all.substring(from) else all.substring(from, e)).trim()
+    }
+
+    /** Turn the raw ACC capacity tuple into plain language; fall back to raw if the shape is unexpected. */
+    private fun friendlyCap(raw: String): String {
+        val p = raw.trim().replace(",", " ").split(Regex("\\s+")).filter { it.isNotBlank() }
+        return when {
+            p.size >= 4 -> "stops charging at ${p[3]}%, resumes at ${p[2]}%  (raw: ${raw.trim()})"
+            // ACC orders the tuple resume-before-pause, which is why the 4-field branch above
+            // reads stop from p[3] and resume from p[2]. The short form follows the same order,
+            // so stop is p[1]; reading it as p[0] printed the two numbers swapped.
+            p.size == 2 -> "stops at ${p[1]}%, resumes at ${p[0]}%  (raw: ${raw.trim()})"
+            raw.isBlank() -> "(not set)"
+            else -> raw.trim()
+        }
     }
 
     /** Extract the text between two markers and render it under a heading. */
@@ -231,22 +307,17 @@ class LogViewerActivity : ScopedAppActivity()
 
     /**
      * Charge-activity capture. A one-shot snapshot can't reveal a 1-2s charge
-     * flicker, so this samples `acca -i` once per second for ~20s and records
+     * flicker, so this samples `acca -i` once per second for ~60s and records
      * level / status / current / voltage per second, then classifies the active
      * charging switch (level-type vs clean on/off) and flags an on/off
      * oscillation near the pause cap. User-initiated and time-bounded, so there
      * is no ongoing battery cost; it reads only, never changes charging.
      */
+    // Toggle: first tap starts the live capture (streams into the ViewModel, survives rotation);
+    // tapping again stops it early. The observer in onCreate renders the growing text.
     private fun captureCharging()
     {
-        setBusy(true)
-        binding.logReportText.text = getString(R.string.log_capturing)
-        launch {
-            val text = withContext(Dispatchers.IO) { runCapture(samples = 20) }
-            report = text
-            binding.logReportText.text = text
-            setBusy(false)
-        }
+        if (capVM.isRunning) capVM.stop() else capVM.start(60)
     }
 
     private suspend fun runCapture(samples: Int): String
@@ -360,9 +431,8 @@ class LogViewerActivity : ScopedAppActivity()
         when (item.itemId)
         {
             android.R.id.home -> { finish(); return true }
-            R.id.menu_deep_diag -> { runDeepDiag(); return true }
+            R.id.menu_deep_diag -> { showReportDialog(); return true }
             R.id.menu_capture -> { captureCharging(); return true }
-            R.id.menu_export_bundle -> { exportFullBundle(); return true }
         }
         return super.onOptionsItemSelected(item)
     }

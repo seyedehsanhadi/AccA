@@ -85,7 +85,7 @@
                     android:id="@+id/item_profile_switch_ll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -140,7 +140,7 @@
                     android:id="@+id/item_profile_capacity_ll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -174,7 +174,7 @@
                     android:id="@+id/item_profile_charging_voltage_ll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -218,7 +218,7 @@
                     android:id="@+id/item_profile_temperature_ll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -252,7 +252,7 @@
                     android:id="@+id/item_profile_cooldown_ll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -286,7 +286,7 @@
                     android:id="@+id/item_profile_on_boot_ll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -320,7 +320,7 @@
                     android:id="@+id/item_profile_on_plug_ll"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="vertical">
 
                     <LinearLayout
@@ -354,7 +354,7 @@
                     android:id="@+id/item_Profile_prioritize_battery_idleTv"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="horizontal">
 
                     <ImageView
@@ -372,7 +372,7 @@
                     android:id="@+id/item_Profile_ResetBsOnPauseTv"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="10dp"
+                    android:layout_marginBottom="3dp"
                     android:orientation="horizontal">
 
                     <ImageView

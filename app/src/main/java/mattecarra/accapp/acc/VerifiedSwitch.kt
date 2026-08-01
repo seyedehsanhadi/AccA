@@ -17,7 +17,7 @@ import com.topjohnwu.superuser.Shell
  *   schema=1
  *   charging_switch=<path> <on> <off>      (the pinnable spec, or absent)
  *   class=bypass|cut|drain|level|throttle
- *   conf=verified|pump-needs-long-test
+ *   conf=verified|needs-test|unconfirmed|pump-needs-long-test
  *   device=<ro.product.device>  soc=<ro.board.platform>
  *   result=no-switch                       (when nothing pinnable was found)
  *   ok=1                                   (sentinel — MUST be the last line; proves a complete write)
@@ -89,10 +89,12 @@ sealed class VerifiedSwitch {
             if (device.isNotEmpty() && liveDevice.isNotEmpty() && device != liveDevice) return DeviceMismatch
             if (soc.isNotEmpty() && liveSoc.isNotEmpty() && soc != liveSoc) return DeviceMismatch
 
-            // Path-exists gate: the switch's first node must really exist on THIS device.
-            val firstPath = sw.trim().substringBefore(' ')
-            if (firstPath.startsWith("/")) {
-                if (!Shell.su("[ -e \"$firstPath\" ]").exec().isSuccess) return None
+            // Path-exists gate: EVERY node of the switch must really exist on THIS device -- a
+            // grouped multi-path spec with one vanished path must not be offered for a direct pin.
+            val paths = sw.trim().split(' ').filter { it.startsWith("/") }
+            if (paths.isNotEmpty()) {
+                val check = paths.joinToString(" && ") { "[ -e \"$it\" ]" }
+                if (!Shell.su(check).exec().isSuccess) return None
             }
 
             val klass = kv["class"].orEmpty()
@@ -129,5 +131,30 @@ sealed class VerifiedSwitch {
         @WorkerThread
         private fun getprop(name: String): String =
             Shell.su("getprop $name").exec().out.firstOrNull()?.trim().orEmpty()
+
+        /**
+         * How a picked switch should be applied, from its class + confidence. Single source of truth
+         * for the "does acc -t run?" decision, shared by the editor card and the switch finder.
+         *
+         * A firmware %-limit (class=level) is proven by the tester's own engage+hold step, and ACC's
+         * binary `acca -t` writes the switch's OFF value = the pause %; when the battery sits BELOW
+         * that % charging correctly keeps going, so `acca -t` returns a FALSE "Switch doesn't work"
+         * for EVERY level switch tested below its cap (the Pixel 9a report). So a level switch must
+         * never touch acc -t: pin it if enforcement was proven, otherwise ask for a lower-% re-run.
+         */
+        fun applyMode(klass: String, conf: String): ApplyMode = when {
+            conf == "verified"          -> ApplyMode.PIN_DIRECT
+            klass.equals("level", true) -> if (conf == "needs-test") ApplyMode.PIN_DIRECT else ApplyMode.LEVEL_RERUN
+            else                        -> ApplyMode.LIVE_TEST
+        }
     }
+
+    /**
+     * PIN_DIRECT  - proof already in hand (conf=verified, or an engage-proven level cap that is only
+     *               slow to re-arm): lock straight away, no acc -t, no "connect charger".
+     * LEVEL_RERUN - a %-cap whose enforcement was NOT proven (unconfirmed / pump). acc -t can only
+     *               ever FALSE-fail it from below the cap, so ask for a re-run at a lower % instead.
+     * LIVE_TEST   - a cut / bypass / drain switch acc -t CAN judge (status flips): run it.
+     */
+    enum class ApplyMode { PIN_DIRECT, LEVEL_RERUN, LIVE_TEST }
 }

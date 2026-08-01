@@ -12,5 +12,10 @@ data class AccaScript(
     var scDescription: String,
     var scBody: String,
     var scOutput : String,
-    var scExitCode: Int
+    var scExitCode: Int,
+    // User-controlled sort position. Before this existed the list was ordered by `uid DESC`,
+    // i.e. newest first and unchangeable, so re-ordering meant copy-then-delete. Defaulted so
+    // every existing construction site keeps compiling; MIGRATION_19_20 backfills it as -uid,
+    // which reproduces the old newest-first order exactly on the first run after upgrading.
+    var scOrder: Int = 0
 ) : Serializable

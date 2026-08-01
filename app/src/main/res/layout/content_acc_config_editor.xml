@@ -193,6 +193,23 @@
                             android:onClick="onFindSwitchClick"
                             android:text="@string/find_switch_title"
                             android:textColor="@color/color_surface" />
+
+                        <!-- Sits directly under Find my switch because it only exists as a
+                             consequence of scanning: a setting that crashed the phone mid-scan is
+                             put back and blocked, and this is where you see or undo that. Filled to
+                             match Find my switch: borderless made it read as decoration and people
+                             did not find it, which matters because it is where a blocked setting
+                             gets undone. -->
+                        <Button
+                            android:id="@+id/blocked_settings_button"
+                            style="@style/Widget.AppCompat.Button.Colored"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center_horizontal"
+                            android:layout_marginTop="@dimen/card_margindiv2"
+                            android:onClick="onBlockedSettingsClick"
+                            android:text="@string/blocked_settings"
+                            android:textColor="@color/color_surface" />
                     </LinearLayout>
 
                 </LinearLayout>
@@ -222,6 +239,7 @@
                 android:orientation="vertical">
 
                 <TextView
+                    android:id="@+id/verified_switch_title_tv"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/verified_switch_title"

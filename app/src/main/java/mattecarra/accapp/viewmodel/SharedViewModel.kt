@@ -104,6 +104,30 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
     {
         Acc.instance.updateAccConfig(value, ConfigUpdaterEnable(mSharedPrefs)).also {
 
+            if (it.isSuccessful())
+            {
+                // Read ACC back after a SUCCESSFUL apply. This is the root fix for the whole
+                // "the app shows something ACC is not doing" class of report.
+                //
+                // Until now the config posted here was what AccA INTENDED to write, and it was
+                // only re-read when the apply FAILED. A successful apply is not the same as an
+                // exact one: ACC normalizes on write (resume_temp clamping, unit coercion, a
+                // rejected control file being dropped, out-of-range values refused), and
+                // ConfigUpdaterEnable can suppress whole commands, so sections silently keep
+                // their previous on-disk values. AccA then displayed numbers ACC had never
+                // stored - which is exactly what users saw as a profile "not taking effect".
+                //
+                // Reading back makes ACC the single source of truth: the app can only ever show
+                // what the daemon actually holds. The cost is one extra root read per
+                // user-initiated apply (not per loop, not in the background), which is
+                // unmeasurable next to the multi-command apply that just ran.
+                val applied = try { Acc.instance.readConfig() } catch (ex: Exception) {
+                    LogExt().e("saveAccConfig()", "read-back after apply failed: ${ex.message}")
+                    null
+                }
+                if (applied != null) config.postValue(Pair(applied, null))
+            }
+
             if (!it.isSuccessful())
             {
                 // Signal the apply failure: at minimum log it at error level so it is not

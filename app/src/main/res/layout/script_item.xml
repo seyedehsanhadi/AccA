@@ -37,11 +37,14 @@
                     android:layout_weight="1"
                     android:orientation="vertical">
 
+                    <!-- Headline5 wrapped most script names onto two lines and gave one card most
+                         of the screen. Headline6 keeps the title clearly dominant while fitting
+                         on one line, so a list of scripts can actually be scanned. -->
                     <TextView
                         android:id="@+id/item_script_title_tv"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textAppearance="@style/TextAppearance.MaterialComponents.Headline5"
+                        android:textAppearance="@style/TextAppearance.MaterialComponents.Headline6"
                         tools:text="@tools:sample/full_names" />
 
                     <TextView
@@ -49,6 +52,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:ellipsize="end"
+                        android:textSize="13sp"
                         tools:text="@tools:sample/full_names" />
 
                 </LinearLayout>
@@ -62,6 +66,27 @@
                     android:visibility="gone"
                     app:srcCompat="@drawable/ic_outline_settings_24px" />
 
+                <!-- Explicit run target. Running a script executes root shell commands against a
+                     live charging controller, so it must be aimed at rather than triggered by a
+                     stray tap anywhere on the row. -->
+                <ImageButton
+                    android:id="@+id/item_script_run_ib"
+                    style="@style/ActionIcon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/script_run"
+                    app:srcCompat="@drawable/ic_baseline_play_arrow_24" />
+
+                <ImageButton
+                    android:id="@+id/item_script_expand_ib"
+                    style="@style/ActionIcon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/script_expand"
+                    app:srcCompat="@drawable/ic_baseline_arrow_drop_down_24px" />
+
                 <ImageButton
                     android:id="@+id/item_script_options_ib"
                     style="@style/ActionIcon"
@@ -71,11 +96,15 @@
 
             </LinearLayout>
 
+            <!-- The body is a shell command: monospace makes flags and paths readable, and 13sp
+                 keeps a two-line collapsed preview compact. -->
             <TextView
                 android:id="@+id/item_script_body_tv"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingTop="@dimen/card_margin"
+                android:fontFamily="monospace"
+                android:paddingTop="@dimen/card_margindiv2"
+                android:textSize="13sp"
                 tools:text="@tools:sample/full_names" />
 
     </LinearLayout>

@@ -27,7 +27,16 @@ class MainApplication: MultiDexApplication()
         super.onCreate()
         // toIntOrNull: a non-numeric "appdebug" pref (corruption, restored backup,
         // ListPreference edge) must not crash the whole app on launch.
-        mDEBUG = (getDefaultSharedPreferences(applicationContext).getString("appdebug", "0") ?: "0").toIntOrNull() ?: 0
-        LogExt().s(javaClass.simpleName, "DEBUG=$mDEBUG " +when(mDEBUG) {0->"[NONE]" 1->"[CONSOLE]" 2->"[FILE]" else->"[UNKNOWN]"})
+        // try/catch: on FBE (file-based-encryption) devices the directBootAware boot receiver
+        // starts this process BEFORE the first unlock, and credential-encrypted SharedPreferences
+        // throw IllegalStateException there. That killed the whole app on every reboot -- which
+        // also took down the early daemon start the locked-boot branch exists to perform.
+        // Nothing here is essential to correctness, so degrade to defaults instead of dying.
+        try {
+            mDEBUG = (getDefaultSharedPreferences(applicationContext).getString("appdebug", "0") ?: "0").toIntOrNull() ?: 0
+            LogExt().s(javaClass.simpleName, "DEBUG=$mDEBUG " +when(mDEBUG) {0->"[NONE]" 1->"[CONSOLE]" 2->"[FILE]" else->"[UNKNOWN]"})
+        } catch (e: Exception) {
+            mDEBUG = 0
+        }
     }
 }
