@@ -109,25 +109,17 @@ object Acc {
         }
     }
 
-    // Force the charger to re-negotiate the fast-charge contract (AICL/APSD) and un-latch any
-    // stray cut, so fast charging re-engages after it dropped (bad cable seat, thermal that
-    // cleared, a stray app). ENABLE direction only -- it can never overcharge or stop charging;
-    // ACC re-applies your limit on its next loop, so this is a best-effort boost, not a bypass of
-    // your settings. Crash-safe: a libsu failure returns false, never propagates.
-    suspend fun rekickFastCharge(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            Shell.su(
-                "cd /sys/class/power_supply 2>/dev/null || exit 1; " +
-                "for f in */input_suspend */charge_disable */batt_slate_mode */op_disable_charge */disable_charging; do [ -w \"\$f\" ] && echo 0 2>/dev/null > \"\$f\"; done; " +
-                "for f in */charging_enabled */battery_charging_enabled */charge_enabled */charging_enable */enable_charging */enable_charger; do [ -w \"\$f\" ] && echo 1 2>/dev/null > \"\$f\"; done; " +
-                "for f in */apsd_rerun */rerun_aicl; do [ -w \"\$f\" ] && echo 1 2>/dev/null > \"\$f\"; done; " +
-                "[ -w /proc/mtk_battery_cmd/en_power_path ] && echo 1 2>/dev/null > /proc/mtk_battery_cmd/en_power_path; true"
-            ).exec().isSuccess
-        } catch (e: Exception) {
-            LogExt().e(TAG, "rekickFastCharge failed: ${Log.getStackTraceString(e)}")
-            false
-        }
-    }
+    // The manual fast-charge re-kick was REMOVED.
+    //
+    // It wrote apsd_rerun and rerun_aicl straight to the nodes. ACC gained a guard in rc22 that
+    // refuses to re-run charger detection while a working high-voltage contract is live, because
+    // apsd_rerun drops a QC or PD contract to the 5V floor and nothing in software brings it back -
+    // only a physical replug does. This path never consulted that guard, so the app could tear down
+    // a healthy 9V contract that the daemon itself would have refused to touch.
+    //
+    // A re-kick is a repair. ACC still performs it automatically when charging is genuinely stalled,
+    // behind four gates: `acc -sk off`, a rate limit, a per-plug contract latch, and the 6V check.
+    // That path is the supported one, and `acc -sk on|off` remains the user control.
 
     // AccA no longer installs or bundles ACC. ACC is a Magisk/KernelSU/APatch module the user
     // flashes themselves; AccA only detects it (isAccInstalled) and, when it is missing or

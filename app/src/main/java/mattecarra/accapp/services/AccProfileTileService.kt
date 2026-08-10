@@ -112,7 +112,7 @@ class AccProfileTileService: TileService(), CoroutineScope {
             //apply profile
             launch {
                 val res = try {
-                    Acc.instance.updateAccConfig(profile.accConfig, ConfigUpdaterEnable(mSharedPrefs))
+                    Acc.instance.updateAccConfig(profile.configForApply(), ConfigUpdaterEnable(mSharedPrefs))
                 } catch (e: Exception) {
                     LogExt().e(LOG_TAG, "updateAccConfig failed: ${e.message}")
                     null

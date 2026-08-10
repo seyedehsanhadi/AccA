@@ -24,6 +24,7 @@ import mattecarra.accapp.utils.Constants
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ProfileUtils
 import mattecarra.accapp.utils.ScopedFragment
+import com.afollestad.materialdialogs.MaterialDialog
 import mattecarra.accapp.viewmodel.ProfilesViewModel
 import mattecarra.accapp.viewmodel.SharedViewModel
 
@@ -51,12 +52,44 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
 
             launch {
                 mSharedViewModel.updateAccConfig(accConfig)
-                // Remove the current selected profile
-                mSharedViewModel.clearCurrentSelectedProfile()
+
+                // Editing from the dashboard used to detach the selected profile unconditionally:
+                // any tweak silently turned "Balanced" into a custom setup, with no prompt and no
+                // way to fold the change back into the profile. Reported from the field, together
+                // with the other half of the same problem -- once PROFILE_KEY is -1 the dashboard
+                // has no profile to follow, so later edits in the profile manager appear to do
+                // nothing.
+                //
+                // The live config genuinely no longer matches the saved profile here, so something
+                // has to give; which one is the user's call. Ask, and let them keep the profile
+                // updated instead of losing it.
+                val currentId = ProfileUtils.getCurrentProfile(mPrefs)
+                val profile = if (currentId >= 0) mViewModel.getProfileById(currentId) else null
 
                 // updateAccConfig suspends; the view may be gone now. Bail if detached.
                 if (_binding == null || !isAdded) return@launch
-                updateInfo(getString(R.string.profile_not_selected), accConfig)
+
+                if (profile == null) {
+                    // Nothing was selected, so there is no profile to keep or update.
+                    mSharedViewModel.clearCurrentSelectedProfile()
+                    updateInfo(getString(R.string.profile_not_selected), accConfig)
+                } else {
+                    MaterialDialog(mContext).show {
+                        title(R.string.profile_edited_keep_title)
+                        message(text = getString(R.string.profile_edited_keep_message, profile.profileName))
+                        cancelOnTouchOutside(false)
+                        positiveButton(R.string.profile_edited_update) {
+                            profile.accConfig = accConfig
+                            mViewModel.updateProfile(profile)
+                            if (_binding != null && isAdded) updateInfo(profile.profileName, accConfig)
+                        }
+                        negativeButton(R.string.profile_edited_detach) {
+                            mSharedViewModel.clearCurrentSelectedProfile()
+                            if (_binding != null && isAdded)
+                                updateInfo(getString(R.string.profile_not_selected), accConfig)
+                        }
+                    }
+                }
             }
         }
     }
@@ -188,8 +221,12 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
         // looking "Shutdown 5% - Resume 70% - Stop 75%" line reporting a limit ACC was not
         // enforcing. Show the disabled text rather than hiding the row outright, so the state is
         // explicit instead of the setting simply vanishing.
+        // isEnabled only GREYED the row, so a disabled capacity limit still occupied the card and
+        // still read like a live setting. Every sibling row below uses isGone/isVisible; match them.
+        // toString() already returns the "disabled" wording, so the text stays correct either way.
         binding.itemProfileCapacityTv.text = accConfig.configCapacity.toString(mContext)
         binding.itemProfileCapacityTv.isEnabled = accConfig.configCapacity.isEnabled
+        binding.itemProfileCapacityLl.isVisible = accConfig.configCapacity.isEnabled
 
         binding.itemProfileSwitchLl.isGone = accConfig.configChargeSwitch.isNullOrEmpty()
         binding.itemProfileSwitchDataTv.text = accConfig.configChargeSwitch ?: mContext.getString(R.string.automatic)

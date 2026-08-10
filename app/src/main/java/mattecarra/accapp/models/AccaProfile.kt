@@ -13,7 +13,36 @@ import java.io.Serializable
         @Embedded var accConfig: AccConfig,
         var pEnables: ProfileEnables,
         var pScripts: List<Int>? = null, // contain uid from script_table
-    ) : Serializable
+    ) : Serializable {
+
+    /**
+     * The config to actually push to ACC, with the profile's own enable toggles honoured.
+     *
+     * `pEnables.eCapacity` and `configCapacity` are stored in separate columns and could disagree:
+     * turning capacity control off wrote only the enable flag, so the numbers stayed at e.g.
+     * pause=75 and applying the profile still sent a 75% limit. The profile screen hid the row
+     * (it reads pEnables) while the dashboard showed a live limit (it reads back what ACC got),
+     * which is exactly the disparity users reported.
+     *
+     * Newer saves write pause=100 at toggle time, but profiles saved before that still carry the
+     * old numbers, so reconcile here as well: with capacity control off the applied config always
+     * carries pause=100, ACC's "charge to full", i.e. no capacity limit -- temperature, voltage and
+     * current stay in force. 100 and not 101: ACC validates pause as 1..100 and clamps 101 to 80,
+     * measured on a Pixel 6a.
+     */
+    fun configForApply(): AccConfig =
+        if (pEnables.eCapacity) accConfig
+        else accConfig.copy(
+            configCapacity = accConfig.configCapacity.copy(
+                // BOTH ends, not just pause. accd's _ge_pause_cap is a plain `level >= pause` with
+                // no special case for 100, so pause=100 still cuts the moment the battery reaches
+                // 100%. Leaving resume at the user's old value (say 70) then makes the phone drain
+                // 100 -> 70 and charge back: a 30% cycle, worse than the limit they turned off.
+                // resume=99 keeps the hysteresis legal (resume < pause) and collapses the band to
+                // 1%, so a full battery simply tops up the way it would with no limit at all.
+                pause = AccConfig.ConfigCapacity.DISABLED,
+                resume = AccConfig.ConfigCapacity.DISABLED - 1))
+    }
 
     //----------------------------------------------------------------------
     // Enable\disable options in profile for greater flexibility !)

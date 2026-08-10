@@ -2,6 +2,35 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## 2.0.1-rc21 (221)
+
+Pairs with ACC v2025.5.18-6.5.1-rc22. Install both.
+
+Added
+- Find my charging switch has its own card on the dashboard, above the configuration.
+- Profile and script export screens gained select-all and select-none.
+
+Fixed
+- A charge limit of 100% no longer silently becomes 80%.
+- A limit of 100% no longer reads back as capacity control being off.
+- Exporting several profiles or scripts no longer produces a truncated file.
+- Importing no longer overwrites a local profile or script of the same name.
+- Settings now shows the refresh interval ACC actually holds, not the default.
+- The dashboard no longer shows wrong watts, amps or volts, or 0.00 W while current is flowing.
+
+Changed
+- Export saves the file by default; sharing moved to the toolbar.
+- Exports go to their own Download/AccA folder and never overwrite an earlier backup.
+- Import offers the same three routes as export: a file, the clipboard, or another app.
+- Export screens start with everything selected.
+
+Removed
+- The fast-charge re-kick, and its "Re-kick fast charge on plug" setting. It wrote apsd_rerun and rerun_aicl straight to the nodes, without the guard ACC gained in rc22 that refuses to re-run charger detection while a working high-voltage contract is live. On a QC or PD supply that drops the contract to 5 V until you physically replug. ACC still re-kicks automatically when charging is genuinely stalled, and `acc -sk on|off` remains the control.
+
+AMPS 7.2.3
+- A scan run during a pause or a thermal throttle no longer suggests pinning the phone at that current.
+- A level-limit switch on a phone below its stop level now produces a usable config line instead of falling through to a current cap.
+
 ## 2.0.1-rc20 (220)
 
 Everything since rc19, in one release.

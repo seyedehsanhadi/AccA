@@ -1,5 +1,6 @@
 package mattecarra.accapp.fragments
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -166,6 +167,12 @@ class DashboardFragment : ScopedFragment()
 
             preferences = Preferences(it)
             configViewModel = ViewModelProvider(it).get(SharedViewModel::class.java)
+
+            // Straight to the finder. It runs the bundled AMPS tester itself, so there is nothing
+            // in the config editor it needs on the way in.
+            binding.dashFindSwitchButton.setOnClickListener { _ ->
+                startActivity(Intent(it, mattecarra.accapp.activities.SwitchFinderActivity::class.java))
+            }
 
             binding.dashResetBatteryStatsButton.setOnClickListener {
                 launch { try { Acc.instance.resetBatteryStats() } catch (e: Exception) { } }
@@ -422,9 +429,13 @@ class DashboardFragment : ScopedFragment()
             if (charging) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
 
         val vbat = if (state.voltageRaw >= 100000L) (state.voltageRaw / 1000L).toInt() else state.voltageRaw.toInt()
-        val battW = if (vbat > 1000) kotlin.math.abs(shownMa) * vbat / 1000000f else 0f
+        // The wattage carries the CURRENT's sign. Taking abs() here printed "-557 mA  .  2.1 W",
+        // two numbers describing the same flow disagreeing about its direction, and the positive
+        // watts is the one that reads like charging. shownMa is already normalised for this
+        // device's polarity, so the sign it carries is the answer for both.
+        val battW = if (vbat > 1000) shownMa * vbat / 1000000f else 0f
         binding.dashChargingSpeedTextView.text = formatCurrentFromState(shownMa) +
-            (if (battW >= 0.1f) "  ·  " + String.format("%.1f W", battW) else "")
+            (if (kotlin.math.abs(battW) >= 0.1f) "  ·  " + String.format("%.1f W", battW) else "")
 
         binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
         val vin = state.inputVoltageMv

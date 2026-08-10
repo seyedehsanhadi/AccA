@@ -60,7 +60,14 @@ class ProfileListAdapter internal constructor(context: Context, activeProfileId:
 
         holder.content.itemProfileTitleTextView.text = profile.profileName
 
-        holder.content.itemProfileCapacityLl.isVisible = profile.pEnables.eCapacity
+        // Two flags described the same thing and could disagree: pEnables.eCapacity is the user's
+        // intent, ConfigCapacity.isEnabled is derived from the numbers ACC actually enforces. A
+        // profile saved before the toggle also wrote pause=DISABLED still carries eCapacity=false
+        // with a live pause value, so honour BOTH -- the row is only shown when the user wants it
+        // AND the numbers would really be enforced. That also makes an old profile render the same
+        // way here as on the dashboard, which reads the derived flag.
+        holder.content.itemProfileCapacityLl.isVisible =
+            profile.pEnables.eCapacity && profile.accConfig.configCapacity.isEnabled
         holder.content.itemProfileCapacityTv.text = profile.accConfig.configCapacity.toString(mContext)
 
         // TODO You must make a switch as a separate item for manual mode or use the parameters from the global configuration in the settings. Here only the display of the selected option.

@@ -162,6 +162,28 @@
 
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Find my charging switch, moved up here from the bottom of the battery card so it sits
+             between the daemon controls and the configuration. It used to live inside the config
+             editor three navigations deep, and users reported not being able to find it at all. -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/switch_card_view"
+            style="@style/Widget.MaterialComponents.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="@dimen/card_margin"
+            android:layout_marginRight="@dimen/card_margin"
+            android:layout_marginBottom="@dimen/card_margindiv2">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/dash_findSwitch_button"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/find_switch_title"
+                app:icon="@drawable/ic_baseline_search_24"
+                app:iconGravity="textStart" />
+        </com.google.android.material.card.MaterialCardView>
+
         <RelativeLayout
             android:id="@+id/current_profile"
             android:layout_height="wrap_content"
@@ -368,21 +390,46 @@
                     android:layout_gravity="center"
                     android:orientation="vertical">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/dash_editCargingLimitOnce_button"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:drawableStart="@drawable/ic_outline_edit_24px"
-                        android:drawableLeft="@drawable/ic_outline_edit_24px"
-                        android:text="@string/edit_charging_limit_once_button" />
+                    <!-- Find my charging switch has moved OUT of this card, up to its own card
+                         directly under the daemon controls. See the switch_card_view below the
+                         status card. It sits above the configuration because choosing a working
+                         switch is a precondition for the configuration meaning anything. -->
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/dash_resetBatteryStats_button"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    <!-- These two share a row rather than taking one each. Neither is
+                         removed: "charge once" is a real one-off override and resetting the
+                         gauge is occasionally the right answer after a deep discharge. They
+                         are just not what someone opens the app to do. -->
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/reset_stats" />
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/dash_editCargingLimitOnce_button"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:paddingLeft="4dp"
+                            android:paddingRight="4dp"
+                            android:textSize="12sp"
+                            android:text="@string/edit_charging_limit_once_button" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/dash_resetBatteryStats_button"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:layout_height="wrap_content"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:paddingLeft="4dp"
+                            android:paddingRight="4dp"
+                            android:textSize="12sp"
+                            android:text="@string/reset_stats" />
+                    </LinearLayout>
                 </LinearLayout>
 
             </LinearLayout>

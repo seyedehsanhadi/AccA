@@ -1026,6 +1026,24 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 content.shutdownCapacityPicker.isEnabled = p1
                 content.resumeCapacityPicker.isEnabled = p1
                 content.pauseCapacityPicker.isEnabled = p1
+
+                // The toggle used to set eCapacity ONLY, leaving pause at its old value. Two flags
+                // then disagreed about the same thing: the profile list hid the row on
+                // pEnables.eCapacity, while the dashboard rendered it live because
+                // ConfigCapacity.isEnabled derives from the numbers (pause in 1..100) and pause was
+                // still 75. Reported from the field -- capacity control switched off in a profile,
+                // dashboard still showing "Shutdown 5% - Resume 70% - Stop 75%".
+                //
+                // Make the toggle mean it: off writes pause = DISABLED so the derived flag agrees,
+                // and on restores a usable value if the config is currently carrying the disabled
+                // sentinel. The user's numbers survive because the pickers hold them.
+                val cap = viewModel.capacity.copy()
+                if (!p1) cap.disable()
+                else if (!cap.isEnabled) {
+                    cap.pause = content.pauseCapacityPicker.value
+                    cap.resume = content.resumeCapacityPicker.value
+                }
+                viewModel.capacity = cap
             }
 
             content.voltcontrolSwitchEnabled ->

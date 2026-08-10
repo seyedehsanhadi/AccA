@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
 # AMPS - Adaptive Multi-device Probe & Selector.
-V=7.2.2
+V=7.2.3
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
 SUPER=1; UNKNOWN=0
@@ -1487,10 +1487,34 @@ classify_held(){
 reg_add(){ _rga="$(printf '%s' "$1" | tr 'A-Z' 'a-z')"; case "$_rga" in cut-*) _rga=cut;; esac; printf '%s\t%s\t%s\t%s\n' "$_rga" "$2" "$3" "$4" >> "$REG" 2>/dev/null; }
 route_hit(){
   rh_cfg="$(printf '%s' "$3" | sed 's/ (.*$//')"
+  # Refuse a config line whose ON value was captured while the phone was NOT actually charging.
+  # The ON value is read off the node before the probe, so if the firmware had charging paused or
+  # thermally throttled at that moment, the "restore to" number is the throttled one and pinning
+  # it caps the phone forever. Measured on a bramble (Pixel 4a 5G) scanned while the charger sat
+  # in CHARGE_PAUSE with icl=0: main/constant_charge_current_max read 0 and the suggested line
+  # was "... 450000 0", i.e. pin this phone at 450mA, on hardware whose own
+  # battery/constant_charge_current reports 3800000.
+  # A current-type ON value under 1A on a node that also carries a much larger reference is that
+  # bug, not a real default. Report the hit, but do not offer it as a pinnable line.
+  case "$rh_cfg" in
+    */constant_charge_current*|*/input_current*|*current_max*)
+      _rh_on="$(printf '%s' "$rh_cfg" | awk '{print $2}')"
+      case "${_rh_on:-x}" in
+        ''|*[!0-9]*) : ;;
+        *) if [ "$_rh_on" -lt 1000000 ] 2>/dev/null; then
+             _rh_ref="$(cat /sys/class/power_supply/battery/constant_charge_current 2>/dev/null)"
+             case "${_rh_ref:-x}" in ''|*[!0-9]*) _rh_ref=0;; esac
+             if [ "$_rh_ref" -gt $(( _rh_on * 2 )) ] 2>/dev/null; then
+               log "  [on-value rejected] $2 -- ON=${_rh_on} was read while charging was paused/throttled (node elsewhere reports ${_rh_ref}); not offered as a config line"
+               rh_cfg=
+             fi
+           fi ;;
+      esac ;;
+  esac
   case "$1" in
-    BYPASS) BYPASS="$BYPASS|$2"; [ -n "$CFG_BYPASS" ] || CFG_BYPASS="$rh_cfg";;
-    DRAIN) DRAIN="$DRAIN|$2"; [ -n "$CFG_DRAIN" ] || CFG_DRAIN="$rh_cfg";;
-    *) CUT="$CUT|$2"; [ -n "$CFG_CUT" ] || CFG_CUT="$rh_cfg";;
+    BYPASS) BYPASS="$BYPASS|$2"; [ -n "$CFG_BYPASS" ] || [ -z "$rh_cfg" ] || CFG_BYPASS="$rh_cfg";;
+    DRAIN) DRAIN="$DRAIN|$2"; [ -n "$CFG_DRAIN" ] || [ -z "$rh_cfg" ] || CFG_DRAIN="$rh_cfg";;
+    *) CUT="$CUT|$2"; [ -n "$CFG_CUT" ] || [ -z "$rh_cfg" ] || CFG_CUT="$rh_cfg";;
   esac
   reg_add "$1" "$rh_cfg" holds-alone "$2"
   WORKING="${WORKING:-$2 ($1)}"
@@ -2718,7 +2742,22 @@ if [ -z "$le_enf" ]; then
   if [ -n "$_lvlacc" ]; then
     _accnow="$(grep -m1 '^chargingSwitch=' /data/adb/vr25/acc-data/config.txt 2>/dev/null | sed -e 's/^chargingSwitch=(//' -e 's/).*$//')"
     case "$_accnow" in
-      *charge_stop_level*|*charge_control_limit*|*batt_full_capacity*|*pcap*) le_enf="$_lvlacc"; LVL_BY_ACC=1;;
+      *charge_stop_level*|*charge_control_limit*|*batt_full_capacity*|*pcap*)
+        le_enf="$_lvlacc"; LVL_BY_ACC=1
+        # CFG_LEVEL is otherwise only set on the VERIFIED path, which needs enforcement to be
+        # observed -- and enforcement can only be observed if the battery crosses the limit
+        # during the scan. A phone sitting at 40% with a stop level of 80 can never show it, so
+        # the level switch was left with no config line and compute_reco's
+        # `[ -n "$le_enf" ] && [ -n "$CFG_LEVEL" ]` fell through to a current-cap bypass.
+        # Measured on a bramble (Pixel 4a 5G): the report printed ACC's own working line,
+        # chargingSwitch=(.../charge_stop_level 100 pcap --), and still said the switch "could
+        # not be turned into a pinnable config line", then recommended an Unconfirmed fcc-zero
+        # over the firmware limit the phone was already using.
+        # ACC's live line IS the pinnable line, so use it verbatim minus the user-lock marker.
+        [ -n "$CFG_LEVEL" ] || case "$_accnow" in
+          *pcap*) CFG_LEVEL="$(printf '%s' "$_accnow" | sed 's/ --$//')" ;;
+        esac
+        ;;
     esac
   fi
 fi

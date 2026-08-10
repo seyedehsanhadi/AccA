@@ -65,6 +65,10 @@ class ProfileEntriesAdapter() : RecyclerView.Adapter<ProfileEntryHolder>() {
         }
     }
 
+    fun checkAll() = setCheckboxStates(true)
+
+    fun uncheckAll() = setCheckboxStates(false)
+
     private fun setCheckboxStates(checked: Boolean) {
         for (entry: ProfileEntry in mEntries) {
             if (entry.isChecked() != checked) {

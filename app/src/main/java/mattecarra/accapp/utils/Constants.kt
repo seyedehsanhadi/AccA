@@ -34,7 +34,6 @@ object Constants {
     val CHARGE_METER_BATTERY_SOURCE = "charge_meter_battery_source"   // acc | system
     val CHARGE_METER_SHOW_TEMP = "charge_meter_show_temp"   // off by default
     val ACCD_USER_STOPPED = "accd_user_stopped"   // deliberate daemon stop; plug guard respects it
-    val AUTO_REKICK_ON_PLUG = "auto_rekick_on_plug"   // opt-in: re-kick fast charge on plug (guarded)
     val UPDATE_NOTIFICATIONS = "update_notifications"   // notify when a new ACC/AccA version is out (default on)
     val UPDATE_DISMISSED_ACCA = "update_dismissed_acca"   // last AccA version the user dismissed
     val UPDATE_DISMISSED_ACC = "update_dismissed_acc"     // last ACC versionCode the user dismissed

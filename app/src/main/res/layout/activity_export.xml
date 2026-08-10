@@ -37,5 +37,5 @@
             android:layout_gravity="bottom|center_horizontal"
             android:layout_margin="16dp"
             android:text="@string/export_title"
-            app:icon="@drawable/ic_export" />
+            app:icon="@drawable/ic_save" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -3,11 +3,23 @@
         xmlns:android="http://schemas.android.com/apk/res/android">
 
     <item
+            android:id="@+id/import_load_file_menu"
+            android:icon="@drawable/ic_round_folder_open_24"
+            android:title="@string/import_load_acca_folder"
+            android:visible="true"
+            app:showAsAction="ifRoom" />
+
+    <item
             android:id="@+id/import_load_clipboard_menu"
             android:icon="@drawable/ic_round_content_paste"
             android:title="@string/menu_title_load_clipboard"
             android:visible="true"
             app:showAsAction="ifRoom" />
+
+    <item
+            android:id="@+id/import_browse_file_menu"
+            android:title="@string/menu_title_browse_file"
+            app:showAsAction="never" />
 
     <item   android:id="@+id/import_clear_menu"
             android:icon="@drawable/ic_round_delete_sweep_24"

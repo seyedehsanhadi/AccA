@@ -1,3 +1,4 @@
 <paths>
     <files-path path="logs/" name="logs" />
+    <files-path path="exports/" name="exports" />
 </paths>

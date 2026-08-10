@@ -554,9 +554,6 @@
     <string name="pref_charge_meter_show_temp_title">Show battery temperature</string>
     <string name="pref_charge_meter_show_temp_summary">Adds the battery temperature next to the status-bar number and in the detailed line. Shown in °C or °F per the Temperature output unit below, under Units of measure.</string>
     <string name="pref_charging_category">Charging</string>
-    <string name="pref_auto_rekick_title">Re-kick fast charge on plug</string>
-    <string name="pref_auto_rekick_summary">Re-negotiate to full fast-charge speed when you plug in below your Stop level. It does not start charging - your Resume level still does that. Off by default.</string>
-    <string name="pref_auto_rekick_info">When you plug in below your Stop level, AccA nudges the charger back to full fast-charge speed. It does not start charging by itself - your Resume level still decides when charging begins. This only makes sure that when charging does resume, it runs at full speed instead of the slow rate some chargers fall to after an unplug or a cut.\n\nHelps Qualcomm and MediaTek phones; does nothing on Pixel/Tensor and others that have no such control. If you set your own Apply-on-plug script, that takes over and this stays out of the way.</string>
     <string name="charge_meter_stop_action">Stop</string>
     <!-- manual AccA-only update browser; ACC surfaces its own update via Magisk/KernelSU -->
     <string name="pref_check_updates_title">Check for updates</string>
@@ -567,7 +564,7 @@
     <!-- detailed-notification lines -->
     <string name="charge_meter_battery_line">Battery %1$d%% · %2$s V · %3$s</string>
     <string name="charge_meter_holds_line">Holds at %1$d%%</string>
-    <string name="charge_reason_user_limit">limited by your Max current</string>
+    <string name="charge_reason_user_limit">your Max current cap is applied</string>
     <string name="charge_reason_thermal">slowed by heat</string>
     <string name="charge_reason_taper">topping off, near full</string>
     <string name="charger_tier_5v">5V standard charger</string>
@@ -578,19 +575,20 @@
 
     <!-- Import and Export -->
     <string name="import_title">Import</string>
-    <string name="import_load_from_clipboard">Press the \'Clipboard\' icon in the toolbar!</string>
+    <string name="import_load_from_clipboard">Nothing loaded yet. Tap the folder icon for your saved exports, or the clipboard icon.</string>
     <string name="export_title">Export</string>
     <string name="export_none_selected">Please select profiles to export above</string>
     <string name="menu_import">Import</string>
     <string name="menu_export">Export</string>
     <string name="menu_title_load_clipboard">Load from Clipboard</string>
-    <string name="menu_title_clear_entries">Clear Entries</string>
+    <string name="menu_title_clear_entries">Clear this list (nothing saved is deleted)</string>
     <string name="import_toast_no_valid_profile_json_clipboard">Valid ACCA Profile JSON not in Clipboard</string>
     <string name="import_toast_no_selected_profiles">Please select Profiles to Import</string>
     <string name="import_profile_success">Successfully imported %d profiles</string>
 
     <!-- Scripts: export/import, expand/collapse, reorder -->
     <string name="export_scripts_title">Export scripts</string>
+    <string name="export_profiles_title">Export profiles</string>
     <string name="import_scripts_title">Import scripts</string>
     <string name="export_no_scripts">There are no scripts to export</string>
     <string name="import_toast_no_valid_script_json_clipboard">Valid AccA script JSON not in clipboard</string>
@@ -774,15 +772,22 @@ They can be written again. Anything that crashed your phone before can crash it 
         <item quantity="other">%d blocked</item>
     </plurals>
     <string name="ui_refresh_pref_title">State refresh interval</string>
+    <string name="ui_refresh_pref_summary_selected">Currently: %1$s</string>
     <string name="ui_refresh_pref_summary">How often the daemon republishes the data this app shows. Longer means less battery used by ACC. Charging is never affected, and a level or status change always shows within seconds.</string>
     <string name="ui_refresh_pref_summary_fmt">%1$s</string>
     <string name="ui_refresh_failed">Could not apply. Is the ACC daemon running?</string>
+    <!-- No percentages. The old labels promised "about a third less CPU" at 60s and "about half"
+         at 120s, from a profile taken before the daemon's other idle costs came down. Re-measured
+         with the phone held awake so every arm is comparable, and a repeated control arm to show
+         the noise floor (0.5% on a Pixel 6a, 1.4% on a Mi A3): 120s saves 4% on the Pixel and
+         nothing measurable on the A3, and Off saves 18% and 5% respectively. One number cannot
+         describe both phones, and the old one was wrong on both. Say the direction, not a figure. -->
     <string-array name="ui_refresh_entries">
         <item>15s - most live, costs the most</item>
         <item>30s - previous default</item>
-        <item>60s - recommended, about a third less CPU</item>
-        <item>120s - saver, about half</item>
-        <item>Off - only update when something changes</item>
+        <item>60s - recommended</item>
+        <item>120s - a little cheaper</item>
+        <item>Off - cheapest; updates when something changes</item>
     </string-array>
     <string-array name="ui_refresh_values">
         <item>15</item>
@@ -791,4 +796,29 @@ They can be written again. Anything that crashed your phone before can crash it 
         <item>120</item>
         <item>0</item>
     </string-array>
+    <string name="menu_title_load_file">Load from file</string>
+    <string name="import_toast_file_unreadable">Could not read that file</string>
+    <string name="import_toast_no_valid_script_json_file">No valid AccA scripts in that file</string>
+    <string name="import_toast_no_valid_profile_json_file">No valid AccA profiles in that file</string>
+    <string name="import_toast_nothing_loaded">Nothing loaded yet. Use Load from file or Load from clipboard first</string>
+    <string name="profile_edited_keep_title">Profile edited</string>
+    <string name="profile_edited_keep_message">You changed settings while the profile \"%1$s\" was selected. Update that profile with the new settings, or keep it unchanged and switch to a custom setup?</string>
+    <string name="profile_edited_update">Update profile</string>
+    <string name="profile_edited_detach">Keep profile, go custom</string>
+    <string name="menu_title_select_all">Select all</string>
+    <string name="menu_title_deselect_all">Deselect all</string>
+    <string name="export_count_toast">Exporting %1$d script(s)</string>
+    <string name="menu_title_save_file">Save to file</string>
+    <string name="menu_title_copy_clipboard">Copy to clipboard</string>
+    <string name="menu_title_share">Share</string>
+    <string name="export_saved_toast">Saved %1$d item(s)</string>
+    <string name="export_copied_toast">Copied %1$d item(s) to clipboard</string>
+    <string name="export_write_failed">Could not write the export file</string>
+    <string name="menu_title_save_as">Save as…</string>
+    <string name="export_save_action">Save</string>
+    <string name="export_saved_to">Saved %1$d item(s) to %2$s</string>
+    <string name="import_load_acca_folder">Load from AccA folder</string>
+    <string name="import_pick_file_title">Files in %1$s</string>
+    <string name="import_no_files_found">No exports in %1$s yet. Use Export first, or Browse for a file from somewhere else.</string>
+    <string name="menu_title_browse_file">Browse…</string>
 </resources>

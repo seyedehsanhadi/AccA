@@ -75,26 +75,54 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
         // cost of raising it is that the meter's live current updates less often. Level and status
         // changes still publish within 5s at every value.
         //
-        // Worth exposing because that publish is the daemon's most expensive act: 1216ms of CPU per
-        // call on a Mi A3, 444ms on a Pixel 6a, against a ~2000ms/min floor for everything else.
-        // Measured idle with the screen off, A3 / Pixel 6a: 30s = 3900/3201 ms per minute,
-        // 60s = 2658/2809 (-32%/-12%), 120s = 2163/2559 (-45%/-20%), off = 1670/2298 (-57%/-28%).
+        // Re-measured with each phone held awake by a partial wakelock, so every arm spends the
+        // same fraction of the window running and only the setting differs. Without that pin the
+        // numbers are meaningless: an A3 ran the same sleep in 496s of wall in one arm and 586s in
+        // another, and the arm that slept least looked most expensive - which produced a result
+        // saying that publishing LESS cost 44% MORE.
+        //
+        // Per minute of awake time, with a repeated 60s control arm giving the noise floor
+        // (0.5% Pixel 6a, 1.4% A3):
+        //   Pixel 6a:  60s = 3334/3350,  120s = 3190 (-4%),  off = 2746 (-18%)
+        //   Mi A3:     60s = 5980/5896,  120s = 6093 (nil),  off = 5661 (-5%)
+        // Only "off" reliably buys anything. The rest of the idle cost is the daemon loop, not
+        // this publish, so the entry labels say the direction rather than a fraction.
         //
         // Written straight through `acc -s`, not through the config editor, so it cannot disturb a
         // profile the user has built. A failure is reported rather than silently swallowed: the
         // preference only keeps the new value if ACC accepted it.
-        findPreference<ListPreference>("ui_refresh")?.setOnPreferenceChangeListener { pref, newValue ->
-            val v = newValue as String
-            val ok = Shell.su("acc -s ui_refresh=$v").exec().isSuccess
-            if (ok) {
-                (pref as ListPreference).summary =
-                    getString(R.string.ui_refresh_pref_summary_fmt, pref.entries[pref.findIndexOfValue(v)])
-            } else {
-                Toast.makeText(context, R.string.ui_refresh_failed, Toast.LENGTH_LONG).show()
+        //
+        // The screen must SHOW the setting, not hide it behind a tap. Reported: "it is not known
+        // which one is selected, you have to open the pop-up to find out". Two things were wrong.
+        // The summary only ever got the selected entry written into it AFTER a change, so a fresh
+        // install or a restart showed the generic explanation and no value at all. And the stored
+        // preference was never reconciled with ACC, so if the two disagreed -- a value set from
+        // the command line, a config restored from a backup -- the dialog opened with no radio
+        // button marked, because the stored value matched none of the entries.
+        //
+        // Read the live value out of ACC's own config, make the preference agree with it, and put
+        // it in the summary. ACC is the authority here; the preference is a mirror.
+        findPreference<ListPreference>("ui_refresh")?.let { pref ->
+            val live = Shell.su("sed -n 's/^uiRefresh=//p' /data/adb/vr25/acc-data/config.txt")
+                .exec().out.firstOrNull()?.trim()
+            if (!live.isNullOrEmpty() && pref.findIndexOfValue(live) >= 0) pref.value = live
+            showUiRefresh(pref)
+
+            pref.setOnPreferenceChangeListener { p, newValue ->
+                val v = newValue as String
+                val ok = Shell.su("acc -s ui_refresh=$v").exec().isSuccess
+                if (ok) {
+                    (p as ListPreference).value = v
+                    showUiRefresh(p)
+                } else {
+                    Toast.makeText(context, R.string.ui_refresh_failed, Toast.LENGTH_LONG).show()
+                }
+                ok
             }
-            ok
         }
 
+        // Selected value first, explanation after, so the answer to "what is it set to" is the
+        // first thing on the line rather than the last.
         val theme = findPreference<ListPreference>("theme")
         theme?.setOnPreferenceChangeListener { _, newValue ->
             when (newValue as String) {
@@ -347,5 +375,12 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
             }
             true
         }
+    }
+
+    private fun showUiRefresh(pref: ListPreference) {
+        val i = pref.findIndexOfValue(pref.value)
+        val label = if (i >= 0) pref.entries[i] else pref.value ?: ""
+        pref.summary = getString(R.string.ui_refresh_pref_summary_selected, label) +
+            System.lineSeparator() + getString(R.string.ui_refresh_pref_summary)
     }
 }
