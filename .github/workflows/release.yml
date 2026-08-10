@@ -76,8 +76,11 @@ jobs:
         run: |
           VER="${GITHUB_REF_NAME#v}"
           awk -v ver="$VER" '
-            $0 ~ "^## \\[" ver "\\]" { grab = 1; next }
-            grab && /^## \[/ { exit }
+            # Match BOTH heading styles. The changelog used "## [2.0.1-rc19] - date" up to rc19
+            # and "## 2.0.1-rc20 (220)" from rc20 on; the bracket-only pattern matched nothing,
+            # so rc20 shipped with no release notes at all - only the fallback line below.
+            index($0, "## " ver) == 1 || index($0, "## [" ver "]") == 1 { grab = 1; next }
+            grab && /^## / { exit }
             grab { print }
           ' CHANGELOG.md > release_notes.md
           if [ ! -s release_notes.md ]; then
