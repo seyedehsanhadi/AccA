@@ -26,7 +26,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.afollestad.materialdialogs.MaterialDialog
 import com.afollestad.materialdialogs.input.input
 import kotlinx.coroutines.launch
+import com.google.android.material.snackbar.Snackbar
 import mattecarra.accapp.R
+import mattecarra.accapp.acc.Acc
 import mattecarra.accapp._interface.OnProfileClickListener
 import mattecarra.accapp.activities.AccConfigEditorActivity
 import mattecarra.accapp.adapters.ProfileListAdapter
@@ -278,17 +280,60 @@ class ProfilesFragment : ScopedFragment(),
     {
         LogExt().d(javaClass.simpleName, "onProfileClick(${profile.uid}): "+ profile.profileName)
 
+        // APPLYING IS RECOVERABLE. One tap on a card used to overwrite the live ACC config with no
+        // confirmation and no way back: a field report described brushing a profile while reading
+        // the list and having to re-import a settings backup to undo it.
+        //
+        // Moving apply behind a menu was the other option, and it is worse: applying is the reason
+        // this screen exists, and it would cost every user two taps to protect against a rare
+        // accident. So keep the single tap and make the accident cost nothing -- snapshot the live
+        // config first, then offer UNDO for as long as the snackbar is up.
         launch {
+            val previous = try { Acc.instance.readConfig() } catch (e: Exception) {
+                LogExt().d(javaClass.simpleName, "could not snapshot the live config for undo: $e")
+                null
+            }
+
             mSharedViewModel.setCurrentSelectedProfile(profile.uid)
             // configForApply(), not accConfig: a profile with capacity control toggled off must push
             // pause=100 (no limit) rather than its stale numbers. See AccaProfile.configForApply.
             mSharedViewModel.updateAccConfig(profile.configForApply())
             mContext.sendBroadcast(Intent(mContext, BatteryInfoWidget::class.java)
                 .setAction(WIDGET_ALL_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
 
-        // Display Toast for the user.
-        Toast.makeText(mContext, getString(R.string.selecting_profile_toast, profile.profileName), Toast.LENGTH_LONG).show()
+            // TEN SECONDS, not LENGTH_LONG. Applying a profile issues a dozen sequential root
+            // commands and takes several seconds, and the snackbar can only be shown once that
+            // finishes -- so LENGTH_LONG's 3.5s started late AND ran out fast. Measured on a Pixel
+            // 6a: the button was frequently gone before it could be pressed, which makes an undo
+            // that technically exists useless in practice.
+            val bar = Snackbar.make(
+                requireView(),
+                getString(R.string.selecting_profile_toast, profile.profileName),
+                10_000)
+
+            // No snapshot means no honest undo. Say nothing rather than offer a button that would
+            // quietly do nothing -- an UNDO that does not undo is worse than no UNDO at all.
+            if (previous != null) {
+                // this@ProfilesFragment.launch, NOT a bare launch.
+                //
+                // Inside launch { } the receiver is THAT COROUTINE'S scope. A bare `launch` in this
+                // click listener therefore attached the undo to the coroutine that showed the
+                // snackbar -- which has already completed by the time anyone can press the button,
+                // so the child was never started. The button dismissed the bar and did absolutely
+                // nothing: verified on a Pixel 6a, click registered, zero acca commands emitted.
+                // It compiles clean, which is why this only showed up on hardware.
+                bar.setAction(R.string.undo) {
+                    this@ProfilesFragment.launch {
+                        mSharedViewModel.updateAccConfig(previous)
+                        mContext.sendBroadcast(Intent(mContext, BatteryInfoWidget::class.java)
+                            .setAction(WIDGET_ALL_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        Toast.makeText(mContext,
+                            getString(R.string.profile_apply_undone), Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            bar.show()
+        }
     }
 
     override fun onProfileLongClick(profile: AccaProfile)

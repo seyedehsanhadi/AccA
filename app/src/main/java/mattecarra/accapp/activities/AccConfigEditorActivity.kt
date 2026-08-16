@@ -1073,6 +1073,25 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 content.cooldownPercentagePicker.isEnabled = p1
                 content.cooldownChargeRatioPicker.isEnabled = p1
                 content.cooldownPauseRatioPicker.isEnabled = p1
+
+                // Turning the switch ON has to BUILD the config, not just flip the flag.
+                //
+                // eCoolDown and configCoolDown are two separate things: the profile card shows the
+                // Cool Down row when eCoolDown is true, but prints the VALUES only when
+                // configCoolDown is non-null. Flipping the switch used to set the flag and leave
+                // the config null, so the row appeared reading "-" and stayed that way until the
+                // user nudged one of the pickers -- whose listener is the only place that ever
+                // constructed it. Reported from the field with screenshots: switch on shows "-",
+                // change Pause 10s -> 9s and the whole line appears.
+                //
+                // The pickers already hold the values to use: they are seeded with the profile's
+                // own settings, or 60/50/10 when it has none.
+                viewModel.coolDown =
+                    if (p1) AccConfig.ConfigCoolDown(
+                        content.cooldownPercentagePicker.value,
+                        content.cooldownChargeRatioPicker.value,
+                        content.cooldownPauseRatioPicker.value)
+                    else null
             }
 
             content.applyOnBootSwitchEnabled ->

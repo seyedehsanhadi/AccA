@@ -430,6 +430,7 @@
 
     <string name="restore">Restore to default</string>
     <string name="undo">Undo</string>
+    <string name="profile_apply_undone">Previous charging settings restored.</string>
     <string name="checking_updates">Checking for update</string>
     <string name="no_update_available">No update available</string>
     <string name="update_completed">Update completed!</string>
