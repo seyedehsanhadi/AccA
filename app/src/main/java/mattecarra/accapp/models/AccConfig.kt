@@ -23,7 +23,12 @@ import java.io.Serializable
         var configResetBsOnPause: Boolean = false,
         var configChargeSwitch: String? = null,
         var configIsAutomaticSwitchingEnabled: Boolean = true,
-        var prioritizeBatteryIdleMode: Boolean = true
+        var prioritizeBatteryIdleMode: Boolean = true,
+        // The cool-down PERCENTAGE is an ACC key of its own (cooldown_capacity) and
+        // must survive the ratio being cleared. It used to live only inside
+        // ConfigCoolDown, so emptying charge/pause nulled that object and the save
+        // wrote the disable value 101 over whatever the user had chosen.
+        var configCoolDownCapacity: Int = 101
     ) : Serializable
     {
 
@@ -119,8 +124,8 @@ import java.io.Serializable
     {
         fun toString(context: Context): String
         {
-            return if (Acc.instance.version >= 202002170) context.getString(R.string.voltage_max) +" "+ (max.toString() ?: "-")
-            else context.getString(R.string.voltage_control_file) +" "+ (controlFile.toString() ?: "-")
+            return if (Acc.instance.version >= 202002170) context.getString(R.string.voltage_max) +" "+ (max?.toString() ?: "-")
+            else context.getString(R.string.voltage_control_file) +" "+ (controlFile ?: "-")
         }
     }
 
@@ -154,9 +159,21 @@ import java.io.Serializable
      * @param pause pause time in seconds.
      */
     data class ConfigCoolDown(var atPercent: Int = 60, var charge: Int = 50, var pause: Int = 10) : Serializable
-    {
+    {
+        /** ACC writes cooldown_capacity=101 to mean "never start cooling down by capacity".
+         *  A percentage cannot exceed 100, so anything above it is the off sentinel. */
+        val isCapacityTriggerOff: Boolean get() = atPercent > 100
+
+        /** The percentage an editor should show and write back. Never the off sentinel:
+         *  the section switch is the on/off control, so turning cool-down ON must produce a
+         *  real percentage. Seeding 101 here left cool-down off after the user enabled it. */
+        fun editorPercent(): Int = atPercent.takeIf { it in 0..100 } ?: DEFAULT_PERCENT
+
+        companion object { const val DEFAULT_PERCENT = 60 }
         fun toString(context: Context): String
         {
+            // Callers hide the whole row when isCapacityTriggerOff, so this only ever
+            // formats a real percentage.
             return context.getString(R.string.template_cool_down_profile, atPercent, charge, pause)
         }
     }

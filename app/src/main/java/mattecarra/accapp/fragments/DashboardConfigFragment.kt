@@ -20,6 +20,7 @@ import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.activities.AccConfigEditorActivity
 import mattecarra.accapp.databinding.ProfilesItemBinding
 import mattecarra.accapp.models.AccConfig
+import mattecarra.accapp.models.AccaProfile
 import mattecarra.accapp.utils.Constants
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ProfileUtils
@@ -49,6 +50,12 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
 
             // Safe-cast the returned config; a missing/garbled extra must not crash.
             val accConfig = data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig ?: return
+            // The editor also returns the whole profile, and its pEnables carry the SECTION
+            // on/off flags. Persisting accConfig alone left those stale: turning a section off
+            // here still showed it on the profile card, because that card renders rows from
+            // pEnables. ProfilesFragment already saves the whole returned profile; this path
+            // has to keep the same two halves together or the two screens disagree.
+            val editedProfile = data.getSerializableExtra(Constants.PROFILE_CONFIG_KEY) as? AccaProfile
 
             launch {
                 mSharedViewModel.updateAccConfig(accConfig)
@@ -80,6 +87,12 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
                         cancelOnTouchOutside(false)
                         positiveButton(R.string.profile_edited_update) {
                             profile.accConfig = accConfig
+                            // uid and name stay from the stored row; the edited halves come
+                            // from the editor so config and section flags cannot diverge.
+                            editedProfile?.let {
+                                profile.pEnables = it.pEnables
+                                profile.pScripts = it.pScripts
+                            }
                             mViewModel.updateProfile(profile)
                             if (_binding != null && isAdded) updateInfo(profile.profileName, accConfig)
                         }
@@ -230,7 +243,10 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
 
         binding.itemProfileSwitchLl.isGone = accConfig.configChargeSwitch.isNullOrEmpty()
         binding.itemProfileSwitchDataTv.text = accConfig.configChargeSwitch ?: mContext.getString(R.string.automatic)
-        binding.itemProfileAutomaticSwitchingTv.isVisible = accConfig.configIsAutomaticSwitchingEnabled
+        // See ProfileListAdapter: the switch write always appends the " --" manual lock, so this
+        // label cannot claim automatic cycling for a configuration that pins a switch.
+        binding.itemProfileAutomaticSwitchingTv.isVisible =
+            accConfig.configIsAutomaticSwitchingEnabled && accConfig.configChargeSwitch.isNullOrEmpty()
 
         //-----------------------------------------------
 
@@ -253,9 +269,11 @@ class DashboardConfigFragment() : ScopedFragment(), SharedPreferences.OnSharedPr
 
         binding.itemProfileTemperatureTv.text = accConfig.configTemperature.toString(mContext)
 
-        binding.itemProfileCooldownLl.isVisible = accConfig.configCoolDown != null
-        binding.itemProfileCooldownTv.text = if (accConfig.configCoolDown == null) "-"
-        else accConfig.configCoolDown?.toString(mContext)
+        // Cool-down off (cooldown_capacity=101) is the same to the user as not configured:
+        // hide the row. Showing "Start at: off" advertises a feature that is not running.
+        val coolDown = accConfig.configCoolDown?.takeIf { !it.isCapacityTriggerOff }
+        binding.itemProfileCooldownLl.isVisible = coolDown != null
+        binding.itemProfileCooldownTv.text = coolDown?.toString(mContext) ?: "-"
 
         binding.itemProfileOnBootLl.isVisible = accConfig.configOnBoot != null
         binding.itemProfileOnBootTv.text = if (accConfig.configOnBoot == null) "-"

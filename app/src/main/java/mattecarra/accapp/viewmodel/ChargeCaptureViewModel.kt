@@ -62,10 +62,19 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
             val acca = "/dev/.vr25/acc/acca"
             if (!Shell.rootAccess()) { _state.postValue(State("root: NOT GRANTED — cannot capture", false, 0, seconds)); return@launch }
 
+            // Ask the daemon how to read this device's current node before sampling it:
+            // currentUnits is uA or mA and polarity is normal or inverted. Hardcoding uA
+            // with an unsigned divide printed +117 mA on a Mi A3 that was discharging.
+            val sense = Shell.su("$acca --state 2>/dev/null").exec().out.joinToString("")
+            val curDiv = if (sense.contains("\"currentUnits\":\"mA\"")) 1L else 1000L
+            val curSign = if (sense.contains("\"polarity\":\"inverted\"")) -1L else 1L
             val head = Shell.su("$acca -sp charging_switch 2>/dev/null; $acca -sp capacity 2>/dev/null").exec().out.joinToString("\n")
             val sw = Regex("""charging_switch=(.*)""").find(head)?.groupValues?.get(1)?.trim()?.trim('"')?.ifBlank { null } ?: "(automatic)"
             val cap = Regex("""capacity=(.*)""").find(head)?.groupValues?.get(1)?.trim() ?: ""
-            val mcc = Shell.su("sed -n 's/^max_charging_current=//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null").exec().out.joinToString("").trim().ifBlank { null }
+            // The on-disk key is maxChargingCurrent= (camelCase); the old snake_case sed
+            // never matched, so mcc was always null and speedVerdict() never saw the cap.
+            val mccRaw = Shell.su("sed -n 's/^maxChargingCurrent=//p' /data/adb/vr25/acc-data/config.txt 2>/dev/null").exec().out.joinToString("").trim()
+            val mcc = Regex("""\(?\s*(\d+)""").find(mccRaw)?.groupValues?.get(1)?.ifBlank { null }
 
             val fixed = StringBuilder()
             fixed.append("# Live charge capture — 1 reading/sec for ${seconds}s\n")
@@ -89,7 +98,7 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
                 val st = f.getOrNull(1)?.ifBlank { null } ?: "?"
                 val iRaw = f.getOrNull(2)?.toLongOrNull(); val tRaw = f.getOrNull(3)?.toIntOrNull()
                 val susp = f.getOrNull(4)?.ifBlank { null } ?: "?"
-                val mA = iRaw?.div(1000); val tempC = tRaw?.div(10)
+                val mA = iRaw?.let { (it / curDiv) * curSign }; val tempC = tRaw?.div(10)
                 log.append(String.format("%2d  %-4s %-13s %-9s %-4s %s\n", t, "$lvl%", st, mA?.toString() ?: "?", susp, tempC?.let { "${it}C" } ?: "?"))
                 val chg = st.contains("Charging", true) && !st.contains("Not", true)
                 if (chg) { sawChg = true; if (mA != null && mA in -30..30) stuck++ } else if (st != "?") sawNot = true

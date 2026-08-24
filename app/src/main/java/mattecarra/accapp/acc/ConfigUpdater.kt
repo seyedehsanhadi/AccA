@@ -48,7 +48,7 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
         LogExt().d(TAG, "pEnable: $cue")
         LogExt().d(TAG, "pAcc: $accConfig")
 
-        val capacityUpdate = cue.sendCapacity && acc.updateAccCapacity(accConfig.configCapacity.shutdown, accConfig.configCoolDown?.atPercent ?: 101, accConfig.configCapacity.resume, accConfig.configCapacity.pause)
+        val capacityUpdate = cue.sendCapacity && acc.updateAccCapacity(accConfig.configCapacity.shutdown, accConfig.configCoolDown?.atPercent ?: accConfig.configCoolDownCapacity, accConfig.configCapacity.resume, accConfig.configCapacity.pause)
         val voltControl = cue.sendVoltage && acc.updateAccVoltControl(accConfig.configVoltage.controlFile, accConfig.configVoltage.max)
         // Some handlers (legacy, v201910132) return "" for the current-max command (NOT SUPPORTED).
         // An empty su command exits 0 -> would falsely report success. Treat an unsupported/empty

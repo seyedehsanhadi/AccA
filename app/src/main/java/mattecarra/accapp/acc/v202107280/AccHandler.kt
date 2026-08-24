@@ -97,7 +97,8 @@ open class AccHandler(override val version: Int) : AccInterface {
             getResetOnPause(config),
             getCurrentChargingSwitch(config),
             isAutomaticSwitchEnabled(config),
-            isPrioritizeBatteryIdleMode(config)
+            isPrioritizeBatteryIdleMode(config),
+            capacityCoolDown
         )
     }
 
@@ -138,12 +139,10 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override suspend fun listVoltageSupportedControlFiles(): List<String> = withContext(Dispatchers.IO) {
-        val res = Shell.su("/dev/.vr25/acc/acca -v :").exec()
-
-        if(res.isSuccess)
-            res.out.filter { it.isNotEmpty() }
-        else
-            emptyList()
+        // ACC 2025.x has no voltage control-file listing: `-v` is --version, so the old
+        // `acca -v :` handed the picker "v2025.5.18-6.5.1-rc24 (202505333)" as a selectable
+        // node. The daemon owns maxChargingVoltage's node list now, so report none.
+        emptyList()
     }
 
     override suspend fun resetBatteryStats(): Boolean = withContext(Dispatchers.IO) {
@@ -178,7 +177,7 @@ open class AccHandler(override val version: Int) : AccInterface {
     private val VOLTAGE_QNOVO_REGEXP = """^\s*VOLTAGE_QNOVO=(\d+)""".toRegex(RegexOption.MULTILINE)
     private val CURRENT_NOW_REGEXP = """^\s*CURRENT_NOW=([+-]?([0-9]*[.])?[0-9]+)""".toRegex(RegexOption.MULTILINE)
     // Regex for CURRENT_QNOVO
-    private val CURRENT_QNOVO_REGEXP = """^\s*CURRENT_NOW=(-?\d+)""".toRegex(RegexOption.MULTILINE)
+    private val CURRENT_QNOVO_REGEXP = """^\s*CURRENT_QNOVO=(-?\d+)""".toRegex(RegexOption.MULTILINE)
     // Regex for CONSTANT_CHARGE_CURRENT_MAX
     private val CONSTANT_CHARGE_CURRENT_MAX_REGEXP = """^\s*CONSTANT_CHARGE_CURRENT_MAX=(\d+)""".toRegex(RegexOption.MULTILINE)
     private val TEMP_REGEXP = """^\s*TEMP=(\d+)""".toRegex(RegexOption.MULTILINE)
@@ -202,7 +201,6 @@ open class AccHandler(override val version: Int) : AccInterface {
     private val INPUT_CURRENT_MAX_REGEXP = """^\s*INPUT_CURRENT_MAX=(\d+)""".toRegex(RegexOption.MULTILINE)
     private val CYCLE_COUNT_REGEXP = """^\s*CYCLE_COUNT=(\d+)""".toRegex(RegexOption.MULTILINE)
 
-    private val POWER_NOW_REGEXP = """^\s*POWER_NOW=([+-]?([0-9]*[.])?[0-9]+)""".toRegex(RegexOption.MULTILINE)
 
     /**
      * ACC 2025.x rewrote `acca -i` to a lowercase, unit-suffixed format, e.g.
@@ -224,7 +222,6 @@ open class AccHandler(override val version: Int) : AccInterface {
     private val TEMP_LOWER_REGEXP = """^\s*temp (\d+)""".toRegex(RegexOption.MULTILINE)
     private val VOLTAGE_NOW_LOWER_REGEXP = """^\s*voltage_now ([0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
     private val CURRENT_NOW_LOWER_REGEXP = """^\s*current_now (-?[0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
-    private val POWER_NOW_LOWER_REGEXP = """^\s*power_now (-?[0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
     private val CHARGE_TYPE_LOWER_REGEXP = """^\s*charge_type (.+)""".toRegex(RegexOption.MULTILINE)
 
     private fun lowerStatus(info: String): String? =
@@ -294,8 +291,7 @@ open class AccHandler(override val version: Int) : AccInterface {
             CHARGE_CONTROL_LIMIT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CHARGE_CONTROL_LIMIT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             INPUT_CURRENT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            CYCLE_COUNT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            POWER_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: POWER_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f
+            CYCLE_COUNT_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1
         )
     }
 
@@ -340,11 +336,27 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     //Charging switches
+    // ` 1) [d] battery/input_suspend 0 1` and ` 2) [d] main/current_max 3000000 0 {mcc}`:
+    // strip the ordinal, the [class] marker and any {key} annotation, leaving the bare
+    // "node on off" spec every caller expects. ACC emits CRLF here, so CR must go too.
+    private val SWITCH_ENTRY_REGEXP =
+        """^\s*\d+\)\s*(?:\[[^\]]*\]\s*)?(.+?)(?:\s*\{[^}]*\})?\s*$""".toRegex()
+
+    internal fun parseSwitchList(lines: List<String>): List<String> =
+        lines.map { it.trim().trimEnd('\r') }
+             .filter { it.isNotEmpty() }
+             .mapNotNull { SWITCH_ENTRY_REGEXP.find(it)?.destructured?.component1()?.trim() }
+             .filter { it.isNotEmpty() }
+             .distinct()
+
     override suspend fun listChargingSwitches(): List<String> = withContext(Dispatchers.IO) {
-        val res = Shell.su("/dev/.vr25/acc/acca -s s:").exec()
+        // `-ss::` is the USABLE list (live-tested, numbered). `-s s:` was the raw candidate
+        // dump: on a Pixel 6a it offered 21 entries against this command's 6, and the extras
+        // include current/voltage ceilings that never pause charging at all.
+        val res = Shell.su("/dev/.vr25/acc/acca -ss::").exec()
 
         if(res.isSuccess)
-            res.out.map { it.trim() }.filter { it.isNotEmpty() }
+            parseSwitchList(res.out)
         else
             emptyList()
     }
@@ -361,7 +373,7 @@ open class AccHandler(override val version: Int) : AccInterface {
         try {
             // Hard-bound the test (see ensureDaemonRunning): it stops the daemon
             // and can otherwise run for minutes, wedging the shell.
-            val res = Shell.su("timeout 150 /dev/.vr25/acc/acca -t${chargingSwitch?.let{" $it"} ?: ""}").exec()
+            val res = Shell.su("timeout 300 /dev/.vr25/acc/acca -t${chargingSwitch?.let{" $it"} ?: ""}").exec()
             // Normalise a working switch to 0 so every caller's `== 0` success check stays correct
             // AND now accepts the exit-15 bypass case. Non-passing codes (2 = plug in, 1 = fails)
             // pass through unchanged so callers can still tell those apart.

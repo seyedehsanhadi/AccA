@@ -47,6 +47,27 @@ import mattecarra.accapp.utils.LogExt
  * Start/stop is driven by [Preferences.chargeMeterEnabled] + a power/screen receiver; the service
  * stops itself when the feature is off, or when unplugged and "always" is off.
  */
+/**
+ * Which side of the charge the status-bar meter reports, and the arithmetic behind it.
+ * Pulled out of the service so the two rules can be tested without an Android runtime.
+ */
+internal object MeterSource
+{
+    /** Power in TENTHS of a watt from millivolts x milliamps. Null when either side is
+     *  missing or the current is below [minMa], which keeps noise out of the reading. */
+    fun wattsX10(mV: Int?, mA: Int?, minMa: Int): Int? =
+        if (mV != null && mA != null && mV > 0 && mA > minMa)
+            (mV.toLong() * mA / 100000L).toInt()
+        else null
+
+    /** Charger-side only while current genuinely flows INTO the battery and the input
+     *  nodes gave a figure. Never keyed off `plugged`: with ACC holding a pause the cable
+     *  is in while the battery drains, and charger-side would report ~0 W from a live
+     *  charger. curMa must already be polarity-corrected. */
+    fun useCharger(curMa: Int?, chargerWattsX10: Int?): Boolean =
+        (curMa ?: 0) > 0 && chargerWattsX10 != null
+}
+
 class ChargeMeterService : Service() {
 
     companion object {
@@ -284,6 +305,15 @@ class ChargeMeterService : Service() {
 
     // Battery level from the sticky intent (no root), as an icon fallback so the strip always has
     // a number instead of the plain battery glyph.
+    // ACC publishes what it learned about this device's current node in `acca --state`:
+    // "currentUnits" (uA|mA) and "polarity" (normal|inverted). Default to the common
+    // case (microamps, normal) until a snapshot has been read.
+    private fun stateCurrentDivisor(): Long =
+        if (lastState?.currentUnits.equals("mA", true)) 1L else 1000L
+
+    private fun stateCurrentSign(): Long =
+        if (lastState?.polarity.equals("inverted", true)) -1L else 1L
+
     private fun batteryLevelPct(): Int? {
         val bs = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
         val lvl = bs.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -296,8 +326,11 @@ class ChargeMeterService : Service() {
     // current (mA) if readable, else battery %. Sign by plug state.
     private fun quickIcon(): Pair<String, String>? {
         val curUa = try { bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) } catch (e: Exception) { Long.MIN_VALUE }
-        val maAbs = if (curUa == Long.MIN_VALUE || curUa == 0L) null else kotlin.math.abs(curUa / 1000L).toInt()
-        val sign = if (plugged) "+" else "-"
+        val signedMa = if (curUa == Long.MIN_VALUE || curUa == 0L) null
+                       else (curUa / stateCurrentDivisor()) * stateCurrentSign()
+        val maAbs = signedMa?.let { kotlin.math.abs(it).toInt() }
+        val sign = if (signedMa != null && signedMa != 0L) (if (signedMa > 0L) "+" else "-")
+                   else if (plugged) "+" else "-"
         if (maAbs != null && maAbs > 5) return "$sign$maAbs" to "mA"
         val pct = batteryLevelPct()
         if (pct != null) return "$pct" to "%"
@@ -345,7 +378,11 @@ class ChargeMeterService : Service() {
         if (!prefs.chargeMeterEnabled) { stopMeter(); return }
         scope.launch {
             val curUa = try { bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) } catch (e: Exception) { Long.MIN_VALUE }
-            val curMa: Int? = if (curUa == Long.MIN_VALUE) null else (curUa / 1000L).toInt()
+            // BATTERY_PROPERTY_CURRENT_NOW is documented as microamps, but OEMs that report
+            // milliamps exist and read 1000x low here. ACC has already learned this device's
+            // node scale and sign in --state, so use those instead of assuming.
+            val curMa: Int? = if (curUa == Long.MIN_VALUE) null
+                              else ((curUa / stateCurrentDivisor()) * stateCurrentSign()).toInt()
             // Median of recent samples, not one raw reading -> smooth + accurate, spikes removed.
             val maAbs = smoothedAbsMa(curMa)
 
@@ -369,16 +406,33 @@ class ChargeMeterService : Service() {
             // produced "Charging 1.0 W 0.00 A" (1 W into the phone, ~0 into the battery) and the
             // W<->mA flicker as input-watts crossed the 1 W line. Input V/A still shows in the detail
             // line below, labelled "in".
-            val wattsX10: Int? =
-                if (maAbs != null && vbatMv != null && vbatMv > 1000 && maAbs > 30)
-                    (vbatMv.toLong() * maAbs / 100000L).toInt()
-                else null
+            // FLOW-DIRECTION SOURCE. Charger-side power is what a charger is rated in and what
+            // people mean by charging speed; battery-side is always lower by conversion loss.
+            // So while current is actually flowing INTO the battery and the input nodes are
+            // readable, both figures come from the charger. Otherwise both come from the
+            // battery.
+            //
+            // Two rules make this safe, and both were learned the hard way:
+            //  1. W and A ALWAYS come from the same side. Charger watts beside battery amps is
+            //     what produced "Charging 1.0 W 0.00 A" and the W<->mA flicker.
+            //  2. The trigger is measured FLOW, never `plugged`. With ACC holding a pause the
+            //     cable is in while the battery drains (measured: present=1, input_suspend=1,
+            //     -0.24 A), and charger-side would report ~0 W from a live charger.
+            val battWattsX10: Int? =
+                if (vbatMv != null && vbatMv > 1000) MeterSource.wattsX10(vbatMv, maAbs, 30) else null
+            val chargerWattsX10: Int? = MeterSource.wattsX10(vin, iin, 50)
+            val useCharger = MeterSource.useCharger(curMa, chargerWattsX10)
+            val wattsX10: Int? = if (useCharger) chargerWattsX10 else battWattsX10
+            val shownMaAbs: Int? = if (useCharger) iin else maAbs
             fun wattsShade(x10: Int): String =
                 if (x10 >= 100) "${x10 / 10} W" else "${x10 / 10}.${x10 % 10} W"
             fun wattsNum(x10: Int): String =
                 if (x10 >= 100) "${x10 / 10}" else "${x10 / 10}.${x10 % 10}"   // no unit (unit line below)
 
-            val sign = if (plugged) "+" else "-"
+            // Sign from the measured, polarity-corrected current, not from whether a
+            // cable is present: a phone plugged in while ACC holds a pause is NOT charging.
+            val m = curMa ?: 0
+            val sign = if (m != 0) (if (m > 0) "+" else "-") else if (plugged) "+" else "-"
             val display = prefs.chargeMeterDisplay
             // Which percentage to show. NOTE the direction here, it is easy to get backwards:
             // the Capacity Mask works by writing ANDROID's battery state, so it is the SYSTEM
@@ -403,17 +457,17 @@ class ChargeMeterService : Service() {
             var stripNum: String? = null
             var stripUnit = ""
             when (display) {
-                "ma" -> if (maAbs != null) { stripNum = "$maAbs"; stripUnit = "mA" }
+                "ma" -> if (shownMaAbs != null) { stripNum = "$shownMaAbs"; stripUnit = "mA" }
                         else if (wattsX10 != null) { stripNum = wattsNum(wattsX10); stripUnit = "W" }
                 "w" -> if (wattsX10 != null) { stripNum = wattsNum(wattsX10); stripUnit = "W" }
-                       else if (maAbs != null) { stripNum = "$maAbs"; stripUnit = "mA" }
+                       else if (shownMaAbs != null) { stripNum = "$shownMaAbs"; stripUnit = "mA" }
                 else -> { // auto
                     if (!plugged) {
-                        if (maAbs != null) { stripNum = "$maAbs"; stripUnit = "mA" }
+                        if (shownMaAbs != null) { stripNum = "$shownMaAbs"; stripUnit = "mA" }
                         else if (wattsX10 != null) { stripNum = wattsNum(wattsX10); stripUnit = "W" }
                     } else {
                         if (wattsX10 != null && wattsX10 >= 10) { stripNum = wattsNum(wattsX10); stripUnit = "W" }
-                        else if (maAbs != null) { stripNum = "$maAbs"; stripUnit = "mA" }
+                        else if (shownMaAbs != null) { stripNum = "$shownMaAbs"; stripUnit = "mA" }
                         else if (wattsX10 != null) { stripNum = wattsNum(wattsX10); stripUnit = "W" }
                     }
                 }
@@ -435,7 +489,7 @@ class ChargeMeterService : Service() {
             // ---- shade content ----
             // Title: class + both watts and amps (with sign), e.g. "Fast charge  ·  +19 W  ·  +1.95 A".
             val wStr = wattsX10?.let { "$sign${wattsShade(it)}" }
-            val aStr = maAbs?.let { "$sign" + String.format("%.2f A", it / 1000f) }
+            val aStr = shownMaAbs?.let { "$sign" + String.format("%.2f A", it / 1000f) }
             val numbers = listOfNotNull(wStr, aStr).joinToString("  ·  ")
             val word = chargeStatusWord(plugged, st?.measuredClass)
             val classWord = if (word == "Charging") getString(when (cls) {

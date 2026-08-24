@@ -4,26 +4,21 @@ import android.content.Context
 import android.util.Log
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import mattecarra.accapp.CurrentUnit
-import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
-import mattecarra.accapp.VoltageUnit
 import mattecarra.accapp.acc._interface.AccInterface
 import mattecarra.accapp.utils.LogExt
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.net.URL
-import kotlin.math.abs
 
 object Acc {
     // Fallback ACC API version for picking a handler when the installed version can't be read yet
     // (e.g. right after a flash, before the daemon is up). AccA ships NO bundle; keep this at the
     // latest known release so a fresh/unreadable install uses the newest handler.
-    const val fallbackVersion = 202505300
+    const val fallbackVersion = 202505333
     private const val TAG = "Acc"
     private val FILES_DIR = "/data/data/mattecarra.accapp/files"
 
@@ -127,22 +122,10 @@ object Acc {
     // showAccNotFound). This removes the "AccA reinstalls its bundled ACC over your flashed one"
     // override class entirely.
 
-    private suspend fun calibrateMeasurements(context: Context) = withContext(Dispatchers.IO) {
-
-        var microVolts = 0
-        var microAmpere = 0
-
-        for (i in 0..10) {
-            val batteryInfo = Acc.instance.getBatteryInfo()
-            if(batteryInfo.getRawVoltageNow() > 1000000) microVolts++
-            if(abs(batteryInfo.getRawCurrentNow()) > 10000) microAmpere++
-            delay(250)
-        }
-
-        val preferences = Preferences(context)
-        preferences.currentInputUnitOfMeasure = if(microAmpere >= 6) CurrentUnit.uA else CurrentUnit.mA
-        preferences.voltageInputUnitOfMeasure = if(microVolts >= 6)  VoltageUnit.uV else VoltageUnit.mV
-    }
+    // calibrateMeasurements() was removed here. It was never called, and against ACC
+    // 2025.x `-i` output (volts "3.83", amps "-0.35") both of its thresholds failed on
+    // every sample, so it would have set the input units to mV/mA and divided the whole
+    // display by 1000. The V/A defaults in Preferences are the correct ones.
 
     internal fun getAccVersion(): Int? {
         // Crash-safe: this runs at startup (Acc.instance) before root may be granted, so a

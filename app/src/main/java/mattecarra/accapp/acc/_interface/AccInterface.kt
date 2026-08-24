@@ -94,7 +94,12 @@ interface AccInterface {
      */
     fun getUpdateAccOnBootExitCommand(enabled: Boolean): String
     suspend fun updateAccOnBootExit(enabled: Boolean) : Boolean = withContext(Dispatchers.IO) {
-        Shell.su(getUpdateAccOnBootExitCommand(enabled)).exec().isSuccess
+        // Handlers that do not support this return "" (see v202107280 and every v2020*).
+        // An empty su command exits 0, so running it would report success having written
+        // nothing. Treat unsupported as "not applicable" instead of a silent false pass.
+        val cmd = getUpdateAccOnBootExitCommand(enabled)
+        if (cmd.isBlank()) return@withContext false
+        Shell.su(cmd).exec().isSuccess
     }
 
     /**

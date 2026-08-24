@@ -40,6 +40,9 @@ data class AccState(
     val accVersionCode: Int?,
     val nativeEnabled: Boolean,
     val nativeStopLevel: Int,
+    // The daemon emits native.startLevel next to stopLevel; it was parsed nowhere, so the
+    // resume half of a firmware limit could not be shown at all.
+    val nativeStartLevel: Int = -1,
     val inputVoltageMv: Int? = null,
     val inputCurrentMa: Int? = null,
     val chargeWatts: Int? = null,
@@ -112,6 +115,7 @@ data class AccState(
                     // native firmware %-limit block (Pixel-class); absent on other devices.
                     nativeEnabled = native.optBoolean("enabled", false),
                     nativeStopLevel = native.optInt("stopLevel", -1),
+                    nativeStartLevel = native.optInt("startLevel", -1),
                     // charger-INPUT telemetry (rc11+): live input volts/amps, null when the
                     // device has no readable input nodes or the daemon predates the field.
                     inputVoltageMv = root.optJSONObject("input")?.let { inp ->

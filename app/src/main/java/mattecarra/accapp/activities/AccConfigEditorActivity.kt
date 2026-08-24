@@ -333,9 +333,15 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
         viewModel.observeCoolDown(this, Observer
         {
+            // The SWITCH is the on/off control; this picker only ever holds a real percentage.
+            // 101 is ACC's "never cool down by capacity" sentinel, not a value a user picks.
+            // Seeding it here would be wrong twice over: the old code CLAMPED it to 100 (arming
+            // the trigger at 100% on the next save), and giving it its own slot let the sentinel
+            // survive turning the switch ON, so cool-down stayed off after being enabled.
             content.cooldownPercentagePicker.minValue = 0
             content.cooldownPercentagePicker.maxValue = 100
-            content.cooldownPercentagePicker.value = it?.atPercent ?: 60
+            content.cooldownPercentagePicker.value =
+                it?.editorPercent() ?: AccConfig.ConfigCoolDown.DEFAULT_PERCENT
 
             content.cooldownChargeRatioPicker.minValue = 1
             content.cooldownChargeRatioPicker.maxValue = 120 //no reason behind this value

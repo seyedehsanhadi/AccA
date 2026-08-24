@@ -73,9 +73,10 @@ class ProfileListAdapter internal constructor(context: Context, activeProfileId:
         // TODO You must make a switch as a separate item for manual mode or use the parameters from the global configuration in the settings. Here only the display of the selected option.
         holder.content.itemProfileSwitchLl.isVisible = profile.pEnables.eChargingSwitch
         holder.content.itemProfileSwitchDataTv.text = profile.accConfig.configChargeSwitch ?: mContext.getString(R.string.automatic)
-        holder.content.itemProfileAutomaticSwitchingTv.visibility =
-            if (profile.accConfig.configChargeSwitch.isNullOrEmpty()) View.GONE
-            else if (profile.accConfig.configIsAutomaticSwitchingEnabled) View.VISIBLE else View.GONE
+        // Applying a profile with an explicit switch always writes the " --" manual lock, so
+        // "Automatically cycle through switches" would be a promise the save path breaks.
+        // Only a profile with NO pinned switch actually leaves ACC free to cycle.
+        holder.content.itemProfileAutomaticSwitchingTv.visibility = View.GONE
 
         //----------------------------------------------------
 
@@ -97,10 +98,11 @@ class ProfileListAdapter internal constructor(context: Context, activeProfileId:
         holder.content.itemProfileTemperatureLl.isVisible = profile.pEnables.eTemperature
         holder.content.itemProfileTemperatureTv.text = profile.accConfig.configTemperature.toString(mContext)
 
-        holder.content.itemProfileCooldownLl.isVisible = profile.pEnables.eCoolDown
-        holder.content.itemProfileCooldownTv.text =
-            if (profile.accConfig.configCoolDown == null) "-"
-            else profile.accConfig.configCoolDown?.toString(mContext)
+        // Off (cooldown_capacity=101) reads as "not configured" to the user, so the row goes
+        // away entirely rather than printing a disabled setting.
+        val coolDown = profile.accConfig.configCoolDown?.takeIf { !it.isCapacityTriggerOff }
+        holder.content.itemProfileCooldownLl.isVisible = profile.pEnables.eCoolDown && coolDown != null
+        holder.content.itemProfileCooldownTv.text = coolDown?.toString(mContext) ?: "-"
 
         holder.content.itemProfileOnBootLl.isVisible = profile.pEnables.eRunOnBoot
         holder.content.itemProfileOnBootTv.text =

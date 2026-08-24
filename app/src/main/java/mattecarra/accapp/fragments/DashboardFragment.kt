@@ -124,7 +124,10 @@ class DashboardFragment : ScopedFragment()
             // ACC's coulomb capacity (reflects your Capacity Mask) when set to "acc", else the phone's
             // own System level. Falls back to System whenever the ACC snapshot is missing/invalid.
             val accCap = dash.state?.capacityPct?.takeIf { it in 0..100 }
-            val shownCapacity = if (preferences.chargeMeterBatterySource == "acc" && accCap != null) accCap else dash.batteryInfo.capacity
+            // batteryInfo.capacity is -1 when both capacity regexes miss the `acca -i` output;
+            // that value used to reach the ProgressBar unfiltered. Clamp to a legal percentage.
+            val shownCapacity = (if (preferences.chargeMeterBatterySource == "acc" && accCap != null) accCap else dash.batteryInfo.capacity)
+                .coerceIn(0, 100)
             binding.dashBatteryCapacityPBar.progress = shownCapacity
 
             // Prefer the rc9+ `acca --state` snapshot when present: its status/measuredClass and
@@ -156,9 +159,21 @@ class DashboardFragment : ScopedFragment()
                 binding.dashChargerTextView.visibility = View.GONE
             }
 
-            binding.dashBatteryTemperatureTextView.text = dash.batteryInfo.getTemperature(preferences.temperatureOutputUnitOfMeasure, true)
+            // Single source of truth: when the `acca --state` snapshot rendered this card, take
+            // volts and temperature from it too. Reading them from batteryInfo (the legacy
+            // `acca -i` scrape) while amps/status came from --state left the card split-brained.
+            // Health has no --state field, so it stays on batteryInfo.
+            val shown = if (state != null) state else mLastState.takeIf { mStateNullStreak <= 2 }
+            if (shown != null) {
+                binding.dashBatteryTemperatureTextView.text =
+                    formatTemperatureFromState(shown.tempDeciC)
+                binding.dashBatteryVoltageTextView.text =
+                    formatVoltageFromState(shown.voltageRaw)
+            } else {
+                binding.dashBatteryTemperatureTextView.text = dash.batteryInfo.getTemperature(preferences.temperatureOutputUnitOfMeasure, true)
+                binding.dashBatteryVoltageTextView.text = dash.batteryInfo.getVoltageNow(preferences.voltageInputUnitOfMeasure, preferences.voltageOutputUnitOfMeasure, true)
+            }
             binding.dashBatteryHealthTextView.text = dash.batteryInfo.health
-            binding.dashBatteryVoltageTextView.text = dash.batteryInfo.getVoltageNow(preferences.voltageInputUnitOfMeasure, preferences.voltageOutputUnitOfMeasure, true)
 
             evaluateHealthWarning(dash)
         }
@@ -266,6 +281,28 @@ class DashboardFragment : ScopedFragment()
             String.format("%.3f", signedMilliAmps / 1000f) + " A"
         else
             signedMilliAmps.toInt().toString() + " mA"
+    }
+
+    // --state reports deci-Celsius (230 = 23.0C), the same scale batteryInfo exposes after
+    // its own /10, so honour the user's output unit exactly as getTemperature() does.
+    private fun formatTemperatureFromState(tempDeciC: Int): String
+    {
+        val c = tempDeciC / 10f
+        return if (preferences.temperatureOutputUnitOfMeasure == mattecarra.accapp.TemperatureUnit.C)
+            c.toInt().toString() + " " + Typography.degree + "C"
+        else
+            String.format("%.1f", c * 1.8f + 32f) + " " + Typography.degree + "F"
+    }
+
+    // voltage_raw is microvolts on every device seen so far, but ACC does not promise it:
+    // fold a millivolt-scale reading up rather than printing 0.004 V.
+    private fun formatVoltageFromState(voltageRaw: Long): String
+    {
+        val mV = if (voltageRaw >= 100000L) voltageRaw / 1000L else voltageRaw
+        return if (preferences.voltageOutputUnitOfMeasure == mattecarra.accapp.VoltageUnit.V)
+            String.format("%.3f", mV / 1000f) + " V"
+        else
+            mV.toString() + " mV"
     }
 
     private fun toggleAccdStatusUi(running: Boolean?)
@@ -420,11 +457,22 @@ class DashboardFragment : ScopedFragment()
 
     private fun renderStateCard(state: AccState)
     {
-        binding.dashBatteryStatusTextView.text = statusLabel(state)
+        // The level existed only as a progress bar; no figure appeared anywhere on the card.
+        binding.dashBatteryStatusTextView.text =
+            if (state.capacityPct in 0..100)
+                getString(R.string.dash_status_with_level, statusLabel(state), state.capacityPct)
+            else statusLabel(state)
         binding.dashBatteryStatusTextView.contentDescription = getString(R.string.status_hint)
 
         val shownMa = state.signedCurrentMilliAmps()
-        val charging = shownMa > 80f
+        // Trust the daemon's own status first. The old `shownMa > 80f` test labelled a
+        // phone charging at trickle (under 80mA, e.g. the tail of a CV taper) as
+        // discharging. The threshold survives only as a tie-break when status is vague.
+        val charging = when {
+            state.status.equals("Charging", true) -> true
+            state.status.contains("Discharging", true) -> false
+            else -> shownMa > 80f
+        }
         binding.dashBatteryChargingSpeedTextView.text =
             if (charging) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
 
@@ -434,10 +482,27 @@ class DashboardFragment : ScopedFragment()
         // watts is the one that reads like charging. shownMa is already normalised for this
         // device's polarity, so the sign it carries is the answer for both.
         val battW = if (vbat > 1000) shownMa * vbat / 1000000f else 0f
-        binding.dashChargingSpeedTextView.text = formatCurrentFromState(shownMa) +
-            (if (kotlin.math.abs(battW) >= 0.1f) "  ·  " + String.format("%.1f W", battW) else "")
+        // Two wattages appear on this card -- this one and the charger input below -- and they
+        // differ by conversion loss. Unlabelled they read as a contradiction (5.0 W vs 7 W),
+        // so each states its side. The row label is "To battery:".
+        binding.dashChargingSpeedTextView.text =
+            if (kotlin.math.abs(battW) >= 0.1f)
+                getString(R.string.dash_batt_flow, formatCurrentFromState(shownMa),
+                          String.format("%.1f W", battW))
+            else formatCurrentFromState(shownMa)
 
-        binding.dashManualLockTextView.visibility = if (state.userLocked) View.VISIBLE else View.GONE
+        // This row carried only the manual-lock note. On a firmware-limit phone the levels ACC
+        // is actually enforcing (native start..stop) appeared NOWHERE on the dashboard, so the
+        // card could not answer "what is holding my charge". Show both facts when both apply.
+        val enforcement = listOfNotNull(
+            if (state.userLocked) getString(R.string.manual_lock_protected) else null,
+            if (state.nativeEnabled && state.nativeStopLevel in 1..100 && state.nativeStartLevel in 1..100)
+                getString(R.string.dash_native_limit, state.nativeStartLevel, state.nativeStopLevel)
+            else null
+        )
+        binding.dashManualLockTextView.text = enforcement.joinToString("  ·  ")
+        binding.dashManualLockTextView.visibility =
+            if (enforcement.isEmpty()) View.GONE else View.VISIBLE
         val vin = state.inputVoltageMv
         val iin = state.inputCurrentMa
         val watts = state.chargeWatts
@@ -458,15 +523,12 @@ class DashboardFragment : ScopedFragment()
         val line: String? = when {
             !charging || watts == null || clsRes == null -> null
             !state.chargeApprox && vin != null && vin > 0 && iin != null && iin > 50 && vbat in 3000..4600 -> {
-                val ratioX100 = (vin * 84) / vbat
-                // compact measured voltage ("5.1V"/"9.0V") not the long "9V fast charger" label,
-                // so the whole line (class + watts + volts + amps + ratio) fits without ellipsis.
                 getString(
                     R.string.dash_charge_fmt,
-                    getString(clsRes), watts,
-                    String.format("%.1fV", vin / 1000f),
+                    String.format("%.1f V", vin / 1000f),
                     String.format("%.2f", iin / 1000f),
-                    String.format("%.1f", ratioX100 / 100.0)
+                    watts,
+                    getString(clsRes)
                 )
             }
             else -> getString(R.string.dash_charge_fmt_approx, getString(clsRes), watts)
@@ -491,37 +553,8 @@ class DashboardFragment : ScopedFragment()
         binding.dashHealthWarningCard.visibility = View.GONE
     }
 
-    private fun computeHealthWarn(dash: DashboardValues): Boolean
-    {
-        // Daemon must be running.
-        if (dash.daemon != true) return false
-
-        val info = dash.batteryInfo
-
-        // Plugged but halted. NOT_CHARGING is Android's "power attached, battery not charging"
-        // state; "Charging" obviously means it works, "Discharging" means unplugged/draining.
-        if (info.status != "Not charging") return false
-
-        // Already full / done -> normal, never warn.
-        if (info.isChargeDone) return false
-
-        // ACC intentionally holding charge (pause-cap / cooldown / thermal) -> normal pause.
-        if (info.isChargeDisabled) return false
-
-        // Need the config to know the pause level + thermal ceiling; if it is not loaded yet
-        // we stay silent rather than risk a false positive.
-        if (!::configViewModel.isInitialized) return false
-
-        val pause = configViewModel.getAccConfigValue { it.configCapacity.pause } ?: return false
-        // Above (or at) the pause level, "not charging" is exactly what ACC should do.
-        if (info.capacity < 0 || info.capacity >= pause) return false
-
-        // Exclude a thermal pause: if temperature is at/above the configured max, not charging
-        // is expected. Temperature is -1 when unknown -> skip this guard then.
-        val maxTemp = configViewModel.getAccConfigValue { it.configTemperature.maxTemperature }
-        if (maxTemp != null && info.temperature >= 0 && info.temperature >= maxTemp) return false
-
-        return true
-    }
+    // computeHealthWarn() was removed: evaluateHealthWarning() hard-hides the card
+    // (rc4, documented false positives on native-limit devices), so this scorer was
+    // unreachable. The hiding decision stands; only the dead code is gone.
 
 }
