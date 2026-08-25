@@ -447,7 +447,7 @@ class DashboardFragment : ScopedFragment()
         if (state.nativeEnabled && state.nativeStopLevel in 1..99 &&
             state.capacityPct > state.nativeStopLevel && (mc == "discharging" || mc == "drain"))
             return getString(R.string.status_draining_to, state.nativeStopLevel)
-        return when (chargeStatusWord(state.plugged, state.measuredClass)) {
+        return when (chargeStatusWord(state.plugged, state.measuredClass, state.status)) {
             "Discharging" -> getString(R.string.status_discharging)
             "Idle" -> getString(R.string.status_idle)
             "Draining" -> getString(R.string.status_draining)

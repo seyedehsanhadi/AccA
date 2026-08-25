@@ -81,13 +81,12 @@ data class AccState(
             when {
                 polarity.equals("inverted", ignoreCase = true) -> -rawMa
                 polarity.equals("unstable", ignoreCase = true) -> {
+                    // The magnitude is trustworthy, the sign is not, so the direction comes from
+                    // the same one rule every label uses. It had its own copy that took
+                    // measuredClass at face value, which printed +268 mA on a Pixel 6a that was
+                    // plugged, held at its native limit and draining.
                     val mag = kotlin.math.abs(rawMa)
-                    when {
-                        measuredClass.equals("charging", ignoreCase = true) -> mag
-                        measuredClass.equals("drain", ignoreCase = true) ||
-                        measuredClass.equals("discharging", ignoreCase = true) -> -mag
-                        else -> if (status.equals("Charging", ignoreCase = true)) mag else -mag
-                    }
+                    if (isChargingNow(measuredClass, status)) mag else -mag
                 }
                 else -> rawMa
             }
