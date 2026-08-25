@@ -229,7 +229,8 @@ class BatteryInfoWidget : AppWidgetProvider()
 
                 widgetView.setTextViewText(R.id.status_label, if (replaceLabel) "Ⓢ:" else context.getString(R.string.info_status))
                 widgetView.setTextViewText(R.id.status_out,
-                    accState?.let { chargeStatusWord(it.plugged, it.measuredClass, it.status) } ?: batteryInfo.status)
+                    accState?.let { chargeStatusWord(it.plugged, it.measuredClass, it.status,
+                        it.signedCurrentMilliAmps()) } ?: batteryInfo.status)
                 widgetView.setTextViewTextSize(R.id.status_label, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextViewTextSize(R.id.status_out, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextColor(R.id.status_label, textColor)

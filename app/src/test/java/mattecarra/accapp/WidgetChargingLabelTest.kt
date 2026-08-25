@@ -56,4 +56,17 @@ class WidgetChargingLabelTest {
         assertEquals("Draining", chargeStatusWord(true, "drain", "Discharging"))
         assertEquals("Discharging", chargeStatusWord(false, "charging", "Charging"))
     }
+
+    // Pixel 6a held at a firmware stop: plugged, not charging, and running off the pack.
+    // "Idle" next to "-311 mA" contradicted itself.
+    @Test fun aPluggedPhoneRunningOffThePackIsDrainingNotIdle() {
+        assertEquals("Draining", chargeStatusWord(true, "charging", "Not charging", -311f))
+        assertEquals("Draining", chargeStatusWord(true, "", "Not charging", -311f))
+    }
+
+    @Test fun aPluggedPhoneSittingStillIsIdle() {
+        assertEquals("Idle", chargeStatusWord(true, "charging", "Not charging", -4f))
+        assertEquals("Idle", chargeStatusWord(true, "charging", "Not charging", 0f))
+        assertEquals("Idle", chargeStatusWord(true, "charging", "Not charging", null))
+    }
 }

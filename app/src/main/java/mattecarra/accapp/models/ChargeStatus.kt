@@ -1,6 +1,13 @@
 package mattecarra.accapp.models
 
-fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? = null): String = when {
+/**
+ * `signedMa` separates the two ways a plugged phone can fail to charge. Idle means the battery is
+ * sitting still -- roughly no current either way. Draining means the phone is running off the pack
+ * while the cable is in, which is what a level hold looks like on a Pixel 6a: -311 mA behind a
+ * firmware stop. Calling that "Idle" contradicted the current printed on the next line.
+ */
+fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? = null,
+                     signedMa: Float? = null): String = when {
     !plugged -> "Discharging"
     measuredClass.equals("bypass", true) -> "Bypass"
     measuredClass.equals("idle", true) || measuredClass.equals("standby", true) -> "Idle"
@@ -12,9 +19,13 @@ fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? =
     // The word had its own copy of the rule and never looked at the kernel, so the same Pixel 6a
     // that drained at -362 mA behind a native level limit printed "Charging" on the dashboard
     // while the current beside it was negative. Route the tail through the one rule.
-    isChargingNow(measuredClass, status) -> "Charging"
+    isChargingNow(measuredClass, status, signedMa) -> "Charging"
+    signedMa != null && signedMa < -IDLE_BAND_MA -> "Draining"
     else -> "Idle"
 }
+
+/** Below this, in either direction, the pack is doing nothing worth naming. */
+const val IDLE_BAND_MA = 50f
 
 
 /**
