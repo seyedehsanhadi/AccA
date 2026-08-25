@@ -31,6 +31,11 @@ import java.io.Serializable
         var configCoolDownCapacity: Int = 101
     ) : Serializable
     {
+        /** The cool-down percentage to WRITE. The ratio owns it when a ratio exists; otherwise
+         *  the standalone key does. Never a literal: hardcoding 101 here reset a percentage the
+         *  user never touched, and it had to be fixed three times in three call sites before
+         *  the rule was given one home. Every writer must go through this. */
+        fun coolDownPercent(): Int = configCoolDown?.atPercent ?: configCoolDownCapacity
 
     //    private companion object : Parceler<AccConfig> {
     ////

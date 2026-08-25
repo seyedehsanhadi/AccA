@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <!-- ACC Tile Strings -->
     <string name="tile_acc_no_root">لا روت</string>
     <!-- Navigation Strings -->
@@ -15,7 +20,6 @@
     <string name="battery_info_label">معلومات:</string>
     <string name="stop_charge">إيقاف الشحن عند:</string>
     <string name="cooldown_temp">درجة حرارة الخمول:</string>
-    <string name="pause_seconds">وقف الثواني:</string>
     <string name="charge_seconds">شحن لثواني:</string>
     <string name="shutdown_capacity">إيقاف التشغيل (إن لم يكن يشحن) عند:</string>
     <string name="config_error_title">خطأ في تحليل التكوين</string>

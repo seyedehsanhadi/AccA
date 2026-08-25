@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name_full">Advanced Charging Controller 앱</string>
     <string name="title_activity_log_view">로그</string>
     <string name="title_activity_log_view_file_name">로그</string>
@@ -30,7 +35,6 @@
     <string name="stop_charge">충전을 중지할 배터리 잔량:</string>
     <string name="cooldown_temp">냉각 온도:</string>
     <string name="max_temp">최대 온도:</string>
-    <string name="pause_seconds">멈출 시간(초):</string>
     <string name="charge_seconds">충전할 시간(초):</string>
     <string name="wait">잠시만 기다려주세요...\n몇 초 정도 소요될 수 있습니다.</string>
     <!-- Exit On Boot Card Strings -->

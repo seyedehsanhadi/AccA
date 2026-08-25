@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Expert Töltés Kezelő Alkalmazás</string>
     <string name="title_activity_log_view">Naplók</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Hőmérséklet szabályozás engedélyezése (°C)</string>
     <string name="cooldown_temp">Lehűtési hőmérséklet:</string>
     <string name="max_temp">Max hőmérséklet:</string>
-    <string name="pause_seconds">Szünet (másodpercben):</string>
     <string name="charge_seconds">Töltés (másodpercben):</string>
     <string name="shutdown_capacity">Leállítás (ha nem tölt) ekkor:</string>
     <string name="no_root_message">Az AccA-nak szüksége van root hozzáférésre.</string>

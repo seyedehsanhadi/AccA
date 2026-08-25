@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Advanced Charging Controller App</string>
     <string name="title_activity_log_view">Protokoly</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Povolit řízení teploty (°C)</string>
     <string name="cooldown_temp">Teplota chlazení:</string>
     <string name="max_temp">Maximální teplota:</string>
-    <string name="pause_seconds">Interval pauzy:</string>
     <string name="charge_seconds">Interval nabíjení:</string>
     <string name="shutdown_capacity">Vypnout (pokud se nenabijí) v:</string>
     <string name="no_root_message">AccA vyžaduje ROOT.</string>

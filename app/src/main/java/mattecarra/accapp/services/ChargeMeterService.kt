@@ -311,8 +311,12 @@ class ChargeMeterService : Service() {
     private fun stateCurrentDivisor(): Long =
         if (lastState?.currentUnits.equals("mA", true)) 1L else 1000L
 
-    private fun stateCurrentSign(): Long =
-        if (lastState?.polarity.equals("inverted", true)) -1L else 1L
+    /** Apply the daemon's polarity to a magnitude read from BatteryManager. Delegates to the
+     *  one rule in AccState so "unstable" (dual-path PMIC) behaves the same everywhere: this
+     *  used to flip only on "inverted" and got the direction wrong on those devices. */
+    private fun signedFromState(rawMa: Long): Int =
+        mattecarra.accapp.models.AccState.normaliseMilliAmps(rawMa.toFloat(), lastState?.polarity,
+                                    lastState?.measuredClass, lastState?.status).toInt()
 
     private fun batteryLevelPct(): Int? {
         val bs = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
@@ -327,7 +331,7 @@ class ChargeMeterService : Service() {
     private fun quickIcon(): Pair<String, String>? {
         val curUa = try { bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) } catch (e: Exception) { Long.MIN_VALUE }
         val signedMa = if (curUa == Long.MIN_VALUE || curUa == 0L) null
-                       else (curUa / stateCurrentDivisor()) * stateCurrentSign()
+                       else signedFromState(curUa / stateCurrentDivisor()).toLong()
         val maAbs = signedMa?.let { kotlin.math.abs(it).toInt() }
         val sign = if (signedMa != null && signedMa != 0L) (if (signedMa > 0L) "+" else "-")
                    else if (plugged) "+" else "-"
@@ -382,7 +386,7 @@ class ChargeMeterService : Service() {
             // milliamps exist and read 1000x low here. ACC has already learned this device's
             // node scale and sign in --state, so use those instead of assuming.
             val curMa: Int? = if (curUa == Long.MIN_VALUE) null
-                              else ((curUa / stateCurrentDivisor()) * stateCurrentSign()).toInt()
+                              else signedFromState(curUa / stateCurrentDivisor())
             // Median of recent samples, not one raw reading -> smooth + accurate, spikes removed.
             val maAbs = smoothedAbsMa(curMa)
 

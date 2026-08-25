@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Вдосконалений додаток контролю заряджання</string>
     <string name="title_activity_log_view">Журнали подій</string>
@@ -41,7 +46,6 @@
     <string name="enable_temp_check">Ввімкнути контроль температури (°C)</string>
     <string name="cooldown_temp">Температура сповільнення:</string>
     <string name="max_temp">Макс. температура:</string>
-    <string name="pause_seconds">Пауза сек.:</string>
     <string name="charge_seconds">Зарядка сек.:</string>
     <string name="shutdown_capacity">Вимкнення (якщо не заряджається) в:</string>
     <string name="no_root_message">AccA вимагає ROOT.</string>
@@ -141,7 +145,6 @@
     <string name="title_on_plugged">Застосувати при підключенні</string>
     <string name="edit_on_plugged">Редагувати параметри \"при підключенні\":</string>
     <string name="template_capacity_profile">Завершення: %1$d%% - Продовжити: %2$d%% - Зупинити: %3$d%%</string>
-    <string name="template_temperature_profile">Температура: %1$d&#176;C - Макс.: %2$d&#176;C - Пауза: %3$dс</string>
     <string name="template_cool_down_profile">Старт в: %1$d%% - Заряд за %2$ds - Призупинення на %3$dсек</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Вибір профілю %1$s.</string>

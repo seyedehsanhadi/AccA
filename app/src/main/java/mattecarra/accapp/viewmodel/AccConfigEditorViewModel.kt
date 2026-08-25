@@ -35,7 +35,15 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
             resetBSOnPause,
             chargeSwitch,
             isAutomaticSwitchEanbled,
-            prioritizeBatteryIdleMode),
+            prioritizeBatteryIdleMode,
+            // configCoolDownCapacity is not driven by any picker: the cool-down section owns
+            // the ratio, and the PERCENTAGE lives in this key. Rebuilding AccConfig without it
+            // let the constructor default supply 101 -- ACC's "cool-down off" -- so simply
+            // opening the editor and saving reset a percentage the user never touched.
+            // It tracks the picker instead of the load-time value, because clearing the ratio
+            // (turning the section off) nulls configCoolDown and would otherwise strand the
+            // percentage the user had just changed.
+            coolDownPercentPicked),
             enables)
         set(value) {
             addToHistory(profile)
@@ -123,12 +131,14 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
         }
 
     private val configCoolDownLiveData = MutableLiveData(_profile.accConfig.configCoolDown)
+    private var coolDownPercentPicked: Int = _profile.accConfig.coolDownPercent()
     var coolDown: AccConfig.ConfigCoolDown?
         get() = configCoolDownLiveData.value
         set(value) {
             if (configCoolDownLiveData.value != value) {
                 addToHistory(profile)
                 configCoolDownLiveData.value = value
+                value?.atPercent?.let { if (it in 0..100) coolDownPercentPicked = it }
                 unsavedChanges = true
             }
         }
@@ -209,6 +219,7 @@ class AccConfigEditorViewModel(application: Application, private val _profile: A
         onBootLiveData.value = value.configOnBoot
         onPlugLiveData.value = value.configOnPlug
         configCoolDownLiveData.value = value.configCoolDown
+        coolDownPercentPicked = value.coolDownPercent()
         configChargeSwitchLiveData.value = value.configChargeSwitch
         // Without these four, undo/restore reverted the underlying profile but left the
         // toggles on screen stale, so Save silently kept the value the user thought they undid.

@@ -297,7 +297,7 @@ class ProfilesFragment : ScopedFragment(),
             mSharedViewModel.setCurrentSelectedProfile(profile.uid)
             // configForApply(), not accConfig: a profile with capacity control toggled off must push
             // pause=100 (no limit) rather than its stale numbers. See AccaProfile.configForApply.
-            mSharedViewModel.updateAccConfig(profile.configForApply())
+            mSharedViewModel.updateAccConfig(profile.configForApply(), profile.pEnables)
             mContext.sendBroadcast(Intent(mContext, BatteryInfoWidget::class.java)
                 .setAction(WIDGET_ALL_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 

@@ -87,11 +87,12 @@ class ProfileListAdapter internal constructor(context: Context, activeProfileId:
         val volt = (profile.accConfig.configVoltage.controlFile != null || profile.accConfig.configVoltage.max != null)
         val currmax = profile.accConfig.configCurrMax != null
 
-        if ((volt && !currmax) || (!volt && currmax))
-        {
-            holder.content.itemProfileChargingVoltageTv.isVisible = volt
-            holder.content.itemProfileCurrentMaxTv.isVisible = currmax
-        }
+        // Unconditional, for the reason already documented in DashboardConfigFragment: the XOR
+        // guard skipped the visibility update whenever BOTH limits were set, so a recycled row kept
+        // the previous item's visibility and a voltage+current profile showed only one of them.
+        // The two limits are independent (CC-phase current cap vs CV-phase voltage cap).
+        holder.content.itemProfileChargingVoltageTv.isVisible = volt
+        holder.content.itemProfileCurrentMaxTv.isVisible = currmax
 
         //----------------------------------------------------
 

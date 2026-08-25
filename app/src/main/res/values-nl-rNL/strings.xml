@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Geavanceerde oplaadcontrole App</string>
     <string name="title_activity_log_view">Logbestanden</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Temperatuurbeheer inschakelen (°C)</string>
     <string name="cooldown_temp">Afkoel temp:</string>
     <string name="max_temp">Max temp:</string>
-    <string name="pause_seconds">Pauzeer seconden:</string>
     <string name="charge_seconds">Seconden laden:</string>
     <string name="shutdown_capacity">Afsluiten (indien niet opladen) op:</string>
     <string name="no_root_message">AccA vereist ROOT.</string>
@@ -150,7 +154,6 @@
     <string name="edit_on_plugged">Wijzig de aansluittoepassingsinstellingen:</string>
     <string name="edit_on_plugged_dialog_message">Voorbeeld: draadloos/voltage_max:9000000 forceert snel draadloos opladen op sommige Pixel apparaten.</string>
     <string name="template_capacity_profile">Afsluiten: %1$d%% - Hervatten: %2$d%% - Stop: %3$d%%</string>
-    <string name="template_temperature_profile">Temperatuur: %1$d&#176;C - Max: %2$d&#176;C - Pauze: %3$ds</string>
     <string name="template_cool_down_profile">Begin om: %1$d%% - Opladen voor %2$ds - Pauze voor %3$ds</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Profiel %1$s selecteren.</string>

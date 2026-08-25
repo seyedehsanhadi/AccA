@@ -251,10 +251,27 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
     private fun initUi()
     {
+        // Settings can switch off the voltage / current-max commands entirely (cueVoltage,
+        // cueCurrMax). That opt-out also blocks the CLEAR, so a profile with no limit cannot
+        // release a cap ACC is already holding. Rather than override the user's opt-out (which
+        // exists so AccA keeps its hands off a limit managed in ACC's own config), stop offering
+        // a control that would silently do nothing, and say why.
+        val sp = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+        val powerControlSendable =
+            sp.getBoolean("cueVoltage", true) || sp.getBoolean("cueCurrMax", true)
+        if (!powerControlSendable)
+        {
+            content.voltcontrolSwitchEnabled.isEnabled = false
+            content.editVoltageLimit.isEnabled = false
+            content.powerControlRestore.isEnabled = false
+            content.powerControlInfo.text =
+                getString(R.string.title_power_control) + " " + getString(R.string.power_control_disabled_in_settings)
+        }
+
         viewModel.observeEnables(this, Observer
         {
             content.capacitySwitchEnabled.isChecked = it.eCapacity
-            content.voltcontrolSwitchEnabled.isChecked = it.eVoltage || it.eCurrMax
+            content.voltcontrolSwitchEnabled.isChecked = powerControlSendable && (it.eVoltage || it.eCurrMax)
             content.tempSwitchEnabled.isChecked = it.eTemperature
             content.cooldownSwitchEnabled.isChecked = it.eCoolDown
             content.applyOnBootSwitchEnabled.isChecked = it.eRunOnBoot

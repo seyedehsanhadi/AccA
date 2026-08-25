@@ -110,7 +110,10 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
 
             pref.setOnPreferenceChangeListener { p, newValue ->
                 val v = newValue as String
-                val ok = Shell.su("acc -s ui_refresh=$v").exec().isSuccess
+                // Absolute path, like every other call in this app. Bare "acc" does resolve on the
+                // root managers tested here (KernelSU adds /data/adb/ksu/bin, Magisk has
+                // /system/bin/acc), but it is an assumption about PATH that nothing else makes.
+                val ok = Shell.su("/dev/.vr25/acc/acca -s ui_refresh=$v").exec().isSuccess
                 if (ok) {
                     (p as ListPreference).value = v
                     showUiRefresh(p)

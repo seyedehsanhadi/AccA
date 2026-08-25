@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.acc._interface.AccInterface
 import mattecarra.accapp.models.AccConfig
+import mattecarra.accapp.models.ProfileEnables
 import mattecarra.accapp.utils.LogExt
 
 const val TAG = "ConfigUpdater()"
@@ -37,6 +38,19 @@ data class ConfigUpdaterEnable(  // primary constructor, all values as TRUE
         sendCurrMax = mSharedPrefs.getBoolean("cueCurrMax", true)
         sendVoltage = mSharedPrefs.getBoolean("cueVoltage", true)
     }
+
+    /**
+     * Apply a PROFILE's own section toggles on top of the global preferences.
+     *
+     * Only temperature is gated here, and the asymmetry is deliberate. The other sections express
+     * "off" by having configForApply() null their values, and that null must still be WRITTEN so
+     * the cap is actually cleared. Temperature has no empty state -- ACC always holds four
+     * thresholds -- so "off" there can only mean "this profile does not manage temperature", i.e.
+     * do not send the command. Before this, the temperature switch greyed its pickers and changed
+     * nothing that was written.
+     */
+    fun forProfile(e: ProfileEnables): ConfigUpdaterEnable =
+        copy(sendTemperature = sendTemperature && e.eTemperature)
 }
 
 //----------------------------------------------------------------------
@@ -48,7 +62,7 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
         LogExt().d(TAG, "pEnable: $cue")
         LogExt().d(TAG, "pAcc: $accConfig")
 
-        val capacityUpdate = cue.sendCapacity && acc.updateAccCapacity(accConfig.configCapacity.shutdown, accConfig.configCoolDown?.atPercent ?: accConfig.configCoolDownCapacity, accConfig.configCapacity.resume, accConfig.configCapacity.pause)
+        val capacityUpdate = cue.sendCapacity && acc.updateAccCapacity(accConfig.configCapacity.shutdown, accConfig.coolDownPercent(), accConfig.configCapacity.resume, accConfig.configCapacity.pause)
         val voltControl = cue.sendVoltage && acc.updateAccVoltControl(accConfig.configVoltage.controlFile, accConfig.configVoltage.max)
         // Some handlers (legacy, v201910132) return "" for the current-max command (NOT SUPPORTED).
         // An empty su command exits 0 -> would falsely report success. Treat an unsupported/empty
@@ -79,6 +93,10 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
         // Per-key failures are otherwise only at debug level (.d), suppressed unless debug is on
         // (mDEBUG defaults to NONE). Log any failure at the always-on 'S' level so a partial apply
         // always leaves a trace in logcat regardless of the debug setting.
+        // A section switched off in Settings is not a failure, but it does mean any cap ACC
+        // already holds stays put -- including when this apply carried a CLEAR. Leave a trace.
+        if (!cue.sendVoltage) LogExt().s(TAG, "[skipped] voltage not sent (cueVoltage off): ${accConfig.configVoltage}")
+        if (!cue.sendCurrMax) LogExt().s(TAG, "[skipped] currentMax not sent (cueCurrMax off): ${accConfig.configCurrMax}")
         if (cue.sendCapacity && !capacityUpdate) LogExt().s(TAG, "[fail] capacity: ${accConfig.configCapacity}")
         if (cue.sendVoltage && !voltControl) LogExt().s(TAG, "[fail] voltage: ${accConfig.configVoltage}")
         if (cue.sendCurrMax && currentMaxSupported && !currentMax) LogExt().s(TAG, "[fail] currentMax: ${accConfig.configCurrMax}")
@@ -120,7 +138,10 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
         return arrayOf(
             acc.getUpdateAccCapacityCommand(
                 accConfig.configCapacity.shutdown,
-                accConfig.configCoolDown?.atPercent ?: 101,
+                // Same rule as the live path above: the cool-down PERCENTAGE is its own ACC key and
+                // must survive the ratio being cleared. This sibling still wrote the disable value,
+                // so every schedule/boot/DJS apply silently reset it.
+                accConfig.coolDownPercent(),
                 accConfig.configCapacity.resume,
                 accConfig.configCapacity.pause ),
             acc.getUpdateAccVoltControlCommand(

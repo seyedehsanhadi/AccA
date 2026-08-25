@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name_full">Εφαρμογή προηγμένου ελέγχου φόρτισης</string>
     <string name="title_activity_log_view">Αρχεία καταγραφής</string>
     <string name="title_activity_log_view_file_name">Αρχεία καταγραφής</string>
@@ -38,7 +43,6 @@
     <string name="stop_charge">Σταματήστε την φόρτιση στο:</string>
     <string name="cooldown_temp">Θερμοκρασία ψύξης:</string>
     <string name="max_temp">Μέγιστη θερμοκρασία:</string>
-    <string name="pause_seconds">Παύση σε δευτερόλεπτα:</string>
     <string name="charge_seconds">Φόρτιση σε δευτερόλεπτα:</string>
     <string name="shutdown_capacity">Απενεργοποίηση (εάν δε φορτίζει) σε:</string>
     <string name="config_error_title">Σφάλμα ανάλυσης παραμέτρων</string>
@@ -116,7 +120,6 @@
     <string name="title_on_plugged">Εφαρμογή κατά τη Σύνδεση</string>
     <string name="edit_on_plugged">Επεξεργασία κατά_τη_σύνδεση ρυθμίσεων:</string>
     <string name="template_capacity_profile">Απενεργοποίηση: %1$d%% - Συνέχιση: %2$d%% - Διακοπή: %3$d%%</string>
-    <string name="template_temperature_profile">Θερμοκρασία: %1$d&#176;C - Μέγιστο: %2$d&#176;C - Παύση: %3$ds</string>
     <string name="template_cool_down_profile">Εκκίνηση σε: %1$d%% - Φόρτιση για %2$ds - Παύση για %3$ds</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Επιλογή προφίλ %1$s.</string>

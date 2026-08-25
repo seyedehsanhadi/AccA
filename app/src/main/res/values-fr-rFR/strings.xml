@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Application de contrôle de chargement avancé</string>
     <string name="title_activity_log_view">Logs</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Activer le contrôle de température (°C)</string>
     <string name="cooldown_temp">Température de refroidissement :</string>
     <string name="max_temp">Temp. max. :</string>
-    <string name="pause_seconds">Pause en secondes :</string>
     <string name="charge_seconds">Charge en secondes :</string>
     <string name="shutdown_capacity">Éteindre (si pas en charge) à :</string>
     <string name="no_root_message">AccA nécessite ROOT.</string>
@@ -141,7 +145,6 @@
     <string name="label_on_plugged">applyOnPlug:</string>
     <string name="edit_on_plugged">Modifier les paramètres qui sont appliqués au démarrage :</string>
     <string name="template_capacity_profile">Extinction : %1$d%% - Reprise : %2$d%% - Arrêt : %3$d%%</string>
-    <string name="template_temperature_profile">Température : %1$d&#176;C - Max: %2$d&#176;C - Pause : %3$ds</string>
     <string name="template_cool_down_profile">Commencer à : %1$d%% - Charge pendant %2$ds - Pause pendant %3$ds</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Sélection du profil %1$s.</string>

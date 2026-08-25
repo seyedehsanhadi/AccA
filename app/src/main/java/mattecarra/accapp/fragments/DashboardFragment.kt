@@ -465,10 +465,18 @@ class DashboardFragment : ScopedFragment()
         binding.dashBatteryStatusTextView.contentDescription = getString(R.string.status_hint)
 
         val shownMa = state.signedCurrentMilliAmps()
-        // Trust the daemon's own status first. The old `shownMa > 80f` test labelled a
-        // phone charging at trickle (under 80mA, e.g. the tail of a CV taper) as
-        // discharging. The threshold survives only as a tie-break when status is vague.
+        // Precedence, and the order matters: measuredClass is what the daemon MEASURED, kernel
+        // status is the thing measuredClass exists to correct -- this file's own comment above says
+        // `acca -i` "reads unplugged-while-plugged", and AMPS logged phones reporting Charging
+        // through ten minutes of measured drain. An earlier version of this block asked status
+        // first, so those phones read "Charging Speed" while the battery emptied. The 80mA
+        // threshold stays as the last tie-break for a phone that reports neither.
+        val mc = state.measuredClass
         val charging = when {
+            mc.equals("charging", true) -> true
+            mc.equals("drain", true) || mc.equals("discharging", true) -> false
+            mc.equals("bypass", true) || mc.equals("idle", true) ||
+            mc.equals("standby", true) || mc.equals("cut", true) -> false
             state.status.equals("Charging", true) -> true
             state.status.contains("Discharging", true) -> false
             else -> shownMa > 80f

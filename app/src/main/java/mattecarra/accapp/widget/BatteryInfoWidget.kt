@@ -24,7 +24,9 @@ import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.activities.BatteryDialogActivity
 import mattecarra.accapp.database.AccaRoomDatabase
+import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.DashboardValues
+import mattecarra.accapp.models.chargeStatusWord
 import mattecarra.accapp.services.WidgetService
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ProfileUtils
@@ -184,6 +186,11 @@ class BatteryInfoWidget : AppWidgetProvider()
 
             val dashboardValues =
                 DashboardValues(Acc.instance.getBatteryInfo(), Acc.instance.isAccdRunning())
+            // `acc -i` alone cannot say whether the raw current sign is trustworthy, nor whether
+            // ACC is holding the input open. The daemon's --state snapshot carries polarity,
+            // measuredClass and the charger side, and the dashboard already reads it -- the widget
+            // was the last surface still showing the unfiltered kernel answer.
+            val accState = Acc.instance.getState()
             with(dashboardValues) {
 
                 val swidgetId = widgetId.toString()
@@ -220,7 +227,8 @@ class BatteryInfoWidget : AppWidgetProvider()
                 widgetView.setImageViewBitmap(R.id.imbkgfck, gradient.toBitmap(mWidth, mHeight))
 
                 widgetView.setTextViewText(R.id.status_label, if (replaceLabel) "Ⓢ:" else context.getString(R.string.info_status))
-                widgetView.setTextViewText(R.id.status_out, batteryInfo.status)
+                widgetView.setTextViewText(R.id.status_out,
+                    accState?.let { chargeStatusWord(it.plugged, it.measuredClass) } ?: batteryInfo.status)
                 widgetView.setTextViewTextSize(R.id.status_label, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextViewTextSize(R.id.status_out, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextColor(R.id.status_label, textColor)
@@ -232,9 +240,19 @@ class BatteryInfoWidget : AppWidgetProvider()
 
                 val prefc = Preferences(context)
 
-                val plus = if (Acc.instance.version < 202107280) batteryInfo.isCharging() else true
-                widgetView.setTextViewText(R.id.charging_out, batteryInfo.getCurrentNow(prefc.currentInputUnitOfMeasure,
-                prefc.currentOutputUnitOfMeasure, plus, showEndvalue))
+                // Same polarity rule as the meter and the dashboard: on an inverted or unstable
+                // gauge the raw sign is meaningless, so ask whether normalising flips it.
+                val rawMa = batteryInfo.getCurrentNow(prefc.currentInputUnitOfMeasure)
+                val normMa = accState?.let {
+                    AccState.normaliseMilliAmps(rawMa, it.polarity, it.measuredClass, it.status) }
+                val plus =
+                    if (normMa != null) (normMa >= 0f) == (rawMa >= 0f)
+                    else if (Acc.instance.version < 202107280) batteryInfo.isCharging() else true
+                val amps = batteryInfo.getCurrentNow(prefc.currentInputUnitOfMeasure,
+                    prefc.currentOutputUnitOfMeasure, plus, showEndvalue)
+                val watts = accState?.chargeWatts?.takeIf { it > 0 && accState.plugged }
+                    ?.let { "  $it W" } ?: ""
+                widgetView.setTextViewText(R.id.charging_out, amps + watts)
 
                 widgetView.setTextViewTextSize(R.id.charging_label, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextViewTextSize(R.id.charging_out, COMPLEX_UNIT_SP, textSize.toFloat())

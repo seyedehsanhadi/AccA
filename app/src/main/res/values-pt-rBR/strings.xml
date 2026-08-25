@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Aplicativo de Controle Avançado de Carregamento</string>
     <string name="title_activity_log_view">Registros</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Ativar controle de temperatura (°C)</string>
     <string name="cooldown_temp">Temperatura de resfriamento:</string>
     <string name="max_temp">Temperatura máxima:</string>
-    <string name="pause_seconds">Pausa em segundos:</string>
     <string name="charge_seconds">Carregamento em segundos:</string>
     <string name="shutdown_capacity">Desligar (quando não carregando) em:</string>
     <string name="no_root_message">AccA requer ROOT.</string>

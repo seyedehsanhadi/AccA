@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Ứng dụng điều chỉnh sạc nâng cao</string>
     <string name="title_activity_log_view">Nhật ký</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Bật kiểm tra nhiệt độ (°C)</string>
     <string name="cooldown_temp">Nhiệt độ làm mát:</string>
     <string name="max_temp">Nhiệt độ tối đa:</string>
-    <string name="pause_seconds">Số giây tạm dừng:</string>
     <string name="charge_seconds">Số giây sạc:</string>
     <string name="shutdown_capacity">Tắt nguồn (nếu không được sạc) ở:</string>
     <string name="no_root_message">Vui lòng cấp quyền root cho ACC.</string>
@@ -140,7 +144,6 @@ Tiến trình nền DJS sẽ được bắt đầu khi khởi động cùng vớ
     <string name="title_on_plugged">Áp dụng trên phích cắm</string>
     <string name="edit_on_plugged">Chỉnh sửa cài đặt application_on_plug:</string>
     <string name="template_capacity_profile">Tắt nguồn: %1$d%% - Tiếp tục: %2$d%% - Dừng lại: %3$d%%</string>
-    <string name="template_temperature_profile">Nhiệt độ:%1$d&#176;C - Tối đa: %2$d&#176;C - Dừng: %3$ds</string>
     <string name="template_cool_down_profile">Bắt đầu lúc: %1$d%% - Sạc trong %2$ds - Tạm dừng trong %3$ds</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Đang chọn hồ sơ %1$s.</string>

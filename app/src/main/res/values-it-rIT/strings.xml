@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">App di Controllo Avanzato della Carica</string>
     <string name="title_activity_log_view">Log</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Abilita controllo temperatura (°C)</string>
     <string name="cooldown_temp">Temperatura di raffreddamento:</string>
     <string name="max_temp">Temperatura massima:</string>
-    <string name="pause_seconds">Secondi di pausa:</string>
     <string name="charge_seconds">Secondi di carica:</string>
     <string name="shutdown_capacity">Spegnimento (se non in carica) al:</string>
     <string name="no_root_message">AccA richiede il ROOT.</string>
@@ -144,7 +148,6 @@
     <string name="edit_on_plugged">Cambia le impostazioni di apply_on_plug:</string>
     <string name="edit_on_plugged_dialog_message">Esempio: wireless/voltage_max::90000000 forza la ricarica wireless rapida in alcuni dispositivi Pixel.</string>
     <string name="template_capacity_profile">Spegnimento: %1$d%% - Riprendi: %2$d%% - Stop: %3$d%%</string>
-    <string name="template_temperature_profile">Temperatura: %1$d&#176;C - Max: %2$d&#176;C - Pausa: %3$ds</string>
     <string name="template_cool_down_profile">Inizia a: %1$d%% - Carica per %2$ds - Pausa per %3$ds</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Selezione del profilo %1$s.</string>

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Advanced Charging Controller App</string>
     <string name="title_activity_log_view">記錄檔</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">啟用溫度控制 (°C)</string>
     <string name="cooldown_temp">最低溫度：</string>
     <string name="max_temp">最高溫度:</string>
-    <string name="pause_seconds">暫停秒數:</string>
     <string name="charge_seconds">充電秒數:</string>
     <string name="shutdown_capacity">關機閥值 (沒有充電情況下):</string>
     <string name="no_root_message">AccA 需要 ROOT 權限。</string>
@@ -150,7 +154,6 @@
     <string name="edit_on_plugged">編輯（apply_on_plug）設置：</string>
     <string name="edit_on_plugged_dialog_message">Example: wireless/voltage_max::9000000 強制在某些 Pixel 設備上使用快速無線充電。</string>
     <string name="template_capacity_profile">關機: %1$d%% - 重新開始充電: %2$d%% - 停止充電: %3$d%%</string>
-    <string name="template_temperature_profile">溫度: %1$d&#176;C - 最大:%2$d&#176;C -暫停: %3$d秒</string>
     <string name="template_cool_down_profile">開始於: %1$d%% - 充電 %2$d 秒 - 暫停 %3$d 秒</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">選擇設定檔案 %1$s</string>

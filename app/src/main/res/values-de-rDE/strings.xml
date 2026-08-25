@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Advanced Charging Controller App</string>
     <string name="title_activity_log_view">Logs</string>
@@ -43,7 +48,6 @@
     <string name="enable_temp_check">Temperatursteuerung aktivieren (°C)</string>
     <string name="cooldown_temp">Abkühltemperatur:</string>
     <string name="max_temp">Max Temperatur:</string>
-    <string name="pause_seconds">Pausieren in Sekunden:</string>
     <string name="charge_seconds">Ladezeit in Sekunden:</string>
     <string name="shutdown_capacity">Herunterfahren (wenn nicht geladen wird) bei:</string>
     <string name="no_root_message">AccA benötigt Root-Rechte.</string>
@@ -159,7 +163,6 @@
     <string name="edit_on_plugged">Einsteck-Einstellungen bearbeiten:</string>
     <string name="edit_on_plugged_dialog_message">Beispiel: Wireless/voltage_max::9000000 erzwingt eine schnelle kabellose Ladungen auf einigen Pixel-Geräten.</string>
     <string name="template_capacity_profile">Herunterfahren: %1$d%% - Fortsetzen: %2$d%% - Anhalten: %3$d%%</string>
-    <string name="template_temperature_profile">Temperatur: %1$d&#176;C - Max: %2$d&#176;C - Pause: %3$ds</string>
     <string name="template_cool_down_profile">Beginnen bei: %1$d%% - Laden für %2$d Sek - Pausieren für %3$d Sek</string>
     <!--Menus Options-->
     <string name="menu_option_run">Ausführen</string>

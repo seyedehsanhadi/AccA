@@ -45,7 +45,13 @@ interface AccInterface {
             val out = Shell.su(
                 "cat /sys/class/power_supply/usb/present /sys/class/power_supply/usb/online " +
                 "/sys/class/power_supply/ac/online /sys/class/power_supply/dc/online " +
-                "/sys/class/power_supply/main*/online 2>/dev/null; dumpsys battery 2>/dev/null"
+                "/sys/class/power_supply/main*/online " +
+                // Wireless was covered only by the dumpsys clause, and "Wireless powered" goes
+                // FALSE while ACC holds a cut -- so a wireless charger plus a hold satisfied
+                // neither test and the app asked the user to plug in something already attached.
+                // present stays 1 through a cut, which is exactly why usb/present is read too.
+                "/sys/class/power_supply/wireless/online /sys/class/power_supply/wireless/present " +
+                "2>/dev/null; dumpsys battery 2>/dev/null"
             ).exec().out
             out.any { it.trim() == "1" } ||
             out.any { Regex("(AC|USB|Wireless|Dock) powered:\\s*true").containsMatchIn(it) }

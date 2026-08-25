@@ -369,11 +369,20 @@ open class AccHandler(override val version: Int) : AccInterface {
     private fun switchTestPassed(code: Int, out: List<String>): Boolean =
         code == 0 || code == 15 || out.any { it.contains("Switch works", ignoreCase = true) }
 
+    /** POSIX single-quoting: everything inside is literal, and an embedded ' is closed,
+     *  escaped and reopened. The only safe way to hand user text to a root shell. */
+    private fun shQuoteSingle(v: String): String = "'" + v.replace("'", "'\\''") + "'"
+
     override suspend fun testChargingSwitch(chargingSwitch: String?): Int = withContext(Dispatchers.IO) {
         try {
             // Hard-bound the test (see ensureDaemonRunning): it stops the daemon
             // and can otherwise run for minutes, wedging the shell.
-            val res = Shell.su("timeout 300 /dev/.vr25/acc/acca -t${chargingSwitch?.let{" $it"} ?: ""}").exec()
+            // The switch spec is built from three free-text fields in the add-switch dialog and
+            // went into a ROOT shell unquoted, so a ";" or "$(...)" typed (or pasted) there ran as
+            // root. Single-quote it: acc.sh does `chargingSwitch=($@)`, which word-splits the value
+            // again, so node/on/off still arrive as three fields.
+            val arg = chargingSwitch?.takeIf { it.isNotBlank() }?.let { " " + shQuoteSingle(it) } ?: ""
+            val res = Shell.su("timeout 300 /dev/.vr25/acc/acca -t$arg").exec()
             // Normalise a working switch to 0 so every caller's `== 0` success check stays correct
             // AND now accepts the exit-15 bypass case. Non-passing codes (2 = plug in, 1 = fails)
             // pass through unchanged so callers can still tell those apart.

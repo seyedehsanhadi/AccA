@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Aplicación avanzada de controlador de carga</string>
     <string name="title_activity_log_view">Registros</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Activar control de temperatura (°C)</string>
     <string name="cooldown_temp">Temperatura de enfriamiento:</string>
     <string name="max_temp">Temperatura máxima:</string>
-    <string name="pause_seconds">Pausar durante (segundos):</string>
     <string name="charge_seconds">Cargar durante (segundos):</string>
     <string name="shutdown_capacity">Apagar (si no está cargando) al:</string>
     <string name="no_root_message">AccA requiere ROOT.</string>
@@ -151,7 +155,6 @@
     <string name="edit_on_plugged">Editar ajustes de apply_on_boot:</string>
     <string name="edit_on_plugged_dialog_message">Ejemplo: wireless/voltage_max::9000000 fuerza la carga inalámbrica rápida en algunos dispositivos Pixel.</string>
     <string name="template_capacity_profile">Apagar: %1$d%% - Reanudar: %2$d%% - Detener: %3$d%%</string>
-    <string name="template_temperature_profile">Temperatura: %1$d&#176;C - Max: %2$d&#176;C - Pausa: %3$ds</string>
     <string name="template_cool_down_profile">Iniciar en: %1$d%% - Cargar por %2$ds - Pausa por %3$ds</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Seleccionando perfil %1$s.</string>

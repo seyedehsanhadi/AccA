@@ -30,7 +30,22 @@ import java.io.Serializable
      * current stay in force. 100 and not 101: ACC validates pause as 1..100 and clamps 101 to 80,
      * measured on a Pixel 6a.
      */
-    fun configForApply(): AccConfig =
+    fun configForApply(): AccConfig {
+        // "with the profile's own enable toggles honoured" -- plural, but only eCapacity was ever
+        // applied. A profile with voltage, current, cool-down, on-boot or on-plug switched OFF
+        // still pushed those stored values to ACC on every apply, because the ConfigUpdaterEnable
+        // used at apply time comes from global prefs, not from this profile's pEnables. Clear the
+        // same set the editor clears when a section is off, so "off" means off wherever it is read.
+        var c = accConfig
+        if (!pEnables.eCoolDown)  c = c.copy(configCoolDown = null)
+        if (!pEnables.eVoltage)   c = c.copy(configVoltage = AccConfig.ConfigVoltage(null, null))
+        if (!pEnables.eCurrMax)   c = c.copy(configCurrMax = null)
+        if (!pEnables.eRunOnBoot) c = c.copy(configOnBoot = null)
+        if (!pEnables.eRunOnPlug) c = c.copy(configOnPlug = null)
+        return applyCapacityToggle(c)
+    }
+
+    private fun applyCapacityToggle(accConfig: AccConfig): AccConfig =
         if (pEnables.eCapacity) accConfig
         else accConfig.copy(
             configCapacity = accConfig.configCapacity.copy(

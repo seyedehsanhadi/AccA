@@ -35,6 +35,7 @@ import mattecarra.accapp.adapters.ScriptListAdapter
 import mattecarra.accapp.databinding.*
 import mattecarra.accapp.models.AccaScript
 import mattecarra.accapp.utils.LogExt
+import mattecarra.accapp.utils.isPlainAccCommand
 import mattecarra.accapp.utils.ScopedFragment
 import mattecarra.accapp.viewmodel.ScriptsViewModel
 
@@ -271,6 +272,19 @@ class ScriptesFragment : ScopedFragment(), OnScriptClickListener
 
     suspend fun runScript(script: AccaScript): AccaScript = withContext(Dispatchers.IO)
     {
+        // "Allow custom shell scripts" (off by default) hid the add button and the edit menu, but
+        // it never gated RUNNING. Import brings scripts in from a file with no such check, so an
+        // imported body executed as root on a swipe with the preference still off. Gate the run
+        // itself -- the one place every path goes through -- and judge the BODY, not where it came
+        // from, so an edited copy of a seeded action is judged by what it would actually do.
+        val allowCustom = PreferenceManager.getDefaultSharedPreferences(mContext)
+            .getBoolean("pref_allow_custom_scripts", false)
+        if (!allowCustom && !isPlainAccCommand(script.scBody))
+        {
+            return@withContext script.copy(
+                scOutput = mContext.getString(R.string.script_blocked_custom_off),
+                scExitCode = 126)
+        }
         // Only the switch test ("acc -t") is dangerous: it stops the charge-control
         // daemon and can run for minutes, wedging the shared root shell so every
         // later command (-D, -v, diagnostics) hangs until the app is force-closed.

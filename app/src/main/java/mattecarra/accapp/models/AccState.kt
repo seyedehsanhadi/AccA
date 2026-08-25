@@ -63,22 +63,35 @@ data class AccState(
      */
     fun signedCurrentMilliAmps(): Float {
         val mA = if (currentUnits.equals("uA", ignoreCase = true)) currentRaw / 1000f else currentRaw.toFloat()
-        return when {
-            polarity.equals("inverted", ignoreCase = true) -> -mA
-            polarity.equals("unstable", ignoreCase = true) -> {
-                val mag = kotlin.math.abs(mA)
-                when {
-                    measuredClass.equals("charging", ignoreCase = true) -> mag
-                    measuredClass.equals("drain", ignoreCase = true) ||
-                    measuredClass.equals("discharging", ignoreCase = true) -> -mag
-                    else -> if (status.equals("Charging", ignoreCase = true)) mag else -mag
-                }
-            }
-            else -> mA
-        }
+        return normaliseMilliAmps(mA, polarity, measuredClass, status)
     }
 
+
+
     companion object {
+        /**
+         * The polarity rule, for callers that read the current themselves (the status-bar meter
+         * from BatteryManager, the charge capture from sysfs) instead of from this snapshot.
+         * It lived only inside [signedCurrentMilliAmps], so those two handled "inverted" and
+         * silently mishandled "unstable" -- on a dual-path PMIC (a Pixel reports exactly this)
+         * the raw sign follows the charge PATH and means nothing, so both showed the wrong
+         * direction. One definition, three callers.
+         */
+        fun normaliseMilliAmps(rawMa: Float, polarity: String?, measuredClass: String?, status: String?): Float =
+            when {
+                polarity.equals("inverted", ignoreCase = true) -> -rawMa
+                polarity.equals("unstable", ignoreCase = true) -> {
+                    val mag = kotlin.math.abs(rawMa)
+                    when {
+                        measuredClass.equals("charging", ignoreCase = true) -> mag
+                        measuredClass.equals("drain", ignoreCase = true) ||
+                        measuredClass.equals("discharging", ignoreCase = true) -> -mag
+                        else -> if (status.equals("Charging", ignoreCase = true)) mag else -mag
+                    }
+                }
+                else -> rawMa
+            }
+
         /**
          * Parses an `acca --state` JSON payload. Returns null if the payload is blank,
          * not valid JSON, or its schemaVersion is below 1 (older daemon / unknown contract)

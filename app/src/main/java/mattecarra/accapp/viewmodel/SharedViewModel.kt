@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.acc.ConfigUpdaterEnable
 import mattecarra.accapp.models.AccConfig
+import mattecarra.accapp.models.ProfileEnables
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ProfileUtils
 
@@ -97,12 +98,24 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
         saveAccConfig(value)
     }
 
+    /**
+     * Apply a PROFILE. The profile's own section toggles gate what is sent -- the temperature
+     * switch in particular, which otherwise greyed its pickers and wrote the thresholds anyway.
+     */
+    suspend fun updateAccConfig(value: AccConfig, enables: ProfileEnables)
+    {
+        LogExt().d(javaClass.simpleName,"updateAccConfig(profile enables)")
+        config.postValue(Pair(value, null))
+        saveAccConfig(value, enables)
+    }
+
     /*
     * Saves config on file. It's run in an async thread every time config is updated.
     */
-    private suspend fun saveAccConfig(value: AccConfig)
+    private suspend fun saveAccConfig(value: AccConfig, enables: ProfileEnables? = null)
     {
-        Acc.instance.updateAccConfig(value, ConfigUpdaterEnable(mSharedPrefs)).also {
+        val cue = ConfigUpdaterEnable(mSharedPrefs).let { c -> enables?.let { c.forProfile(it) } ?: c }
+        Acc.instance.updateAccConfig(value, cue).also {
 
             if (it.isSuccessful())
             {

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Aplikasi Pengontrol Pengisian Lanjutan</string>
     <string name="title_activity_log_view">Log</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Aktifkan kendali suhu (°C)</string>
     <string name="cooldown_temp">Suhu reda:</string>
     <string name="max_temp">Temp maksimum:</string>
-    <string name="pause_seconds">Jeda detik:</string>
     <string name="charge_seconds">Isi ulang detik:</string>
     <string name="shutdown_capacity">Shutdown (jika tidak mengisi daya) di:</string>
     <string name="no_root_message">AccA membutuhkan akses ROOT.</string>
@@ -148,7 +152,6 @@ atau --> github.com/MatteCarra/AccA/issues.    </string>
     <string name="label_on_plugged">applyOnPlug:</string>
     <string name="edit_on_plugged">Ubah pengaturan apply_on_plug:</string>
     <string name="template_capacity_profile">Shutdown: %1$d%% - Lanjutkan: %2$d%% - Stop: %3$d%%</string>
-    <string name="template_temperature_profile">Suhu: %1$d&#176;C - Maks: %2$d&#176;C - Jeda: %3$ds</string>
     <string name="template_cool_down_profile">Mulai di: %1$d%% - Biaya untuk %2$ds - Jeda untuk %3$ds</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">Memilih profil %1$s.</string>

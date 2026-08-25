@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- pause_seconds / template_temperature_profile removed: the stale translations said
+         "pause seconds", but this value is the RESUME TEMPERATURE in degrees C. A wrong unit on a
+         temperature threshold is worse than falling back to English, so they fall back until
+         retranslated against the current English strings. -->
+
     <string name="app_name">AccA</string>
     <string name="app_name_full">Gelişmiş Şarj Kontrol Uygulaması (ACCA)</string>
     <string name="title_activity_log_view">Günlükler</string>
@@ -42,7 +47,6 @@
     <string name="enable_temp_check">Sıcaklık kontrolünü etkinleştirin (° C)</string>
     <string name="cooldown_temp">Soğuma sıcaklığı:</string>
     <string name="max_temp">Maks. sıcaklık:</string>
-    <string name="pause_seconds">Duraklatma süresi (sn):</string>
     <string name="charge_seconds">Şarj etme süresi (sn):</string>
     <string name="shutdown_capacity">Şarj edilmediğinde cihazı kapatma yüzdesi:</string>
     <string name="no_root_message">AccA root gerektirir. </string>
@@ -145,7 +149,6 @@
     <string name="label_on_plugged">applyOnPlug:</string>
     <string name="edit_on_plugged">ApplyOnPlug ayarlarını düzenle:</string>
     <string name="template_capacity_profile">Kapat: %1$d%% - Devam Et: %2$d%% - Durdur: %3$d%%</string>
-    <string name="template_temperature_profile">Sıcaklık: %1$d&#176;C - Maks: %2$d&#176;C - Duraklat: %3$ds</string>
     <string name="template_cool_down_profile">Başlat: %1$d%% - %2$d saniye şarj et - %3$d saniye duraklat</string>
     <!--Menus Options-->
     <string name="selecting_profile_toast">%1$s profili seçildi.</string>
