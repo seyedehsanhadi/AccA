@@ -131,20 +131,19 @@ class WidgetService : Service(), OnAdvWidgetInterface
                 {
                     isPowerConnected = intent.getBooleanExtra("isCharging", isPowerConnected)
 
-                    if (isPowerConnected) // power connected
-                    {
-                        LogExt().d(javaClass.simpleName, ".onStartCommand(): Screen+Power=True, send MSG with 2000 ms delay ")
-                        mWidgetHandler.sendMessageDelayed(Message.obtain(mWidgetHandler, Runnable {
-                            mWidgetHandler.removeCallbacksAndMessages(null)
-                            LogExt().d(javaClass.simpleName, "MainLooperRunnable(): Clear all MSG, send WIDGET_ONE_UPDATE")
-                            sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ONE_UPDATE).putExtras(intent))
-                        }), 2500)
-                    }
-                    else // NO connected
-                    {
-                        LogExt().d(javaClass.simpleName, ".onStartCommand(): Power=False, send WIDGET_ONE_UPDATE")
+                    // Both branches are DELAYED. The unplugged one used to re-broadcast
+                    // immediately, which would have been a tight loop -- two root shell calls per
+                    // turn -- so the widget only ever asked for a follow-up while charging, and a
+                    // discharging phone sat on a frozen "Current Now" until the screen toggled or
+                    // the hourly system update came round. A slower unplugged cadence gives a live
+                    // figure without the spin; the isScreenOn guard above ends the loop the moment
+                    // the screen goes off.
+                    val delayMs = if (isPowerConnected) 2500L else 10000L
+                    LogExt().d(javaClass.simpleName, ".onStartCommand(): screen on, next widget update in $delayMs ms")
+                    mWidgetHandler.sendMessageDelayed(Message.obtain(mWidgetHandler, Runnable {
+                        mWidgetHandler.removeCallbacksAndMessages(null)
                         sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ONE_UPDATE).putExtras(intent))
-                    }
+                    }), delayMs)
                 }
             }
 
@@ -205,13 +204,18 @@ class WidgetService : Service(), OnAdvWidgetInterface
     override fun onScreen(screenOn: Boolean)
     {
         isScreenOn = screenOn
-        if (isScreenOn && isPowerConnected) sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
+        // Screen on is enough. Requiring power too meant an unplugged phone never refreshed the
+        // widget at all, which is what "Current Now is not updated" looked like.
+        if (isScreenOn) sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
+        else mWidgetHandler.removeCallbacksAndMessages(null)
     }
 
     override fun onPowerState(connectOn: Boolean)
     {
         isPowerConnected = connectOn
-        if (isPowerConnected && isScreenOn) sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
+        // Unplugging matters as much as plugging in: the widget would otherwise keep showing the
+        // charger-side figures until something else woke it.
+        if (isScreenOn) sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
     }
 
     //--------------------------------------------------------------------

@@ -301,14 +301,12 @@ class BatteryInfoWidget : AppWidgetProvider()
 
                 getInstance(context).updateAppWidget(widgetId, widgetView)
 
-                // Self-refresh cadence follows the same answer the widget prints. Driving it off
-                // the kernel status kept a pause-hold refreshing as though it were charging.
-                if (chargingNow)
-                {
-                    LogExt().d(javaClass.simpleName, "chargingNow: true, Send SelfUpdate $swidgetId")
-                    val intent = Intent().setAction(WIDGET_ONE_UPDATE).putExtra(WIDGET_ID_NAME, widgetId).putExtra("isCharging", true)
-                    WidgetService().runSelfIntent(context, intent)
-                }
+                // Always ask for the next tick. The service decides whether there is one: it drops
+                // the request when the screen is off, and picks the cadence from isCharging. Asking
+                // only while charging is what froze the figure on a discharging phone.
+                LogExt().d(javaClass.simpleName, "SelfUpdate $swidgetId, chargingNow=$chargingNow")
+                WidgetService().runSelfIntent(context, Intent().setAction(WIDGET_ONE_UPDATE)
+                    .putExtra(WIDGET_ID_NAME, widgetId).putExtra("isCharging", chargingNow))
             }
 
             } catch (e: Exception) {

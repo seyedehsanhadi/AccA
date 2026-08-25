@@ -16,6 +16,10 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.BatteryManager
 import android.os.Build
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import xml.BatteryInfoWidget
+import xml.WIDGET_ALL_UPDATE
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -96,6 +100,7 @@ class ChargeMeterService : Service() {
         const val ACTION_REFRESH = "acca.meter.refresh"   // pref changed -> re-read + re-render
         private const val TICK_MS = 3000L                 // refresh cadence while screen on
         private const val ROOT_EVERY = 3                  // root --state only every 3rd tick (~9s)
+        private const val WIDGET_EVERY = 2                // push to placed widgets every 2nd tick (~6s)
 
         /** True if a charger is attached right now (sticky battery intent, no root). */
         fun isPluggedNow(context: Context): Boolean {
@@ -167,6 +172,20 @@ class ChargeMeterService : Service() {
             plugged = isPluggedNow(this@ChargeMeterService)
             if (!prefs.chargeMeterEnabled) { stopMeter(); return }
             update(refreshState = (tickCount % ROOT_EVERY == 0))
+            // Drive the home-screen widget from THIS clock.
+            //
+            // The widget had its own: a broadcast -> WidgetService -> Handler -> broadcast chain,
+            // plus screen/power receivers and an AppWidgetAlarm that was commented out. None of it
+            // runs on Android 8+, because runSelfIntent() calls startService() from a broadcast
+            // receiver, which the platform refuses in the background; the failure lands in a catch
+            // and is invisible. Checked on a Pixel 6a: ChargeMeterService is alive and foreground
+            // while WidgetService is not running at all, so the widget only ever refreshed on the
+            // system's own hourly update.
+            //
+            // This loop already solves every part of the problem -- it stops with the screen, has a
+            // backstop for a missed SCREEN_OFF, and reads current without root on every tick -- so
+            // the widget becomes a second consumer of it rather than a second implementation.
+            if (tickCount % WIDGET_EVERY == 0) pushToWidgets()
             tickCount++
             // Reschedule ALWAYS while the screen is on. Screen-off is stopped by the SCREEN_OFF
             // receiver; as a backstop for a MISSED SCREEN_OFF broadcast, stop only after TWO
@@ -175,6 +194,18 @@ class ChargeMeterService : Service() {
             // old bug: one glitchy read stopped ticking permanently until the next SCREEN_ON).
             if (screenReallyOn()) { offStreak = 0; handler.postDelayed(this, TICK_MS) }
             else if (++offStreak < 2) handler.postDelayed(this, TICK_MS)
+        }
+    }
+
+    /** No-op when the user has no widget placed, which is the common case. */
+    private fun pushToWidgets() {
+        try {
+            val ids = AppWidgetManager.getInstance(this)
+                .getAppWidgetIds(ComponentName(this, BatteryInfoWidget::class.java))
+            if (ids == null || ids.isEmpty()) return
+            sendBroadcast(Intent(this, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
+        } catch (e: Exception) {
+            LogExt().s(javaClass.simpleName, "pushToWidgets failed: $e")
         }
     }
 
