@@ -27,6 +27,7 @@ import mattecarra.accapp.database.AccaRoomDatabase
 import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.DashboardValues
 import mattecarra.accapp.models.chargeStatusWord
+import mattecarra.accapp.models.isChargingNow
 import mattecarra.accapp.services.WidgetService
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ProfileUtils
@@ -234,8 +235,14 @@ class BatteryInfoWidget : AppWidgetProvider()
                 widgetView.setTextColor(R.id.status_label, textColor)
                 widgetView.setTextColor(R.id.status_out, textColor)
 
+                // The number is normalised below, but the WORD was still the kernel's answer:
+                // a pause-hold prints status Charging, so the widget said "Charging speed" over a
+                // negative current. Same precedence the dashboard uses -- measuredClass first.
+                val chargingNow = accState?.let { isChargingNow(it.measuredClass, it.status) }
+                    ?: batteryInfo.isCharging()
+
                 widgetView.setTextViewText(R.id.charging_label, if (replaceLabel) "Ⓒ:"
-                else if (batteryInfo.isCharging()) context.getString(R.string.info_charging_speed)
+                else if (chargingNow) context.getString(R.string.info_charging_speed)
                      else context.getString(R.string.info_discharging_speed))
 
                 val prefc = Preferences(context)
@@ -292,9 +299,11 @@ class BatteryInfoWidget : AppWidgetProvider()
 
                 getInstance(context).updateAppWidget(widgetId, widgetView)
 
-                if (batteryInfo.isCharging())
+                // Self-refresh cadence follows the same answer the widget prints. Driving it off
+                // the kernel status kept a pause-hold refreshing as though it were charging.
+                if (chargingNow)
                 {
-                    LogExt().d(javaClass.simpleName, "isCharging(): true, Send SelfUpdate $swidgetId")
+                    LogExt().d(javaClass.simpleName, "chargingNow: true, Send SelfUpdate $swidgetId")
                     val intent = Intent().setAction(WIDGET_ONE_UPDATE).putExtra(WIDGET_ID_NAME, widgetId).putExtra("isCharging", true)
                     WidgetService().runSelfIntent(context, intent)
                 }

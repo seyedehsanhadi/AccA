@@ -31,6 +31,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
+import mattecarra.accapp.acc.ConfigUpdaterEnable
 import mattecarra.accapp.databinding.ActivityMainBinding
 import mattecarra.accapp.dialogs.*
 import mattecarra.accapp.djs.Djs
@@ -954,7 +955,14 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                             time,
                                             executeOnce,
                                             executeOnBoot,
-                                            configProfile.accConfig
+                                            // configForApply(), not accConfig: scheduling a
+                                            // profile used to write the sections its own switches
+                                            // had turned off, so a limit removed in the editor came
+                                            // back at the scheduled time.
+                                            configProfile.configForApply(),
+                                            ConfigUpdaterEnable(
+                                                PreferenceManager.getDefaultSharedPreferences(this@MainActivity))
+                                                .forProfile(configProfile.pEnables)
                                         )
                                 }
                         } catch (e: Exception) {

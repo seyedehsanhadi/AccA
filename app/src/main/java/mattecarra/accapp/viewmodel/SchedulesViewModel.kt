@@ -13,6 +13,7 @@ import mattecarra.accapp.database.AccaRoomDatabase
 import mattecarra.accapp.database.ScheduleDao
 import mattecarra.accapp.djs.Djs
 import mattecarra.accapp.models.AccConfig
+import mattecarra.accapp.acc.ConfigUpdaterEnable
 import mattecarra.accapp.models.ScheduleProfile
 import mattecarra.accapp.models.Schedule
 import mattecarra.accapp.utils.LogExt
@@ -62,22 +63,22 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun addSchedule(scheduleName: String, time: String, executeOnce: Boolean, executeOnBoot: Boolean, profile: AccConfig) = viewModelScope.launch {
+    fun addSchedule(scheduleName: String, time: String, executeOnce: Boolean, executeOnBoot: Boolean, profile: AccConfig, cue: ConfigUpdaterEnable = ConfigUpdaterEnable()) = viewModelScope.launch {
         try {
             val id = insertScheduleProfile(ScheduleProfile(0, scheduleName, profile))
             val ok = Djs.instance.append(
-                Schedule(true, time, executeOnce, executeOnBoot, ScheduleProfile(id, scheduleName, profile)).toDjsSchedule()
+                Schedule(true, time, executeOnce, executeOnBoot, ScheduleProfile(id, scheduleName, profile), cue).toDjsSchedule()
             )
             if (!ok) mSchedulesDao.deleteById(id)   // roll back the orphan DB row if the DJS write failed
             refreshSchedules()
         } catch (e: Exception) { Log.e(TAG, "addSchedule failed: ${e.message}") }
     }
 
-    fun editSchedule(id: Int, scheduleName: String, isEnabled: Boolean, time: String, executeOnce: Boolean, executeOnBoot: Boolean, profile: AccConfig) = viewModelScope.launch {
+    fun editSchedule(id: Int, scheduleName: String, isEnabled: Boolean, time: String, executeOnce: Boolean, executeOnBoot: Boolean, profile: AccConfig, cue: ConfigUpdaterEnable = ConfigUpdaterEnable()) = viewModelScope.launch {
         try {
             val scheduleProfile = ScheduleProfile(id, scheduleName, profile)
             val ok = Djs.instance.edit(
-                Schedule(isEnabled, time, executeOnce, executeOnBoot, scheduleProfile).toDjsSchedule()
+                Schedule(isEnabled, time, executeOnce, executeOnBoot, scheduleProfile, cue).toDjsSchedule()
             )
             if (ok) mSchedulesDao.update(scheduleProfile)   // keep DB in step with DJS only on success
             else LogExt().e(TAG, "editSchedule: DJS edit returned false for id=$id; DB left unchanged")

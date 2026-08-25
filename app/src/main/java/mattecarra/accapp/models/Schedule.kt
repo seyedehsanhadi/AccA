@@ -7,7 +7,12 @@ import mattecarra.accapp.djs.Djs
 import mattecarra.accapp.djs.DjsSchedule
 import java.lang.StringBuilder
 
-data class Schedule(val isEnabled: Boolean, val time: String, val executeOnce: Boolean, val executeOnBoot: Boolean, val profile: ScheduleProfile) {
+// `cue` carries the gates that were in force when the schedule was written: the global
+// AccVoltControl / AccCurrentMax opt-outs, and the source profile's own section switches. The
+// command string is baked into DJS at add/edit time, so these are the gates that matter. Reading a
+// schedule back from DJS defaults to all-enabled, which changes nothing -- that path never rebuilds
+// the command.
+data class Schedule(val isEnabled: Boolean, val time: String, val executeOnce: Boolean, val executeOnBoot: Boolean, val profile: ScheduleProfile, val cue: ConfigUpdaterEnable = ConfigUpdaterEnable()) {
     private val timeRegex = """([0-9]{2})([0-9]{2})""".toRegex()
 
     companion object {
@@ -24,7 +29,7 @@ data class Schedule(val isEnabled: Boolean, val time: String, val executeOnce: B
 
     fun getCommand(): String {
         // The profile body uses the boot-safe acca.sh path (the A5 fix above).
-        val body = (": accaScheduleId${profile.uid}; ${ConfigUpdater(profile.accConfig, ConfigUpdaterEnable()).concatenateCommands(Acc.instance)}")
+        val body = (": accaScheduleId${profile.uid}; ${ConfigUpdater(profile.accConfig, cue).concatenateCommands(Acc.instance)}")
             .replace(RUNTIME_ACCA, BOOT_SAFE_ACCA)
 
         val string = StringBuilder()

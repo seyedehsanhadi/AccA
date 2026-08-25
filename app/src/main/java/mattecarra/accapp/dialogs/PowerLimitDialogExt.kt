@@ -16,6 +16,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
+import androidx.core.view.isVisible
 import mattecarra.accapp.databinding.VoltageControlEditorDialogBinding
 import mattecarra.accapp.models.AccConfig
 
@@ -39,10 +40,18 @@ fun chargerTierLabel(context: android.content.Context, mv: Int): String = contex
     }
 )
 
+/**
+ * `voltageSendable` / `currentSendable` are the Settings opt-outs (cueVoltage, cueCurrMax). They
+ * are INDEPENDENT flags and must gate independently: ConfigUpdater reads them separately, so with
+ * one off and one on the skipped half was still editable here and its write -- including a clear --
+ * went nowhere. Never show a field whose command is skipped.
+ */
 fun MaterialDialog.powerLimitDialog(
     configVoltage: AccConfig.ConfigVoltage,
     configCurrentMax: Int?,
     coroutineScope: CoroutineScope,
+    voltageSendable: Boolean = true,
+    currentSendable: Boolean = true,
     listener: PowerLimitSelectionListener
 ): MaterialDialog {
 
@@ -63,6 +72,20 @@ fun MaterialDialog.powerLimitDialog(
     val currentMaxLayout = binding.currentMaxDialogLl
     val enableCurrentLimitCheckBox = binding.enableCurrentMaxCheckBox
     val currentMaxEditText = binding.currentMaxEditText
+
+    if (!voltageSendable) {
+        voltageControlFileLayout.isVisible = false
+        enableVoltageLimitCheckBox.isEnabled = false
+        voltageMaxEditText.isEnabled = false
+        enableVoltageLimitCheckBox.text = context.getString(R.string.power_limit_off_in_settings,
+            context.getString(R.string.cue_AccVoltControl_pref_title))
+    }
+    if (!currentSendable) {
+        enableCurrentLimitCheckBox.isEnabled = false
+        currentMaxEditText.isEnabled = false
+        enableCurrentLimitCheckBox.text = context.getString(R.string.power_limit_off_in_settings,
+            context.getString(R.string.cue_AccCurrentMax_pref_title))
+    }
 
     positiveButton(android.R.string.ok) { dialog ->
 

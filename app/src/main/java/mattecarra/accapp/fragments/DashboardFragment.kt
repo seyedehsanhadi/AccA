@@ -25,6 +25,7 @@ import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.databinding.DashboardFragmentBinding
 import mattecarra.accapp.databinding.EditChargingLimitOnceDialogBinding
 import mattecarra.accapp.models.AccState
+import mattecarra.accapp.models.isChargingNow
 import mattecarra.accapp.models.DashboardValues
 import mattecarra.accapp.models.chargeStatusWord
 import mattecarra.accapp.utils.LogExt
@@ -471,16 +472,7 @@ class DashboardFragment : ScopedFragment()
         // through ten minutes of measured drain. An earlier version of this block asked status
         // first, so those phones read "Charging Speed" while the battery emptied. The 80mA
         // threshold stays as the last tie-break for a phone that reports neither.
-        val mc = state.measuredClass
-        val charging = when {
-            mc.equals("charging", true) -> true
-            mc.equals("drain", true) || mc.equals("discharging", true) -> false
-            mc.equals("bypass", true) || mc.equals("idle", true) ||
-            mc.equals("standby", true) || mc.equals("cut", true) -> false
-            state.status.equals("Charging", true) -> true
-            state.status.contains("Discharging", true) -> false
-            else -> shownMa > 80f
-        }
+        val charging = isChargingNow(state.measuredClass, state.status, shownMa)
         binding.dashBatteryChargingSpeedTextView.text =
             if (charging) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
 

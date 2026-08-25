@@ -219,6 +219,7 @@
     <string name="done">Done</string>
     <string name="edit_charging_limit_once_dialog_msg">Your regular settings are automatically restored once the chosen battery level is reached.</string>
     <string name="title_power_control">Charging power control</string>
+    <string name="power_limit_off_in_settings">%1$s is off in Settings</string>
     <string name="script_blocked_custom_off">Blocked: this script is more than a plain acc command. Turn on Settings → Allow custom shell scripts to run it.</string>
     <string name="power_control_disabled_in_settings">(off in Settings: AccVoltControl / AccCurrentMax)</string>
     <string name="info">Info</string>

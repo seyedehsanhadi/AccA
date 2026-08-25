@@ -257,8 +257,12 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         // exists so AccA keeps its hands off a limit managed in ACC's own config), stop offering
         // a control that would silently do nothing, and say why.
         val sp = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-        val powerControlSendable =
-            sp.getBoolean("cueVoltage", true) || sp.getBoolean("cueCurrMax", true)
+        // Two INDEPENDENT flags. ConfigUpdater reads them separately, so ORing them here left the
+        // skipped half editable whenever the other was on. Each half is gated inside the dialog;
+        // the whole card only goes away when neither can be written.
+        mVoltageSendable = sp.getBoolean("cueVoltage", true)
+        mCurrentSendable = sp.getBoolean("cueCurrMax", true)
+        val powerControlSendable = mVoltageSendable || mCurrentSendable
         if (!powerControlSendable)
         {
             content.voltcontrolSwitchEnabled.isEnabled = false
@@ -1408,10 +1412,14 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         }
     }
 
+    private var mVoltageSendable = true
+    private var mCurrentSendable = true
+
     fun editPowerOnClick(v: View)
     {
         MaterialDialog(this@AccConfigEditorActivity).show {
-            powerLimitDialog(viewModel.voltageLimit, viewModel.currentMaxLimit, this@AccConfigEditorActivity)
+            powerLimitDialog(viewModel.voltageLimit, viewModel.currentMaxLimit,
+                this@AccConfigEditorActivity, mVoltageSendable, mCurrentSendable)
             { controlFile, voltageMaxEnabled, voltageMax, currentMaxEnabled, currentMax ->
 
                 if (voltageMaxEnabled && voltageMax != null)

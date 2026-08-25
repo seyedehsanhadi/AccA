@@ -133,10 +133,19 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
         temp
     }
 
+    /**
+     * The schedule / DJS / boot sibling of execute(). It ignored `cue` entirely, so every gate the
+     * live path honours -- the global AccVoltControl and AccCurrentMax opt-outs, and a profile's
+     * own temperature switch -- was silently dropped the moment the same profile ran on a timer.
+     *
+     * Blank segments are dropped too. A handler that does not support a command returns "", and
+     * joining that with "; " produced `cmd; ; cmd`, which is a shell syntax error: on those builds
+     * the whole scheduled apply failed rather than skipping one unsupported key.
+     */
     fun concatenateCommands(acc: AccInterface): String
     {
-        return arrayOf(
-            acc.getUpdateAccCapacityCommand(
+        return listOfNotNull(
+            if (!cue.sendCapacity) null else acc.getUpdateAccCapacityCommand(
                 accConfig.configCapacity.shutdown,
                 // Same rule as the live path above: the cool-down PERCENTAGE is its own ACC key and
                 // must survive the ratio being cleared. This sibling still wrote the disable value,
@@ -144,25 +153,25 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
                 accConfig.coolDownPercent(),
                 accConfig.configCapacity.resume,
                 accConfig.configCapacity.pause ),
-            acc.getUpdateAccVoltControlCommand(
+            if (!cue.sendVoltage) null else acc.getUpdateAccVoltControlCommand(
                 accConfig.configVoltage.controlFile,
                 accConfig.configVoltage.max ),
-            acc.getUpdateAccCurrentMaxCommand(accConfig.configCurrMax),
-            acc.getUpdateAccTemperatureCommand(
+            if (!cue.sendCurrMax) null else acc.getUpdateAccCurrentMaxCommand(accConfig.configCurrMax),
+            if (!cue.sendTemperature) null else acc.getUpdateAccTemperatureCommand(
                 accConfig.configTemperature.coolDownTemperature,
                 accConfig.configTemperature.maxTemperature,
                 accConfig.configTemperature.pause,
                 accConfig.configTemperature.shutdown ),
-            acc.getUpdateAccCoolDownCommand(
+            if (!cue.sendCoolDown) null else acc.getUpdateAccCoolDownCommand(
                 accConfig.configCoolDown?.charge,
                 accConfig.configCoolDown?.pause ),
-            acc.getUpdateResetUnpluggedCommand(accConfig.configResetUnplugged),
-            acc.getUpdateResetOnPauseCommand(accConfig.configResetBsOnPause),
-            acc.getUpdateAccOnBootCommand(accConfig.configOnBoot),
-            acc.getUpdateAccOnPluggedCommand(accConfig.configOnPlug),
-            acc.getUpdateAccChargingSwitchCommand(accConfig.configChargeSwitch, accConfig.configIsAutomaticSwitchingEnabled),
-            acc.getUpdatePrioritizeBatteryIdleModeCommand(accConfig.prioritizeBatteryIdleMode)
-        ).joinToString("; ")
+            if (!cue.sendResetUnplugged) null else acc.getUpdateResetUnpluggedCommand(accConfig.configResetUnplugged),
+            if (!cue.sendResetBsOnPause) null else acc.getUpdateResetOnPauseCommand(accConfig.configResetBsOnPause),
+            if (!cue.sendOnBoot) null else acc.getUpdateAccOnBootCommand(accConfig.configOnBoot),
+            if (!cue.sendOnPlug) null else acc.getUpdateAccOnPluggedCommand(accConfig.configOnPlug),
+            if (!cue.sendChargeSwitch) null else acc.getUpdateAccChargingSwitchCommand(accConfig.configChargeSwitch, accConfig.configIsAutomaticSwitchingEnabled),
+            if (!cue.sendBatteryIdleMode) null else acc.getUpdatePrioritizeBatteryIdleModeCommand(accConfig.prioritizeBatteryIdleMode)
+        ).filter { it.isNotBlank() }.joinToString("; ")
     }
 }
 
