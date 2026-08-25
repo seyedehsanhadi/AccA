@@ -1,6 +1,7 @@
 package xml
 
 import android.app.PendingIntent
+import mattecarra.accapp.widget.pendingFlags
 import android.appwidget.*
 import android.appwidget.AppWidgetManager.*
 import android.appwidget.AppWidgetProvider
@@ -168,12 +169,12 @@ class BatteryInfoWidget : AppWidgetProvider()
             widgetView.setOnClickPendingIntent(R.id.dash_click_left_zone, // click
                 PendingIntent.getBroadcast(context, widgetId,
                 Intent(context, BatteryInfoWidget::class.java).setAction(WIDGET_ACTION_CLICK).putExtra(WIDGET_ID_NAME, widgetId),
-                PendingIntent.FLAG_CANCEL_CURRENT))
+                pendingFlags(PendingIntent.FLAG_CANCEL_CURRENT)))
 
             widgetView.setOnClickPendingIntent(R.id.dash_click_right_zone, // click
                 PendingIntent.getBroadcast(context, widgetId,
                     Intent(context, BatteryInfoWidget::class.java).setAction(WIDGET_ACTION_REVERSE),
-                    PendingIntent.FLAG_CANCEL_CURRENT))
+                    pendingFlags(PendingIntent.FLAG_CANCEL_CURRENT)))
 
             getInstance(context).updateAppWidget(widgetId, widgetView) // update
             return
@@ -291,12 +292,12 @@ class BatteryInfoWidget : AppWidgetProvider()
                 widgetView.setOnClickPendingIntent(R.id.dash_click_left_zone,
                     PendingIntent.getBroadcast(context, widgetId,
                     Intent(context, BatteryInfoWidget::class.java).setAction(WIDGET_ACTION_CLICK)
-                    .putExtra(WIDGET_ID_NAME, widgetId), PendingIntent.FLAG_CANCEL_CURRENT))
+                    .putExtra(WIDGET_ID_NAME, widgetId), pendingFlags(PendingIntent.FLAG_CANCEL_CURRENT)))
 
                 widgetView.setOnClickPendingIntent(R.id.dash_click_right_zone, // click
                     PendingIntent.getBroadcast(context, widgetId,
                         Intent(context, BatteryInfoWidget::class.java).setAction(WIDGET_ACTION_REVERSE),
-                        PendingIntent.FLAG_CANCEL_CURRENT))
+                        pendingFlags(PendingIntent.FLAG_CANCEL_CURRENT)))
 
                 getInstance(context).updateAppWidget(widgetId, widgetView)
 
@@ -313,7 +314,9 @@ class BatteryInfoWidget : AppWidgetProvider()
             } catch (e: Exception) {
                 // Acc.instance getter / getBatteryInfo / version / Room getCurrentProfile can
                 // throw on a routine widget update -> never let it crash the process.
-                LogExt().d(javaClass.simpleName, "updateOneWidget failed: " + e.message)
+                // Always-on: this failure is invisible on the home screen -- the widget just keeps
+                // showing its placeholder icon -- so a debug-level line meant no trace at all.
+                LogExt().s(javaClass.simpleName, "updateOneWidget failed: " + e.toString())
             }
         }
     }

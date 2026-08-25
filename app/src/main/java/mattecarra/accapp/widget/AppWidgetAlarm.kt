@@ -24,7 +24,7 @@ open class AppWidgetAlarm(context: Context)
         calendar.add(Calendar.MILLISECOND, LONG_INTERVAL_MILLIS.toInt())
         //
         val updateAllIntent = Intent(mContext, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE)
-        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, ALARM_ID, updateAllIntent, PendingIntent.FLAG_UPDATE_CURRENT)
+        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, ALARM_ID, updateAllIntent, pendingFlags(PendingIntent.FLAG_UPDATE_CURRENT))
         // RTC does not wake the device up
         val alarmManager: AlarmManager = mContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarmManager.setRepeating(AlarmManager.RTC, calendar.timeInMillis, LONG_INTERVAL_MILLIS, pendingIntent)
@@ -36,7 +36,7 @@ open class AppWidgetAlarm(context: Context)
         calendar.add(Calendar.MILLISECOND, FAST_INTERVAL_MILLIS.toInt())
         //
         val updateOneIntent = Intent(mContext, BatteryInfoWidget::class.java).setAction(WIDGET_ONE_UPDATE).putExtra(WIDGET_ID_NAME, widgetId)
-        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, widgetId, updateOneIntent, PendingIntent.FLAG_ONE_SHOT)
+        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, widgetId, updateOneIntent, pendingFlags(PendingIntent.FLAG_ONE_SHOT))
         //
         val alarmManager: AlarmManager = mContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarmManager.setRepeating(AlarmManager.RTC, calendar.timeInMillis, FAST_INTERVAL_MILLIS, pendingIntent)
@@ -45,14 +45,14 @@ open class AppWidgetAlarm(context: Context)
     fun stopLongUpdateAlarm()
     {
         val alarmIntent = Intent(WIDGET_ALL_UPDATE)
-        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, ALARM_ID, alarmIntent, PendingIntent.FLAG_CANCEL_CURRENT)
+        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, ALARM_ID, alarmIntent, pendingFlags(PendingIntent.FLAG_CANCEL_CURRENT))
         (mContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pendingIntent)
     }
 
     fun stopFastUpdateAlarm(widgetId: Int)
     {
         val updateOneIntent = Intent(WIDGET_ONE_UPDATE).putExtra(WIDGET_ID_NAME, widgetId)
-        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, widgetId, updateOneIntent, PendingIntent.FLAG_CANCEL_CURRENT)
+        val pendingIntent: PendingIntent = PendingIntent.getBroadcast(mContext, widgetId, updateOneIntent, pendingFlags(PendingIntent.FLAG_CANCEL_CURRENT))
         (mContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pendingIntent)
     }
 
