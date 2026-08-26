@@ -254,14 +254,18 @@ class BatteryInfoWidget : AppWidgetProvider()
 
                 val prefc = Preferences(context)
 
-                // Same polarity rule as the meter and the dashboard: on an inverted or unstable
-                // gauge the raw sign is meaningless, so ask whether normalising flips it.
+                // normaliseMilliAmps() takes the RAW reading out of --state. `acc -i` has ALREADY
+                // applied polarity, so feeding its value through it corrects an already-corrected
+                // number: measured on a Mi A3 charging, --state current_raw was -1344605 while
+                // `acc -i` reported current_now 1.23A, and normalising that positive value flipped
+                // the widget to -1230 mA on a phone that was charging. Ask the state for its own
+                // signed figure, exactly as the dashboard does, and only fall back to batteryInfo
+                // when there is no state at all.
                 val rawMa = batteryInfo.getCurrentNow(prefc.currentInputUnitOfMeasure)
-                val normMa = accState?.let {
-                    AccState.normaliseMilliAmps(rawMa, it.polarity, it.measuredClass, it.status) }
-                val plus =
-                    if (normMa != null) (normMa >= 0f) == (rawMa >= 0f)
-                    else if (Acc.instance.version < 202107280) batteryInfo.isCharging() else true
+                val normMa = accState?.signedCurrentMilliAmps()
+                // Only reached when there is no --state to ask; `acc -i` already carries the sign
+                // on rc9+ daemons, so it is passed through untouched there.
+                val plus = if (Acc.instance.version < 202107280) batteryInfo.isCharging() else true
                 // Same source as the sign and the watts: one measurement, not three.
                 val amps = if (normMa != null)
                     StateFormat.current(normMa, prefc.currentOutputUnitOfMeasure)
