@@ -25,6 +25,7 @@ import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.databinding.DashboardFragmentBinding
 import mattecarra.accapp.databinding.EditChargingLimitOnceDialogBinding
 import mattecarra.accapp.models.AccState
+import mattecarra.accapp.models.StateFormat
 import mattecarra.accapp.models.isChargingNow
 import mattecarra.accapp.models.DashboardValues
 import mattecarra.accapp.models.chargeStatusWord
@@ -276,35 +277,18 @@ class DashboardFragment : ScopedFragment()
      * chosen output unit, mirroring BatteryInfo.getCurrentNow's "x.xxx A" / "x mA" format.
      * The sign is already correct (normalised by polarity/units), so no `positive` flag here.
      */
-    private fun formatCurrentFromState(signedMilliAmps: Float): String
-    {
-        return if (preferences.currentOutputUnitOfMeasure == mattecarra.accapp.CurrentUnit.A)
-            String.format("%.3f", signedMilliAmps / 1000f) + " A"
-        else
-            signedMilliAmps.toInt().toString() + " mA"
-    }
+    private fun formatCurrentFromState(signedMilliAmps: Float): String =
+        StateFormat.current(signedMilliAmps, preferences.currentOutputUnitOfMeasure)
 
     // --state reports deci-Celsius (230 = 23.0C), the same scale batteryInfo exposes after
     // its own /10, so honour the user's output unit exactly as getTemperature() does.
-    private fun formatTemperatureFromState(tempDeciC: Int): String
-    {
-        val c = tempDeciC / 10f
-        return if (preferences.temperatureOutputUnitOfMeasure == mattecarra.accapp.TemperatureUnit.C)
-            c.toInt().toString() + " " + Typography.degree + "C"
-        else
-            String.format("%.1f", c * 1.8f + 32f) + " " + Typography.degree + "F"
-    }
+    private fun formatTemperatureFromState(tempDeciC: Int): String =
+        StateFormat.temperature(tempDeciC, preferences.temperatureOutputUnitOfMeasure)
 
     // voltage_raw is microvolts on every device seen so far, but ACC does not promise it:
     // fold a millivolt-scale reading up rather than printing 0.004 V.
-    private fun formatVoltageFromState(voltageRaw: Long): String
-    {
-        val mV = if (voltageRaw >= 100000L) voltageRaw / 1000L else voltageRaw
-        return if (preferences.voltageOutputUnitOfMeasure == mattecarra.accapp.VoltageUnit.V)
-            String.format("%.3f", mV / 1000f) + " V"
-        else
-            mV.toString() + " mV"
-    }
+    private fun formatVoltageFromState(voltageRaw: Long): String =
+        StateFormat.voltage(voltageRaw, preferences.voltageOutputUnitOfMeasure)
 
     private fun toggleAccdStatusUi(running: Boolean?)
     {
@@ -457,8 +441,19 @@ class DashboardFragment : ScopedFragment()
         }
     }
 
+    private var mLastConfigSignature: String? = null
+
     private fun renderStateCard(state: AccState)
     {
+        // --state carries ACC's own config every poll. When it stops matching what the settings
+        // card was fed, something outside AccA changed it, so re-read once and let the existing
+        // observer update the card. Costs one root read at the moment of an actual change, and
+        // nothing at all otherwise.
+        state.configSignature?.let { sig ->
+            if (mLastConfigSignature != null && mLastConfigSignature != sig)
+                if (::configViewModel.isInitialized) configViewModel.reloadConfigFromAcc()
+            mLastConfigSignature = sig
+        }
         // The level existed only as a progress bar; no figure appeared anywhere on the card.
         binding.dashBatteryStatusTextView.text =
             if (state.capacityPct in 0..100)
@@ -482,7 +477,7 @@ class DashboardFragment : ScopedFragment()
         // two numbers describing the same flow disagreeing about its direction, and the positive
         // watts is the one that reads like charging. shownMa is already normalised for this
         // device's polarity, so the sign it carries is the answer for both.
-        val battW = if (vbat > 1000) shownMa * vbat / 1000000f else 0f
+        val battW = AccState.batteryWatts(shownMa, state.voltageRaw)
         // Two wattages appear on this card -- this one and the charger input below -- and they
         // differ by conversion loss. Unlabelled they read as a contradiction (5.0 W vs 7 W),
         // so each states its side. The row label is "To battery:".

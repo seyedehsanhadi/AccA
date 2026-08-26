@@ -22,6 +22,17 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
     private val mApplyFailed: MutableLiveData<Boolean> = MutableLiveData()
     val applyFailed: LiveData<Boolean> get() = mApplyFailed
 
+    /**
+     * Re-read ACC's config and publish it. For when something OUTSIDE AccA changed it -- a script,
+     * a DJS schedule, an edit to config.txt -- which no writer here would have posted.
+     */
+    fun reloadConfigFromAcc() {
+        viewModelScope.launch {
+            try { config.postValue(Pair(Acc.instance.readConfig(), null)) }
+            catch (ex: Exception) { LogExt().w(javaClass.simpleName, "reloadConfigFromAcc: ${ex.message}") }
+        }
+    }
+
     init {
         viewModelScope.launch {
             try {

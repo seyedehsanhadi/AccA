@@ -28,6 +28,7 @@ import mattecarra.accapp.database.AccaRoomDatabase
 import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.DashboardValues
 import mattecarra.accapp.models.chargeStatusWord
+import mattecarra.accapp.models.StateFormat
 import mattecarra.accapp.models.isChargingNow
 import mattecarra.accapp.services.ChargeMeterService
 import mattecarra.accapp.services.WidgetService
@@ -261,10 +262,18 @@ class BatteryInfoWidget : AppWidgetProvider()
                 val plus =
                     if (normMa != null) (normMa >= 0f) == (rawMa >= 0f)
                     else if (Acc.instance.version < 202107280) batteryInfo.isCharging() else true
-                val amps = batteryInfo.getCurrentNow(prefc.currentInputUnitOfMeasure,
+                // Same source as the sign and the watts: one measurement, not three.
+                val amps = if (normMa != null)
+                    StateFormat.current(normMa, prefc.currentOutputUnitOfMeasure)
+                else batteryInfo.getCurrentNow(prefc.currentInputUnitOfMeasure,
                     prefc.currentOutputUnitOfMeasure, plus, showEndvalue)
-                val watts = accState?.chargeWatts?.takeIf { it > 0 && accState.plugged }
-                    ?.let { "  $it W" } ?: ""
+                // The row is labelled "To battery", so the watts beside it must be the battery
+                // side. chargeWatts is the CHARGER side and read high next to a battery mA:
+                // 2820 mA at 4.04 V is 11.4 W into the pack, printed as the supply's 13 W.
+                val watts = accState?.let { st ->
+                    val w = AccState.batteryWatts(normMa ?: rawMa, st.voltageRaw)
+                    if (kotlin.math.abs(w) >= 0.1f) String.format("  %.1f W", w) else null
+                } ?: ""
                 widgetView.setTextViewText(R.id.charging_out, amps + watts)
 
                 widgetView.setTextViewTextSize(R.id.charging_label, COMPLEX_UNIT_SP, textSize.toFloat())
@@ -273,14 +282,22 @@ class BatteryInfoWidget : AppWidgetProvider()
                 widgetView.setTextColor(R.id.charging_out, textColor)
 
                 widgetView.setTextViewText(R.id.temper_label, if (replaceLabel) "Ⓣ:" else context.getString(R.string.info_temperature))
-                widgetView.setTextViewText(R.id.temper_out, batteryInfo.getTemperature(prefc.temperatureOutputUnitOfMeasure, showEndvalue))
+                // Prefer --state, as the dashboard does. Reading temperature and voltage from the
+                // `acc -i` scrape while the amps and the status came from --state is what left the
+                // dashboard split-brained, and the widget was still doing it: it printed 4.040 V
+                // beside the dashboard's 4.036 V, because `acc -i` rounds to two decimals first.
+                widgetView.setTextViewText(R.id.temper_out,
+                    accState?.let { StateFormat.temperature(it.tempDeciC, prefc.temperatureOutputUnitOfMeasure) }
+                        ?: batteryInfo.getTemperature(prefc.temperatureOutputUnitOfMeasure, showEndvalue))
                 widgetView.setTextViewTextSize(R.id.temper_label, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextViewTextSize(R.id.temper_out, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextColor(R.id.temper_label, textColor)
                 widgetView.setTextColor(R.id.temper_out, textColor)
 
                 widgetView.setTextViewText(R.id.voltage_label, if (replaceLabel) "Ⓥ:" else context.getString(R.string.info_voltage))
-                widgetView.setTextViewText(R.id.voltage_out, batteryInfo.getVoltageNow(prefc.voltageInputUnitOfMeasure, prefc.voltageOutputUnitOfMeasure, showEndvalue))
+                widgetView.setTextViewText(R.id.voltage_out,
+                    accState?.let { StateFormat.voltage(it.voltageRaw, prefc.voltageOutputUnitOfMeasure) }
+                        ?: batteryInfo.getVoltageNow(prefc.voltageInputUnitOfMeasure, prefc.voltageOutputUnitOfMeasure, showEndvalue))
                 widgetView.setTextViewTextSize(R.id.voltage_label, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextViewTextSize(R.id.voltage_out, COMPLEX_UNIT_SP, textSize.toFloat())
                 widgetView.setTextColor(R.id.voltage_label, textColor)

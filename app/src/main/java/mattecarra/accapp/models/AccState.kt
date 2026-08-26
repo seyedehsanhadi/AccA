@@ -48,7 +48,17 @@ data class AccState(
     val chargeWatts: Int? = null,
     val chargeClass: String? = null,
     val chargeReason: String? = null,
-    val chargeApprox: Boolean = false
+    val chargeApprox: Boolean = false,
+    /**
+     * The daemon's own view of the config, verbatim. Not parsed into an AccConfig: it is here only
+     * so a surface can notice that ACC's config changed underneath it. The dashboard's settings
+     * card is fed by SharedViewModel.config, which is posted by AccA's own writers -- so a change
+     * from anywhere else (a script from the Scripts tab, a schedule firing through DJS, an edit to
+     * config.txt, ACC healing a value) left the card showing numbers ACC did not hold. Measured on
+     * a Pixel 6a: the card read "Resume: 70% - Stop: 75%" for minutes while the config said 19 20
+     * and the firmware-limit row beside it, fed from --state, already said 19% - 20%.
+     */
+    val configSignature: String? = null
 ) {
 
     /**
@@ -77,6 +87,18 @@ data class AccState(
          * the raw sign follows the charge PATH and means nothing, so both showed the wrong
          * direction. One definition, three callers.
          */
+        /**
+         * Battery-side watts: the signed mA the caller is already showing, times the pack voltage.
+         * NOT charge.watts, which is the CHARGER side (input volts x input amps) and is the larger
+         * of the two -- 13 W in from an 8.4 V supply was 11.4 W into a 4.04 V pack on a Pixel 6a.
+         * The widget printed the charger figure on a row labelled "To battery"; the dashboard
+         * computed this correctly but kept the formula to itself.
+         */
+        fun batteryWatts(signedMa: Float, voltageRaw: Long): Float {
+            val mv = if (voltageRaw >= 100000L) (voltageRaw / 1000L).toInt() else voltageRaw.toInt()
+            return if (mv > 1000) signedMa * mv / 1000000f else 0f
+        }
+
         fun normaliseMilliAmps(rawMa: Float, polarity: String?, measuredClass: String?, status: String?): Float =
             when {
                 polarity.equals("inverted", ignoreCase = true) -> -rawMa
@@ -143,7 +165,11 @@ data class AccState(
                     },
                     chargeClass = root.optJSONObject("charge")?.optString("class", "")?.takeIf { it.isNotBlank() },
                     chargeReason = root.optJSONObject("charge")?.optString("reason", "")?.takeIf { it.isNotBlank() },
-                    chargeApprox = root.optJSONObject("charge")?.optBoolean("approx", false) ?: false
+                    chargeApprox = root.optJSONObject("charge")?.optBoolean("approx", false) ?: false,
+                    configSignature = root.optJSONObject("config")?.let { cfg ->
+                        listOf("capacity", "temperature", "chargingSwitch", "prioritizeBattIdleMode")
+                            .joinToString("|") { cfg.optString(it, "") }
+                    }
                 )
             } catch (e: Exception) {
                 null
