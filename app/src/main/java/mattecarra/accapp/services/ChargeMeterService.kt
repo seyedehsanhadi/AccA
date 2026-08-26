@@ -101,6 +101,28 @@ class ChargeMeterService : Service() {
         private const val TICK_MS = 3000L                 // refresh cadence while screen on
         private const val ROOT_EVERY = 3                  // root --state only every 3rd tick (~9s)
         private const val WIDGET_EVERY = 2                // push to placed widgets every 2nd tick (~6s)
+        /** A --state read is only worth as much as it is fresh; past this the widget reads its own. */
+        private const val SHARED_STATE_MAX_AGE_MS = 15_000L
+
+        @Volatile private var sharedState: mattecarra.accapp.models.AccState? = null
+        @Volatile private var sharedStateAt = 0L
+
+        private fun publishState(state: mattecarra.accapp.models.AccState) {
+            sharedState = state
+            sharedStateAt = android.os.SystemClock.elapsedRealtime()
+        }
+
+        /**
+         * The --state this service last read, for any other surface in the process that would
+         * otherwise spawn its own root shell for the same answer. The widget renders on this
+         * service's tick, so without sharing it re-ran `acca --state` a second or two after the
+         * meter had already read it. Null when stale or when the meter is not running, and the
+         * caller falls back to reading for itself.
+         */
+        fun recentState(): mattecarra.accapp.models.AccState? =
+            sharedState?.takeIf {
+                android.os.SystemClock.elapsedRealtime() - sharedStateAt <= SHARED_STATE_MAX_AGE_MS
+            }
 
         /** True if a charger is attached right now (sticky battery intent, no root). */
         fun isPluggedNow(context: Context): Boolean {
@@ -425,7 +447,7 @@ class ChargeMeterService : Service() {
             // ticks; reuse the cached value otherwise so we don't spawn a root shell every tick.
             if (refreshState) {
                 val fresh = try { withContext(Dispatchers.IO) { Acc.instance.getState() } } catch (e: Exception) { null }
-                if (fresh != null) lastState = fresh
+                if (fresh != null) { lastState = fresh; publishState(fresh) }
             }
             val st = lastState
             val cls = st?.chargeClass

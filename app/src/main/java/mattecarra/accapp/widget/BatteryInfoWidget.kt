@@ -29,6 +29,7 @@ import mattecarra.accapp.models.AccState
 import mattecarra.accapp.models.DashboardValues
 import mattecarra.accapp.models.chargeStatusWord
 import mattecarra.accapp.models.isChargingNow
+import mattecarra.accapp.services.ChargeMeterService
 import mattecarra.accapp.services.WidgetService
 import mattecarra.accapp.utils.LogExt
 import mattecarra.accapp.utils.ProfileUtils
@@ -192,7 +193,10 @@ class BatteryInfoWidget : AppWidgetProvider()
             // ACC is holding the input open. The daemon's --state snapshot carries polarity,
             // measuredClass and the charger side, and the dashboard already reads it -- the widget
             // was the last surface still showing the unfiltered kernel answer.
-            val accState = Acc.instance.getState()
+            // The meter tick that triggered this render has usually just read --state. Reuse it
+            // rather than spawning a second root shell for the same answer a moment later; falls
+            // back to reading when it is stale or the meter is not running.
+            val accState = ChargeMeterService.recentState() ?: Acc.instance.getState()
             with(dashboardValues) {
 
                 val swidgetId = widgetId.toString()
