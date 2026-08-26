@@ -516,13 +516,29 @@ class DashboardFragment : ScopedFragment()
             "taper" -> R.string.charge_reason_taper
             else -> null
         }
+        // A measured wattage with no class is ACC saying the charger is delivering power that is
+        // not reaching the battery -- it is running the phone while a hold is in force. The row
+        // used to require `charging` and a class, so a Mi A3 with the cable in and 1797 mA coming
+        // from the wall showed nothing at all, which reads as "no charger".
+        // Captured non-null so both branches below can format them; a smart-cast does not survive
+        // being hoisted into a val.
+        val vinOk = vin?.takeIf { it > 0 && !state.chargeApprox }
+        val iinOk = iin?.takeIf { it > 50 && !state.chargeApprox }
+        val hasMeasuredInput = vinOk != null && iinOk != null
         val line: String? = when {
+            watts != null && clsRes == null && vinOk != null && iinOk != null && state.plugged ->
+                getString(
+                    R.string.dash_charge_fmt_held,
+                    String.format("%.1f V", vinOk / 1000f),
+                    String.format("%.2f", iinOk / 1000f),
+                    watts
+                )
             !charging || watts == null || clsRes == null -> null
-            !state.chargeApprox && vin != null && vin > 0 && iin != null && iin > 50 && vbat in 3000..4600 -> {
+            vinOk != null && iinOk != null && vbat in 3000..4600 -> {
                 getString(
                     R.string.dash_charge_fmt,
-                    String.format("%.1f V", vin / 1000f),
-                    String.format("%.2f", iin / 1000f),
+                    String.format("%.1f V", vinOk / 1000f),
+                    String.format("%.2f", iinOk / 1000f),
                     watts,
                     getString(clsRes)
                 )
