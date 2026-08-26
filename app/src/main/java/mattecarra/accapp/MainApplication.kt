@@ -13,6 +13,21 @@ class MainApplication: MultiDexApplication()
     {
         var mDEBUG: Int = 0
 
+        /**
+         * The app's own files directory, captured once at process start.
+         *
+         * Acc.kt hardcoded "/data/data/mattecarra.accapp/files", which is only correct for the
+         * primary user of an unmodified install. A clone, a parallel-space copy or a secondary
+         * user gets /data/user/<id>/mattecarra.accapp/files, so the hardcoded path does not exist
+         * there and the app-managed ACC fallback is invisible: isAccInstalled() says no and the
+         * daemon is never started from it. Acc is a singleton with a Context-free getter, hence
+         * the static capture here rather than threading a Context through.
+         *
+         * Null until onCreate has run; every caller keeps the old literal as its fallback, so the
+         * primary-user path is byte-for-byte what it was.
+         */
+        @Volatile var filesDirPath: String? = null
+
         init
         {
             Shell.Config.setFlags(Shell.FLAG_REDIRECT_STDERR)
@@ -25,6 +40,9 @@ class MainApplication: MultiDexApplication()
     override fun onCreate()
     {
         super.onCreate()
+        // Before anything that might read it, and outside the try below: filesDir is a plain path
+        // lookup and cannot throw the FBE exception the preference read can.
+        filesDirPath = try { filesDir?.absolutePath } catch (e: Exception) { null }
         // toIntOrNull: a non-numeric "appdebug" pref (corruption, restored backup,
         // ListPreference edge) must not crash the whole app on launch.
         // try/catch: on FBE (file-based-encryption) devices the directBootAware boot receiver

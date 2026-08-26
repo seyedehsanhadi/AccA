@@ -8,6 +8,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp.acc._interface.AccInterface
+import mattecarra.accapp.MainApplication
 import mattecarra.accapp.utils.LogExt
 import java.io.BufferedInputStream
 import java.io.File
@@ -20,7 +21,13 @@ object Acc {
     // latest known release so a fresh/unreadable install uses the newest handler.
     const val fallbackVersion = 202505333
     private const val TAG = "Acc"
-    private val FILES_DIR = "/data/data/mattecarra.accapp/files"
+    // The literal is the primary-user path and stays as the fallback; the real directory is asked
+    // for when the app has started. A clone, parallel-space copy or secondary user lives under
+    // /data/user/<id>/..., where the literal does not exist -- so isAccInstalled() returned false
+    // and the app-managed ACC install could never be started from the app. Flashed-module installs
+    // were unaffected either way, because initAcc prefers /data/adb/vr25/acc/service.sh.
+    private val FILES_DIR: String
+        get() = MainApplication.filesDirPath ?: "/data/data/mattecarra.accapp/files"
 
     /*
     * This method returns the name of the package with a compatible AccInterface
