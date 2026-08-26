@@ -524,14 +524,18 @@ class DashboardFragment : ScopedFragment()
         // being hoisted into a val.
         val vinOk = vin?.takeIf { it > 0 && !state.chargeApprox }
         val iinOk = iin?.takeIf { it > 50 && !state.chargeApprox }
-        val hasMeasuredInput = vinOk != null && iinOk != null
         val line: String? = when {
-            watts != null && clsRes == null && vinOk != null && iinOk != null && state.plugged ->
+            // Plugged with no charge class: ACC is holding. The amps are usually 0 here -- a
+            // suspended input delivers nothing, and ACC zeroes the stale reading the kernel
+            // leaves behind -- so this line reports what IS true: the cable is at this voltage,
+            // and this much of it is reaching the battery. Requiring a wattage would hide the
+            // row on exactly the phones that need it.
+            state.plugged && clsRes == null && vin != null && vin > 0 ->
                 getString(
                     R.string.dash_charge_fmt_held,
-                    String.format("%.1f V", vinOk / 1000f),
-                    String.format("%.2f", iinOk / 1000f),
-                    watts
+                    String.format("%.1f V", vin / 1000f),
+                    String.format("%.2f", (iin ?: 0) / 1000f),
+                    watts ?: 0
                 )
             !charging || watts == null || clsRes == null -> null
             vinOk != null && iinOk != null && vbat in 3000..4600 -> {

@@ -554,7 +554,7 @@
     <string name="dash_charge_fmt_approx">From charger: ~%2$d W or more (%1$s, approximate)</string>
     <!-- ACC is holding the input: the charger is running the phone, none of it reaching the
          battery. Measured watts, deliberately no speed class - nothing is filling. -->
-    <string name="dash_charge_fmt_held">From charger: %1$s &#183; %2$s A &#183; %3$d W &#183; not charging the battery</string>
+    <string name="dash_charge_fmt_held">From charger: %1$s &#183; %2$s A &#183; %3$d W to battery</string>
     <!-- Status-bar charge meter (rc15) -->
     <string name="charge_meter_channel">Charging current meter</string>
     <string name="charge_meter_charging">Charging</string>
