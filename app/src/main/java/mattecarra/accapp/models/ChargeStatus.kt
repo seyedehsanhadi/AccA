@@ -14,8 +14,9 @@ fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? =
     measuredClass.equals("drain", true) || measuredClass.equals("discharging", true) -> "Draining"
     // A cut means the input is held OFF: the cable is in, the battery is not charging. It used to
     // fall through to the "Charging" default, so every phone whose switch is an input cut reported
-    // Charging while ACC was holding it. Idle is the honest word -- plugged, battery flat.
-    measuredClass.equals("cut", true) || measuredClass.equals("cut-input", true) -> "Idle"
+    // Charging while ACC was holding it. It then returned "Idle" unconditionally, which put the
+    // same contradiction back for a cut phone running off its own pack: Idle printed above -311 mA.
+    // A cut says nothing about which of the two is happening, so let the current decide, below.
     // The word had its own copy of the rule and never looked at the kernel, so the same Pixel 6a
     // that drained at -362 mA behind a native level limit printed "Charging" on the dashboard
     // while the current beside it was negative. Route the tail through the one rule.

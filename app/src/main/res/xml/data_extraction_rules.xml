@@ -14,9 +14,12 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <include domain="database" path="acca_database" />
-        <exclude domain="database" path="acca_database-wal" />
-        <exclude domain="database" path="acca_database-shm" />
+        <!-- The database is NOT uploaded. scripts_table holds shell commands that run as root, and
+             a database cannot be included while leaving one table behind, so the whole file stays
+             on the device. Preferences carry no script bodies and still go. Profiles and schedules
+             survive a phone swap through device-transfer below, which never leaves the user's
+             hands. -->
+        <exclude domain="database" path="." />
         <include domain="sharedpref" path="." />
     </cloud-backup>
     <device-transfer>

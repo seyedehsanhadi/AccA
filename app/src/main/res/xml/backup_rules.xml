@@ -17,8 +17,12 @@
   who never think to use it.
 -->
 <full-backup-content>
-    <include domain="database" path="acca_database" />
-    <exclude domain="database" path="acca_database-wal" />
-    <exclude domain="database" path="acca_database-shm" />
+    <!-- The database is excluded, matching data_extraction_rules.xml. scripts_table holds shell
+         commands that run as root, and Android 11 and below cannot tell a cloud upload apart from
+         a local device transfer, so including it here means uploading them. A privacy property
+         should not depend on the OS version. The cost is real and stated plainly: on these phones
+         a reinstall no longer restores profiles, schedules or scripts, and Export/Import from the
+         overflow menu is the only route. Preferences carry no script bodies and still go. -->
+    <exclude domain="database" path="." />
     <include domain="sharedpref" path="." />
 </full-backup-content>

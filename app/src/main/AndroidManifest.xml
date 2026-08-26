@@ -152,11 +152,27 @@
              AFTER the first unlock on FBE phones, so daemon start waited for the user ("ACC settings
              do not apply after a reboot until it's unlocked"). The locked branch starts the /data/adb
              daemons (DE storage) without touching CE prefs. MY_PACKAGE_REPLACED was handled in code
-             but never declared here, so the after-update restart never fired. -->
+             but never declared here, so the after-update restart never fired.
+
+             exported="false". Exported with no permission, every action here was reachable by an
+             EXPLICIT broadcast from any installed app; BOOT_COMPLETED is only protected against
+             IMPLICIT delivery. Verified on a Pixel 6a: "am broadcast -n" from another uid ran the
+             root daemon init.
+
+             android:permission="RECEIVE_BOOT_COMPLETED" was the first answer and it is not one:
+             that permission is normal-level and granted automatically to anything that asks for
+             it, so a hostile app declares it and walks straight through. Measured on the same
+             phone, com.android.shell holds it granted=true.
+
+             exported="false" is the real gate. The first four actions are PROTECTED broadcasts,
+             which the system delivers to a manifest receiver whether or not it is exported, so
+             every genuine boot path still works while explicit delivery from another app cannot
+             reach it. QUICKBOOT_POWERON is an OEM action and may not be protected; it is kept
+             because losing it costs a slower daemon start on those phones, never correctness. -->
         <receiver
             android:name=".receivers.AccBootReceiver"
             android:enabled="true"
-            android:exported="true"
+            android:exported="false"
             android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />

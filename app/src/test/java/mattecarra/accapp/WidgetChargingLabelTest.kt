@@ -69,4 +69,15 @@ class WidgetChargingLabelTest {
         assertEquals("Idle", chargeStatusWord(true, "charging", "Not charging", 0f))
         assertEquals("Idle", chargeStatusWord(true, "charging", "Not charging", null))
     }
+
+    // B-002: the cut arm returned Idle before the current was ever consulted.
+    @Test fun aCutPhoneRunningOffThePackIsDraining() {
+        assertEquals("Draining", chargeStatusWord(true, "cut", "Charging", -311f))
+        assertEquals("Draining", chargeStatusWord(true, "cut-input", "Charging", -311f))
+    }
+
+    @Test fun aCutPhoneDrawingNothingIsStillIdle() {
+        assertEquals("Idle", chargeStatusWord(true, "cut", "Charging", -3f))
+        assertEquals("Idle", chargeStatusWord(true, "cut-input", "Charging", null))
+    }
 }
