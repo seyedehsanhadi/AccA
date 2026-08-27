@@ -101,7 +101,9 @@ class SchedulesFragment : ScopedFragment(), OnScheduleClickListener {
     }
 
     override fun onScheduleToggle(schedule: Schedule, isEnabled: Boolean) {
-        viewModel.editSchedule(schedule.profile.uid, schedule.profile.scheduleName, isEnabled, schedule.time, schedule.executeOnce, schedule.executeOnBoot, schedule.profile.accConfig)
+        // Pass the schedule's OWN gates. editSchedule rebuilds the whole DJS command, so omitting
+        // them here meant flipping this checkbox re-enabled every section the user had turned off.
+        viewModel.editSchedule(schedule.profile.uid, schedule.profile.scheduleName, isEnabled, schedule.time, schedule.executeOnce, schedule.executeOnBoot, schedule.profile.accConfig, schedule.cue)
     }
 
     override fun onScheduleDeleteClick(schedule: Schedule) {

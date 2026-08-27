@@ -157,7 +157,7 @@ class AccStateTest {
     // ---- current_max upper-bound rule (PowerLimitDialogExt.checkCurrent) ----
     // The dialog enables OK only when the entered current is in 1..9999 (a >9999 write is
     // rejected by the daemon and applies NO limit). Mirror that exact predicate here.
-    private fun currentMaxValid(value: Int?): Boolean = (value ?: 0) in 1..9999
+    private fun currentMaxValid(value: Int?) = mattecarra.accapp.models.ConfigLimits.currentMaxValid(value)
 
     @Test
     fun currentMaxBound_acceptsInRange_rejectsOutOfRange() {
@@ -173,8 +173,10 @@ class AccStateTest {
 
     // ---- shutdown_temp rule (AccConfigEditorActivity.validateConfig) ----
     // shutdown ∈ [max(max_temp,40) .. 70]. Returns true when the config is acceptable.
-    private fun shutdownTempValid(maxTemp: Int, shutdown: Int): Boolean =
-        shutdown in maxOf(maxTemp, 40)..70
+    // Delegates to the PRODUCTION rule now. These were local re-implementations, so the
+    // assertions passed whether or not the real checks still existed.
+    private fun shutdownTempValid(maxTemp: Int, shutdown: Int) =
+        mattecarra.accapp.models.ConfigLimits.shutdownTempValid(maxTemp, shutdown)
 
     @Test
     fun shutdownTempBound_respectsMaxFloorAndCeiling() {

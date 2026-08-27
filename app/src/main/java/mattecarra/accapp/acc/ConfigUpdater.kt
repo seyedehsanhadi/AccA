@@ -27,6 +27,29 @@ data class ConfigUpdaterEnable(  // primary constructor, all values as TRUE
     var sendBatteryIdleMode: Boolean = true
 ) {
 
+    /**
+     * The eleven gates as a fixed-order bit string, so a schedule can remember the gates it was
+     * written with. Persisting the object itself would mean embedding it in Room, and Room picks
+     * a constructor by matching columns - this class has a second one taking SharedPreferences,
+     * which is exactly the ambiguity worth avoiding for a value this small.
+     *
+     * An EMPTY or short mask decodes to all-enabled, which is what every pre-existing row holds,
+     * so old schedules keep behaving exactly as they did.
+     */
+    fun toMask(): String = listOf(
+        sendCapacity, sendVoltage, sendCurrMax, sendTemperature, sendCoolDown, sendOnBoot,
+        sendOnPlug, sendResetUnplugged, sendResetBsOnPause, sendChargeSwitch, sendBatteryIdleMode
+    ).joinToString("") { if (it) "1" else "0" }
+
+    companion object {
+        fun fromMask(mask: String?): ConfigUpdaterEnable {
+            if (mask == null || mask.length < 11) return ConfigUpdaterEnable()
+            fun b(i: Int) = mask[i] == '1'
+            return ConfigUpdaterEnable(
+                b(0), b(1), b(2), b(3), b(4), b(5), b(6), b(7), b(8), b(9), b(10))
+        }
+    }
+
     // Secondary constructor, values are obtained from setting over the base
     constructor(mSharedPrefs: SharedPreferences) : this()
     {

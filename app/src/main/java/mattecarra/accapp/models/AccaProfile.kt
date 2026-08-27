@@ -42,6 +42,11 @@ import java.io.Serializable
         if (!pEnables.eCurrMax)   c = c.copy(configCurrMax = null)
         if (!pEnables.eRunOnBoot) c = c.copy(configOnBoot = null)
         if (!pEnables.eRunOnPlug) c = c.copy(configOnPlug = null)
+        // eChargingSwitch was the one enable the apply path never honoured. ProfileListAdapter
+        // uses it to HIDE the switch row, so a profile with it off looked like it had no switch
+        // while still sending configChargeSwitch to ACC and locking it there - the UI said one
+        // thing and the daemon held another.
+        if (!pEnables.eChargingSwitch) c = c.copy(configChargeSwitch = null)
         return applyCapacityToggle(c)
     }
 

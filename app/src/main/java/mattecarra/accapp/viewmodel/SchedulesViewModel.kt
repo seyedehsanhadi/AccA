@@ -52,7 +52,10 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
                                 val scheduleProfile = getScheduleProfileById(djsSchedule.scheduleProfileId)
                                     ?: ScheduleProfile(djsSchedule.scheduleProfileId, "Recovered schedule", AccConfig())
                                         .also { rec -> try { insertScheduleProfile(rec) } catch (e: Exception) {} }
-                                Schedule(djsSchedule.isEnabled, djsSchedule.time, djsSchedule.executeOnce, djsSchedule.executeOnBoot, scheduleProfile)
+                                // Carry the SAVED gates back, not a fresh all-enabled default. The toggle path rebuilds
+                                // the DJS command from this object, so defaulting here silently re-enabled every section
+                                // the user had switched off.
+                                Schedule(djsSchedule.isEnabled, djsSchedule.time, djsSchedule.executeOnce, djsSchedule.executeOnBoot, scheduleProfile, ConfigUpdaterEnable.fromMask(scheduleProfile.cueMask))
                             }
                         }
                     }.mapNotNull { it.await() }
@@ -65,9 +68,9 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun addSchedule(scheduleName: String, time: String, executeOnce: Boolean, executeOnBoot: Boolean, profile: AccConfig, cue: ConfigUpdaterEnable = ConfigUpdaterEnable()) = viewModelScope.launch {
         try {
-            val id = insertScheduleProfile(ScheduleProfile(0, scheduleName, profile))
+            val id = insertScheduleProfile(ScheduleProfile(0, scheduleName, profile, cue.toMask()))
             val ok = Djs.instance.append(
-                Schedule(true, time, executeOnce, executeOnBoot, ScheduleProfile(id, scheduleName, profile), cue).toDjsSchedule()
+                Schedule(true, time, executeOnce, executeOnBoot, ScheduleProfile(id, scheduleName, profile, cue.toMask()), cue).toDjsSchedule()
             )
             if (!ok) mSchedulesDao.deleteById(id)   // roll back the orphan DB row if the DJS write failed
             refreshSchedules()
@@ -76,7 +79,7 @@ class SchedulesViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun editSchedule(id: Int, scheduleName: String, isEnabled: Boolean, time: String, executeOnce: Boolean, executeOnBoot: Boolean, profile: AccConfig, cue: ConfigUpdaterEnable = ConfigUpdaterEnable()) = viewModelScope.launch {
         try {
-            val scheduleProfile = ScheduleProfile(id, scheduleName, profile)
+            val scheduleProfile = ScheduleProfile(id, scheduleName, profile, cue.toMask())
             val ok = Djs.instance.edit(
                 Schedule(isEnabled, time, executeOnce, executeOnBoot, scheduleProfile, cue).toDjsSchedule()
             )

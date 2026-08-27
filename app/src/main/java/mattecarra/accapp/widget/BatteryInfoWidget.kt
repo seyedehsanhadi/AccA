@@ -113,7 +113,7 @@ class BatteryInfoWidget : AppWidgetProvider()
             WIDGET_ALL_UPDATE,
             ACTION_APPWIDGET_UPDATE ->
             {
-                updateAllWidget(context, getAppWidgetIds(context))
+                goAsync().let { pr -> updateAllWidget(context, getAppWidgetIds(context)) { pr.finish() } }
             }
 
             WIDGET_ONE_UPDATE,
@@ -121,7 +121,7 @@ class BatteryInfoWidget : AppWidgetProvider()
             {
                 var widgetId = intent.getIntExtra(EXTRA_APPWIDGET_ID, -1)
                 if (widgetId == -1) widgetId = intent.getIntExtra(WIDGET_ID_NAME, -1)
-                if (widgetId > -1) updateOneWidget(context, widgetId)
+                if (widgetId > -1) goAsync().let { pr -> updateOneWidget(context, widgetId) { pr.finish() } }
             }
 
             WIDGET_ACTION_REVERSE ->
@@ -131,7 +131,7 @@ class BatteryInfoWidget : AppWidgetProvider()
                 val manualStop = SP.getBoolean(WIDGET_ALL_STOP, false).not()
                 Toast.makeText(context, "${ if(manualStop) "Sleeping" else "Fast"} mode", Toast.LENGTH_SHORT).show()
                 SP.edit().putBoolean(WIDGET_ALL_STOP, manualStop).apply()
-                updateAllWidget(context, getAppWidgetIds(context))
+                goAsync().let { pr -> updateAllWidget(context, getAppWidgetIds(context)) { pr.finish() } }
             }
 
             WIDGET_ACTION_CLICK ->
@@ -152,12 +152,26 @@ class BatteryInfoWidget : AppWidgetProvider()
 
     //------------------------------------------------------------------
 
-    fun updateAllWidget(context: Context, widgetIds: IntArray?)
+    fun updateAllWidget(context: Context, widgetIds: IntArray?, onDone: (() -> Unit)? = null)
     {
-        if (widgetIds != null) for (one in widgetIds) updateOneWidget(context, one)
+        // N widgets, ONE goAsync token: release it when the last one finishes, not the first.
+        if (widgetIds == null || widgetIds.isEmpty()) { onDone?.invoke(); return }
+        val remaining = java.util.concurrent.atomic.AtomicInteger(widgetIds.size)
+        for (one in widgetIds) updateOneWidget(context, one) {
+            if (remaining.decrementAndGet() == 0) onDone?.invoke()
+        }
     }
 
-    fun updateOneWidget(context: Context, widgetId: Int)
+    /**
+     * @param onDone released once the async work finishes; onReceive passes the goAsync() token.
+     *
+     * onReceive() used to call this and return immediately, leaving root calls, a Room query and
+     * the RemoteViews update running in an unstructured GlobalScope job with nothing telling
+     * Android the receiver was still busy. The process could be killed mid-update - worst when
+     * the charge-meter foreground service is disabled, which is the default, because then
+     * nothing else is holding the process up either.
+     */
+    fun updateOneWidget(context: Context, widgetId: Int, onDone: (() -> Unit)? = null)
     {
         val sp = context.getSharedPreferences(WIDGET_PREF_NAME, MODE_PRIVATE)
         val manualStop = sp.getBoolean(WIDGET_ALL_STOP, false)
@@ -179,6 +193,7 @@ class BatteryInfoWidget : AppWidgetProvider()
                     pendingFlags(PendingIntent.FLAG_CANCEL_CURRENT)))
 
             getInstance(context).updateAppWidget(widgetId, widgetView) // update
+            onDone?.invoke()   // sleep-mode path returns early; release the receiver
             return
         }
 
@@ -245,7 +260,10 @@ class BatteryInfoWidget : AppWidgetProvider()
                 // The number is normalised below, but the WORD was still the kernel's answer:
                 // a pause-hold prints status Charging, so the widget said "Charging speed" over a
                 // negative current. Same precedence the dashboard uses -- measuredClass first.
-                val chargingNow = accState?.let { isChargingNow(it.measuredClass, it.status) }
+                // Give the rule its third input. measuredClass is refreshed on a slower cadence than the
+                // current, so a stale "charging" class over a freshly negative reading printed "Charging
+                // speed" above a discharging number. The signed current is the tie-break.
+                val chargingNow = accState?.let { isChargingNow(it.measuredClass, it.status, it.signedCurrentMilliAmps()) }
                     ?: batteryInfo.isCharging()
 
                 widgetView.setTextViewText(R.id.charging_label, if (replaceLabel) "Ⓒ:"
@@ -330,8 +348,10 @@ class BatteryInfoWidget : AppWidgetProvider()
                 // the request when the screen is off, and picks the cadence from isCharging. Asking
                 // only while charging is what froze the figure on a discharging phone.
                 LogExt().d(javaClass.simpleName, "SelfUpdate $swidgetId, chargingNow=$chargingNow")
-                WidgetService().runSelfIntent(context, Intent().setAction(WIDGET_ONE_UPDATE)
+                if (!ChargeMeterService.isDrivingWidgets()) {
+                    WidgetService().runSelfIntent(context, Intent().setAction(WIDGET_ONE_UPDATE)
                     .putExtra(WIDGET_ID_NAME, widgetId).putExtra("isCharging", chargingNow))
+                }
             }
 
             } catch (e: Exception) {
@@ -341,6 +361,7 @@ class BatteryInfoWidget : AppWidgetProvider()
                 // showing its placeholder icon -- so a debug-level line meant no trace at all.
                 LogExt().s(javaClass.simpleName, "updateOneWidget failed: " + e.toString())
             }
+            finally { onDone?.invoke() }
         }
     }
 

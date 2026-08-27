@@ -13,7 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mattecarra.accapp.models.*
 
-@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 23)
+@Database(entities = [AccaProfile::class, ScheduleProfile::class, AccaScript::class], version = 24)
 @TypeConverters(ConfigConverter::class)
 abstract class AccaRoomDatabase : RoomDatabase()
 {
@@ -328,6 +328,20 @@ abstract class AccaRoomDatabase : RoomDatabase()
             }
         }
 
+        private val MIGRATION_23_24: Migration = object : Migration(23, 24)
+        {
+            override fun migrate(database: SupportSQLiteDatabase)
+            {
+                // Schedules remember the gates they were written with. Without this, reading a
+                // schedule back from DJS produced an all-enabled default, and the TOGGLE path
+                // (SchedulesFragment -> editSchedule) rebuilds the whole DJS command - so flipping a
+                // schedule on or off silently re-enabled voltage, current and temperature control
+                // that the user had turned off when creating it.
+                // DEFAULT '' means "all enabled", which is exactly how existing rows behaved.
+                database.execSQL("ALTER TABLE schedules_table ADD COLUMN `cueMask` TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context): AccaRoomDatabase
         {
             val tempInstance = INSTANCE
@@ -337,7 +351,7 @@ abstract class AccaRoomDatabase : RoomDatabase()
                 // Create database instance here
                 INSTANCE =
                     Room.databaseBuilder(context.applicationContext, AccaRoomDatabase::class.java, DATABASE_NAME)
-                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23)
+                        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24)
                         // If a migration ever throws, or the on-disk DB is a newer/corrupt
                         // version, REBUILD the DB instead of crashing on every launch -- that
                         // crash is what forced a manual uninstall/reinstall ("blank page until

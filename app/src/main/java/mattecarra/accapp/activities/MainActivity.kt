@@ -834,7 +834,11 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                     executeOnce,
                                     executeOnBoot,
                                     data.getSerializableExtra(Constants.ACC_CONFIG_KEY) as? AccConfig
-                                        ?: return
+                                        ?: return,
+                                    // A custom schedule has no profile, but the GLOBAL AccVoltControl / AccCurrentMax
+                                    // opt-outs still apply; the all-enabled default ignored them.
+                                    ConfigUpdaterEnable(androidx.preference.PreferenceManager
+                                        .getDefaultSharedPreferences(this@MainActivity))
                                 )
                         }
                     }
@@ -992,7 +996,10 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                 time,
                                 executeOnce,
                                 executeOnBoot,
-                                schedule.profile.accConfig
+                                schedule.profile.accConfig,
+                                // "Keep current config" must keep its GATES too; without this the edit rewrote the
+                                // DJS command with every section re-enabled.
+                                schedule.cue
                             )
                     -2L -> //edit current config
                         Intent(
@@ -1077,7 +1084,11 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                         time,
                                         executeOnce,
                                         executeOnBoot,
-                                        configProfile.accConfig
+                                        configProfile.configForApply(),
+                                        // configForApply() + forProfile(), the pair the ADD path already uses. Raw accConfig
+                                        // with no gates pushed sections the profile has switched off.
+                                        ConfigUpdaterEnable(androidx.preference.PreferenceManager
+                                            .getDefaultSharedPreferences(this@MainActivity)).forProfile(configProfile.pEnables)
                                     )
                             }
                     }

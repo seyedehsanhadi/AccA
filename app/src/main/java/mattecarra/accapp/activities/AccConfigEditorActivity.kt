@@ -83,7 +83,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
         // [max(max_temp, 40) .. 70]. The cutoff sits at or above the max (pause) temperature.
         // ACC accepts shutdown == max_temp (e.g. 50/50), so AccA must too; the old max+3 / floor-50
         // tightening rejected valid ACC configs and blocked saves the daemon would have accepted.
-        if (shutdown !in maxOf(max, 40)..70) return getString(R.string.err_shutdown_temp_range)
+        if (!mattecarra.accapp.models.ConfigLimits.shutdownTempValid(max, shutdown)) return getString(R.string.err_shutdown_temp_range)
 
         val cap = c.configCapacity                  // shutdown < resume < pause; percent 0..100 OR mV 3001..5000
         if (cap.pause > 100) {                       // ACC mV-capacity domain (voltage thresholds)

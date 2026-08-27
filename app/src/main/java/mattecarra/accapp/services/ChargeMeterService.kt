@@ -113,6 +113,20 @@ class ChargeMeterService : Service() {
         }
 
         /**
+         * True when this service is alive and has published recently, i.e. it is the thing
+         * currently re-rendering the widget on its own tick.
+         *
+         * The widget asks before scheduling its OWN next tick through WidgetService. Without
+         * that question there were two refresh clocks whenever the meter was enabled - the
+         * meter every 6s and WidgetService every 2.5s or 10s - producing duplicate root reads
+         * and out-of-order widget updates, and none at all in the branch where the meter is
+         * disabled. One owner either way: the meter when it is running, WidgetService when not.
+         */
+        fun isDrivingWidgets(): Boolean =
+            sharedState != null &&
+            android.os.SystemClock.elapsedRealtime() - sharedStateAt <= SHARED_STATE_MAX_AGE_MS
+
+        /**
          * The --state this service last read, for any other surface in the process that would
          * otherwise spawn its own root shell for the same answer. The widget renders on this
          * service's tick, so without sharing it re-ran `acca --state` a second or two after the
@@ -548,7 +562,10 @@ class ChargeMeterService : Service() {
             val wStr = wattsX10?.let { "$sign${wattsShade(it)}" }
             val aStr = shownMaAbs?.let { "$sign" + String.format("%.2f A", it / 1000f) }
             val numbers = listOfNotNull(wStr, aStr).joinToString("  ·  ")
-            val word = chargeStatusWord(plugged, st?.measuredClass)
+            // All four inputs. This passed only plugged + a CACHED measuredClass, and meter state is
+            // refreshed every 9s while the current refreshes every 3s - so the window where the class
+            // still says "charging" over an already-negative current is routine, not theoretical.
+            val word = chargeStatusWord(plugged, st?.measuredClass, st?.status, st?.signedCurrentMilliAmps())
             val classWord = if (word == "Charging") getString(when (cls) {
                 "slow" -> R.string.charge_class_slow; "standard" -> R.string.charge_class_standard
                 "fast" -> R.string.charge_class_fast; "superfast" -> R.string.charge_class_superfast
