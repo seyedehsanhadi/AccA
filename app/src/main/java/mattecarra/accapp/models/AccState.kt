@@ -115,8 +115,25 @@ data class AccState(
 
         /**
          * Parses an `acca --state` JSON payload. Returns null if the payload is blank,
-         * not valid JSON, or its schemaVersion is below 1 (older daemon / unknown contract)
-         * so the caller can fall back to the legacy path. Never throws.
+         * not valid JSON, its schemaVersion is below 1 (older daemon / unknown contract),
+         * or it is an ERROR payload, so the caller can fall back to the legacy path.
+         * Never throws.
+         *
+         * The error case is not hypothetical and the schema check alone does not catch it.
+         * ACC rc24 answers with a well-formed, current-schema document when it has nothing to
+         * report (state-export.sh):
+         *
+         *     {"schemaVersion":1,"error":"daemon-not-running"}
+         *
+         * schemaVersion is 1, so the old guard passed it, and every `optJSONObject(...) ?: JSONObject()`
+         * below then manufactured an entire battery reading out of defaults: -1%, 0 mA, 0 V,
+         * -1 deci-C, unplugged, status "Unknown". Being non-null, it SUPPRESSED the legacy
+         * `acca -i` fallback in the dashboard, the widget and the charge meter, so a phone with no
+         * daemon showed confident wrong numbers instead of falling back to a path that works.
+         *
+         * Two conditions reject it: an explicit `error` key, and the absence of the `battery`
+         * object. The second matters on its own - a truncated or partial document has no error key
+         * either, and a reading invented from defaults is worse than no reading.
          */
         fun parseState(json: String): AccState? {
             if (json.isBlank()) return null
@@ -124,8 +141,9 @@ data class AccState(
                 val root = JSONObject(json)
                 val schema = root.optInt("schemaVersion", 0)
                 if (schema < 1) return null
+                if (root.has("error")) return null
 
-                val battery = root.optJSONObject("battery") ?: JSONObject()
+                val battery = root.optJSONObject("battery") ?: return null
                 val sensing = root.optJSONObject("sensing") ?: JSONObject()
                 val sw = root.optJSONObject("switch") ?: JSONObject()
                 val acc = root.optJSONObject("acc") ?: JSONObject()

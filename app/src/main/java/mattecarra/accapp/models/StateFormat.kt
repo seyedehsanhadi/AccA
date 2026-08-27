@@ -14,15 +14,35 @@ import mattecarra.accapp.VoltageUnit
  */
 object StateFormat {
 
-    fun current(signedMilliAmps: Float, unit: CurrentUnit): String =
-        if (unit == CurrentUnit.A) String.format("%.3f", signedMilliAmps / 1000f) + " A"
-        else signedMilliAmps.toInt().toString() + " mA"
+    /**
+     * Every one of these enums has THREE values, and treating them as two silently renders the
+     * third as its neighbour. currentOutputUnitOfMeasure really can hold uA (Preferences maps the
+     * stored string "uA"), so `unit == A` else mA printed microamps with a mA suffix.
+     */
+    fun current(signedMilliAmps: Float, unit: CurrentUnit): String = when (unit) {
+        CurrentUnit.A  -> String.format("%.3f", signedMilliAmps / 1000f) + " A"
+        CurrentUnit.uA -> (signedMilliAmps * 1000f).toLong().toString() + " µA"
+        else           -> signedMilliAmps.toInt().toString() + " mA"
+    }
 
-    /** --state reports deci-Celsius (230 = 23.0C), the scale batteryInfo exposes after its own /10. */
+    /**
+     * --state reports deci-Celsius (230 = 23.0C), the scale batteryInfo exposes after its own /10.
+     *
+     * CF means BOTH scales, and it is the DEFAULT preference, so the old two-way test
+     * (`== C` else Fahrenheit) changed what every stock install shows the moment the dashboard and
+     * widget moved onto this formatter: Celsius silently became Fahrenheit-only. ChargeMeterService
+     * already renders the three-way correctly; this now matches it rather than contradicting it on
+     * the same screen.
+     */
     fun temperature(tempDeciC: Int, unit: TemperatureUnit): String {
         val c = tempDeciC / 10f
-        return if (unit == TemperatureUnit.C) c.toInt().toString() + " " + Typography.degree + "C"
-        else String.format("%.1f", c * 1.8f + 32f) + " " + Typography.degree + "F"
+        val f = c * 1.8f + 32f
+        val deg = Typography.degree
+        return when (unit) {
+            TemperatureUnit.C  -> c.toInt().toString() + " " + deg + "C"
+            TemperatureUnit.F  -> String.format("%.1f", f) + " " + deg + "F"
+            else               -> c.toInt().toString() + deg + "C/" + Math.round(f).toString() + deg + "F"
+        }
     }
 
     /**
@@ -31,7 +51,10 @@ object StateFormat {
      */
     fun voltage(voltageRaw: Long, unit: VoltageUnit): String {
         val mV = if (voltageRaw >= 100000L) voltageRaw / 1000L else voltageRaw
-        return if (unit == VoltageUnit.V) String.format("%.3f", mV / 1000f) + " V"
-        else mV.toString() + " mV"
+        return when (unit) {
+            VoltageUnit.V  -> String.format("%.3f", mV / 1000f) + " V"
+            VoltageUnit.uV -> (mV * 1000L).toString() + " µV"
+            else           -> mV.toString() + " mV"
+        }
     }
 }

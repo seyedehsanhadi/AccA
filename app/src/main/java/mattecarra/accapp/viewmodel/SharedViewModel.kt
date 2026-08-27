@@ -95,38 +95,47 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
 
         if(operation(value)) {
             this.config.postValue(Pair(value, null))
-            saveAccConfig(value)
+            saveAccConfig(value)   // this overload reports nothing; the two public ones do
         }
     }
 
     /*
     * Updates the AccConfig and write on file
     */
-    suspend fun updateAccConfig(value: AccConfig)
+    suspend fun updateAccConfig(value: AccConfig): Boolean
     {
         LogExt().d(javaClass.simpleName,"updateAccConfig()")
         config.postValue(Pair(value, null))
-        saveAccConfig(value)
+        return saveAccConfig(value)
     }
 
     /**
      * Apply a PROFILE. The profile's own section toggles gate what is sent -- the temperature
      * switch in particular, which otherwise greyed its pickers and wrote the thresholds anyway.
      */
-    suspend fun updateAccConfig(value: AccConfig, enables: ProfileEnables)
+    suspend fun updateAccConfig(value: AccConfig, enables: ProfileEnables): Boolean
     {
         LogExt().d(javaClass.simpleName,"updateAccConfig(profile enables)")
         config.postValue(Pair(value, null))
-        saveAccConfig(value, enables)
+        return saveAccConfig(value, enables)
     }
 
     /*
     * Saves config on file. It's run in an async thread every time config is updated.
     */
-    private suspend fun saveAccConfig(value: AccConfig, enables: ProfileEnables? = null)
+    /**
+     * Returns whether ACC actually accepted the apply. This used to return Unit, so every caller
+     * that then persisted "profile X is now current" did so whether or not the apply worked --
+     * leaving the app and the widget naming profile B while ACC still held profile A, or a
+     * half-applied mixture of the two. The quick-settings tile already had the right contract
+     * (persist only when res.isSuccessful()); it simply had no way to share it with the UI paths.
+     */
+    private suspend fun saveAccConfig(value: AccConfig, enables: ProfileEnables? = null): Boolean
     {
         val cue = ConfigUpdaterEnable(mSharedPrefs).let { c -> enables?.let { c.forProfile(it) } ?: c }
+        var applyOk = false
         Acc.instance.updateAccConfig(value, cue).also {
+            applyOk = it.isSuccessful()
 
             if (it.isSuccessful())
             {
@@ -184,6 +193,7 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
                 config.postValue(Pair(currentConfigVal, null))
             }
         }
+        return applyOk
     }
 
     /**

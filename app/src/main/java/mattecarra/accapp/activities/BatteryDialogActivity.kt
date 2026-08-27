@@ -233,12 +233,9 @@ class BatteryDialogActivity : ScopedAppActivity()
                                 launch {
                                     try
                                     {
-                                        // configForApply(), not accConfig: ProfilesFragment already applies profiles this way.
-                                        // Picking the same profile from the widget bypassed it, so a
-                                        // profile with a section switched OFF still pushed its stored
-                                        // values -- most visibly the old pause on a capacity-off profile.
-                                        mSharedViewModel.updateAccConfig(temp[index].configForApply(), temp[index].pEnables)
-                                        mSharedViewModel.setCurrentSelectedProfile(temp[index].uid)
+                                        val applied = mSharedViewModel.updateAccConfig(temp[index].configForApply(), temp[index].pEnables)
+                                        // Only record the selection if ACC took it; see ProfilesFragment for the same rule.
+                                        if (applied) mSharedViewModel.setCurrentSelectedProfile(temp[index].uid)
                                         Toast.makeText(this@BatteryDialogActivity, getString(R.string.selecting_profile_toast, temp[index].profileName), Toast.LENGTH_SHORT).show()
                                         sendBroadcast(Intent(this@BatteryDialogActivity, BatteryInfoWidget::class.java).setAction(WIDGET_ALL_UPDATE))
                                     }

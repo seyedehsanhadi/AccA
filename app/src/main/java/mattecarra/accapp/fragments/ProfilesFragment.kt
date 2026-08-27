@@ -294,10 +294,14 @@ class ProfilesFragment : ScopedFragment(),
                 null
             }
 
-            mSharedViewModel.setCurrentSelectedProfile(profile.uid)
             // configForApply(), not accConfig: a profile with capacity control toggled off must push
             // pause=100 (no limit) rather than its stale numbers. See AccaProfile.configForApply.
-            mSharedViewModel.updateAccConfig(profile.configForApply(), profile.pEnables)
+            val applied = mSharedViewModel.updateAccConfig(profile.configForApply(), profile.pEnables)
+            // Persist "this profile is current" ONLY when ACC accepted it. This used to be saved before
+            // the apply was even attempted, so a failed or partial apply still left the app and the
+            // widget naming a profile the daemon was not running. The quick-settings tile has always
+            // had this contract; the UI paths now match it.
+            if (applied) mSharedViewModel.setCurrentSelectedProfile(profile.uid)
             mContext.sendBroadcast(Intent(mContext, BatteryInfoWidget::class.java)
                 .setAction(WIDGET_ALL_UPDATE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
