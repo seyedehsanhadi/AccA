@@ -120,10 +120,19 @@ data class AccState(
          * Never throws.
          *
          * The error case is not hypothetical and the schema check alone does not catch it.
-         * ACC rc24 answers with a well-formed, current-schema document when it has nothing to
-         * report (state-export.sh):
+         * ACC rc24 can answer with a well-formed, current-schema document that carries NO reading.
+         * print_state() emits this when write_state produced no state.json (state-export.sh):
          *
          *     {"schemaVersion":1,"error":"daemon-not-running"}
+         *
+         * Measured on a Pixel 6a: this is NARROWER than "the daemon is not running". With accd
+         * stopped, acca --state still returns a full document, because it can compute the state
+         * live. The error branch needs state.json to be absent AND write_state unable to make
+         * one - in practice a wiped tmpfs, i.e. early boot before service.sh has run.
+         *
+         * That makes the SECOND guard below the more valuable of the two: any truncated or
+         * partial document has no error key either, and inventing a reading from defaults is
+         * worse than admitting there is none.
          *
          * schemaVersion is 1, so the old guard passed it, and every `optJSONObject(...) ?: JSONObject()`
          * below then manufactured an entire battery reading out of defaults: -1%, 0 mA, 0 V,
