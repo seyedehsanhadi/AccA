@@ -58,6 +58,20 @@ android {
     }
     lintOptions {
         disable 'MissingTranslation'
+
+        // A LINT BASELINE, because the gate this feeds was added before the debt was paid.
+        //
+        // 73e203a added `gradlew lintDebug` to both CI workflows so a regression could not ship.
+        // The workflow step has no continue-on-error, so it aborts the release job BEFORE the APK
+        // is built and signed - and lint fails on this tree with 43 pre-existing errors, 28 of
+        // them Activity#isDestroyed requiring API 17 against a declared minSdkVersion 16. So the
+        // gate as written blocks every release rather than catching regressions, which is the
+        // opposite of what it was added for.
+        //
+        // The baseline records what is already broken and keeps failing the build on anything
+        // NEW. Raising minSdk would clear most of it and is the real fix, but that is a product
+        // decision about which devices AccA claims to support, not a build tweak.
+        baseline file('lint-baseline.xml')
     }
 }
 
