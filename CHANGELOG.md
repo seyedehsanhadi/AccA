@@ -8,9 +8,8 @@ Pairs with ACC v2025.5.18-6.5.1-rc24. Install both.
 
 Added
 - Home-screen widget that works on Android 12 and later.
-- Bundled AMPS v7.3.1, byte-identical to the module's copy, replacing v7.3.0.
+- Bundled AMPS switch-finder v7.3.1, byte-identical to the module's copy.
 - Schedules remember which configuration sections they were written with.
-- Bundled AMPS switch-finder v7.3.0, byte-identical to the module's copy.
 - CI runs the unit tests and lint before it builds anything, on a recorded lint baseline.
 
 Fixed
