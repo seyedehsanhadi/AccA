@@ -202,7 +202,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     }
                 }
 
-                if (isFinishing || isDestroyed) return@launch
+                if (isFinishing || isActivityDestroyed) return@launch
 
                 if (readConfig == null) showConfigReadError()
 
@@ -479,7 +479,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 }
             }
 
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             verifiedSwitch = result
             when (result)
@@ -701,12 +701,8 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             if (mode == VerifiedSwitch.ApplyMode.PIN_DIRECT)
             {
                 // Check EVERY node of the spec, not only the first: a grouped multi-path switch with
-                // vanished later paths must fall through to the live test, not pin blind.
-                val nodes = switch.trim().split(' ').filter { it.startsWith("/") }
-                    .ifEmpty { listOf(switch.trim().substringBefore(' ')) }
-                val check = nodes.joinToString(" && ") { "[ -e \"$it\" ]" }
-                val present = try { withContext(Dispatchers.IO) { Shell.su(check).exec().isSuccess } }
-                catch (ex: Exception) { false }
+                // vanished paths invalidate the saved result.
+                val present = withContext(Dispatchers.IO) { VerifiedSwitch.pathsExist(switch) }
                 if (present)
                 {
                     content.verifiedSwitchApplyButton.isEnabled = false
@@ -714,27 +710,14 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     content.verifiedSwitchApplyProgress.visibility = View.VISIBLE
                     content.verifiedSwitchApplyStatus.text = ""
                     val ok = try { withContext(Dispatchers.IO) {
-                        val w = Acc.instance.updateAccChargingSwitch(switch, false)
-                        // A2: kick the daemon so the pin takes effect NOW (charging actually stops). The
-                        // `--` write already made ACC set .user-locked; safe post-D2 (no un-cap on restart).
-                        // Then VERIFY it came back: a failed restart would leave the pin written but
-                        // unenforced until ACC's next natural cycle while the UI says Locked.
-                        if (w) try
-                        {
-                            Shell.su(Acc.instance.getAccRestartDaemon()).exec()
-                            Thread.sleep(2500)
-                            val d = Shell.su("/dev/.vr25/acc/acca -D").exec().code
-                            if (d != 0 && d != 8) Shell.su("/dev/.vr25/acc/acca -D restart").exec()
-                        }
-                        catch (_: Exception) {}
-                        w
+                        VerifiedSwitch.pinAndRestart(Acc.instance, switch)
                     } }
                     catch (ex: Exception)
                     {
                         LogExt().e(javaClass.simpleName, "updateAccChargingSwitch() failed: $ex")
                         false
                     }
-                    if (isFinishing || isDestroyed) return@launch
+                    if (isFinishing || isActivityDestroyed) return@launch
                     content.verifiedSwitchApplySpinner.visibility = View.GONE
                     if (ok)
                     {
@@ -751,6 +734,8 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                     }
                     return@launch
                 }
+                Toast.makeText(this@AccConfigEditorActivity, R.string.error_occurred, Toast.LENGTH_LONG).show()
+                return@launch
             }
 
             if (mode == VerifiedSwitch.ApplyMode.LEVEL_RERUN)
@@ -773,7 +758,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
 
             if (!charging)
             { // Cannot live-test unplugged: prompt to plug in instead of testing.
-                if (isFinishing || isDestroyed) return@launch
+                if (isFinishing || isActivityDestroyed) return@launch
                 MaterialDialog(this@AccConfigEditorActivity).show {
                     title(R.string.verified_switch_title)
                     message(R.string.verified_switch_plug_to_apply)
@@ -795,7 +780,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 false
             }
 
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             if (!passed)
             {
@@ -810,18 +795,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
             val written = try
             {
                 withContext(Dispatchers.IO) {
-                    val w = Acc.instance.updateAccChargingSwitch(switch, false)
-                    // A2: kick the daemon so the new switch takes effect immediately (safe post-D2),
-                    // then verify it came back (same guarantee as the PIN_DIRECT path).
-                    if (w) try
-                    {
-                        Shell.su(Acc.instance.getAccRestartDaemon()).exec()
-                        Thread.sleep(2500)
-                        val d = Shell.su("/dev/.vr25/acc/acca -D").exec().code
-                        if (d != 0 && d != 8) Shell.su("/dev/.vr25/acc/acca -D restart").exec()
-                    }
-                    catch (_: Exception) {}
-                    w
+                    VerifiedSwitch.pinAndRestart(Acc.instance, switch)
                 }
             }
             catch (ex: Exception)
@@ -830,7 +804,7 @@ class AccConfigEditorActivity : ScopedAppActivity(),
                 false
             }
 
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             content.verifiedSwitchApplySpinner.visibility = View.GONE
             if (written)

@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -44,6 +45,7 @@ class SwitchFinderActivity : ScopedAppActivity()
     private var shellJob: Shell.Job? = null
     // The async submit handle, so we know when the run has finished (vs still streaming).
     @Volatile private var running = false
+    @Volatile private var cancelling = false
     // Set once the run completes and the artifact is read; gates the result card.
     private var foundSwitch: String? = null
     // True iff the artifact's conf was exactly "verified" (long-tested on THIS device): the tester
@@ -78,11 +80,9 @@ class SwitchFinderActivity : ScopedAppActivity()
     // it and never executes until the run ends -- THE reason Cancel did nothing. Control commands therefore
     // run on a SEPARATE root shell, so they execute immediately while the tester holds the main one.
     private val controlShell: Shell by lazy { Shell.newInstance() }
-    private fun controlExec(cmd: String)
-    {
-        try { controlShell.newJob().add(cmd).exec() }
-        catch (e: Exception) { LogExt().e(javaClass.simpleName, "controlExec failed: $e") }
-    }
+    private fun controlExec(cmd: String): Boolean =
+        try { controlShell.newJob().add(cmd).exec().isSuccess }
+        catch (e: Exception) { LogExt().e(javaClass.simpleName, "controlExec failed: $e"); false }
 
     override fun onCreate(savedInstanceState: Bundle?)
     {
@@ -171,15 +171,15 @@ class SwitchFinderActivity : ScopedAppActivity()
             negativeButton(android.R.string.cancel) { finish() }
         }
         content.findViewById<android.widget.Button>(R.id.dlg_sf_quick).setOnClickListener {
-            dialog.dismiss(); startElapsedCounter(); startRun("--quick")
+            dialog.dismiss(); startRun("--quick")
         }
         content.findViewById<android.widget.Button>(R.id.dlg_sf_deep).setOnClickListener {
             dialog.dismiss()
             MaterialDialog(this).show {
                 title(text = "Deep scan")
                 message(text = "Standard finds your switches without touching the charger.\n\nHighest accuracy ALSO asks you to UNPLUG the charger briefly -- this reveals hidden vendor switches the firmware only writes when power leaves, and works even on phones with no current sensor. Your charger may need a re-plug afterwards.")
-                positiveButton(text = "Standard") { startElapsedCounter(); startRun("--complete") }
-                negativeButton(text = "Highest accuracy") { startElapsedCounter(); startRun("--complete --unplug") }
+                positiveButton(text = "Standard") { startRun("--complete") }
+                negativeButton(text = "Highest accuracy") { startRun("--complete --unplug") }
             }
         }
     }
@@ -235,11 +235,12 @@ class SwitchFinderActivity : ScopedAppActivity()
     private fun startRun(mode: String)
     {
         running = true
+        startElapsedCounter()
         started = true
         runMode = mode
         launch {
             val extracted = withContext(Dispatchers.IO) { extractTester() }
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             if (!extracted)
             {
@@ -258,7 +259,7 @@ class SwitchFinderActivity : ScopedAppActivity()
                 override fun onAddElement(line: String?)
                 {
                     val text = line ?: return
-                    if (isFinishing || isDestroyed) return
+                    if (isFinishing || isActivityDestroyed) return
                     appendLine(text)
                     updateHeaderFor(text)
                 }
@@ -270,7 +271,7 @@ class SwitchFinderActivity : ScopedAppActivity()
                 // Completion callback. Bounce onto Main, read the artifact and show the result
                 // card. Guard against a late callback after the activity has already closed.
                 mainHandler.post {
-                    if (isFinishing || isDestroyed) return@post
+                    if (isFinishing || isActivityDestroyed || cancelling) return@post
                     running = false
                     onRunFinished()
                 }
@@ -292,7 +293,7 @@ class SwitchFinderActivity : ScopedAppActivity()
             assets.open(ASSET).use { input ->
                 appFile.outputStream().use { output -> input.copyTo(output) }
             }
-            Shell.su("rm -f $STOPF; cp ${appFile.absolutePath} $TESTER_PATH; chmod 0755 $TESTER_PATH").exec().isSuccess
+            Shell.su("rm -f $STOPF /data/local/tmp/acc-compat-verified; cp ${appFile.absolutePath} $TESTER_PATH; chmod 0755 $TESTER_PATH").exec().isSuccess
         }
         catch (ex: Exception)
         {
@@ -359,13 +360,13 @@ class SwitchFinderActivity : ScopedAppActivity()
             {
                 val alive = withContext(Dispatchers.IO)
                 {
-                    try { controlShell.newJob().add("pgrep -f acc-compat.sh >/dev/null").exec().isSuccess }
+                    try { controlShell.newJob().add("pgrep -f '[a]cc-compat[.]sh' >/dev/null").exec().isSuccess }
                     catch (e: Exception) { false }
                 }
                 if (!alive) break
                 delay(2000)
             }
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
             running = false
             onRunFinished()
         }
@@ -378,6 +379,7 @@ class SwitchFinderActivity : ScopedAppActivity()
      */
     private fun onRunFinished()
     {
+        if (cancelling) return
         binding.switchFinderProgress.visibility = View.GONE
         binding.switchFinderCancelButton.setText(R.string.close)
 
@@ -392,7 +394,7 @@ class SwitchFinderActivity : ScopedAppActivity()
                 }
             }
 
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             when (result)
             {
@@ -555,19 +557,15 @@ class SwitchFinderActivity : ScopedAppActivity()
 
         launch {
             // Decide from class+conf (single source of truth in VerifiedSwitch.applyMode):
-            // PIN_DIRECT (verified, or an engage-proven level cap that is only slow to re-arm) locks
+            // PIN_DIRECT (verified) locks
             // with no acc -t; LEVEL_RERUN (an unproven %-cap acc -t can only FALSE-fail) asks for a
             // lower-% re-run; LIVE_TEST (cut / bypass / drain) runs acc -t first.
             val mode = VerifiedSwitch.applyMode(foundKlass, foundConf)
             if (mode == VerifiedSwitch.ApplyMode.PIN_DIRECT)
             {
                 // Check EVERY node of the spec, not just the first: a grouped multi-path switch with
-                // vanished later paths must fall through to the live test, not pin blind.
-                val nodes = switch.trim().split(' ').filter { it.startsWith("/") }
-                    .ifEmpty { listOf(switch.trim().substringBefore(' ')) }
-                val check = nodes.joinToString(" && ") { "[ -e \"$it\" ]" }
-                val present = try { withContext(Dispatchers.IO) { Shell.su(check).exec().isSuccess } }
-                catch (ex: Exception) { false }
+                // vanished paths invalidate the saved result.
+                val present = withContext(Dispatchers.IO) { VerifiedSwitch.pathsExist(switch) }
                 if (present)
                 {
                     binding.switchFinderApplyButton.isEnabled = false
@@ -575,7 +573,7 @@ class SwitchFinderActivity : ScopedAppActivity()
                     binding.switchFinderApplyStatus.text = ""
                     val ok = try { withContext(Dispatchers.IO) { pinAndKick(switch) } }
                     catch (ex: Exception) { LogExt().e(javaClass.simpleName, "verified pin failed: $ex"); false }
-                    if (isFinishing || isDestroyed) return@launch
+                    if (isFinishing || isActivityDestroyed) return@launch
                     binding.switchFinderApplyProgress.visibility = View.GONE
                     if (ok)
                     {
@@ -589,6 +587,8 @@ class SwitchFinderActivity : ScopedAppActivity()
                     }
                     return@launch
                 }
+                Toast.makeText(this@SwitchFinderActivity, R.string.error_occurred, Toast.LENGTH_LONG).show()
+                return@launch
             }
 
             if (mode == VerifiedSwitch.ApplyMode.LEVEL_RERUN)
@@ -608,7 +608,7 @@ class SwitchFinderActivity : ScopedAppActivity()
                 false
             }
 
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             if (!charging)
             { // Cannot live-test unplugged: prompt to plug in instead of testing.
@@ -632,7 +632,7 @@ class SwitchFinderActivity : ScopedAppActivity()
                 false
             }
 
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             if (!passed)
             {
@@ -650,7 +650,7 @@ class SwitchFinderActivity : ScopedAppActivity()
                 false
             }
 
-            if (isFinishing || isDestroyed) return@launch
+            if (isFinishing || isActivityDestroyed) return@launch
 
             binding.switchFinderApplyProgress.visibility = View.GONE
             if (written)
@@ -675,84 +675,67 @@ class SwitchFinderActivity : ScopedAppActivity()
      * restart re-inits the daemon onto it. Safe post-D2 (exxit no longer un-caps on restart at the limit).
      * Runs on a worker thread (callers wrap it in Dispatchers.IO).
      */
-    private suspend fun pinAndKick(switch: String): Boolean
-    {
-        val w = Acc.instance.updateAccChargingSwitch(switch, false)
-        if (w) try
-        {
-            Shell.su(Acc.instance.getAccRestartDaemon()).exec()
-            // Verify the daemon actually came back before the UI claims Locked: a failed restart
-            // would leave the pin written but unenforced until ACC's next natural cycle.
-            Thread.sleep(2500)
-            val d = Shell.su("/dev/.vr25/acc/acca -D").exec().code
-            if (d != 0 && d != 8) Shell.su("/dev/.vr25/acc/acca -D restart").exec()
-        }
-        catch (_: Exception) {}
-        return w
-    }
+    private suspend fun pinAndKick(switch: String): Boolean =
+        VerifiedSwitch.pinAndRestart(Acc.instance, switch)
 
     /** Cancel: stop the tester, restore charging, and only THEN close -- with on-screen progress so the
      *  page never just blanks while the phone is left mid-test. */
     private fun onCancelClick()
     {
         if (!running) { finish(); return }
+        cancelling = true
         running = false
         setHeader(getString(R.string.find_switch_status_cancelling))
         binding.switchFinderProgress.visibility = View.VISIBLE
         binding.switchFinderCancelButton.isEnabled = false
         binding.switchFinderApplyButton.visibility = View.GONE
         launch {
-            killTesterAndRecover()
-            if (isFinishing || isDestroyed) return@launch
-            Toast.makeText(this@SwitchFinderActivity, R.string.find_switch_cancelled_restored, Toast.LENGTH_LONG).show()
-            finish()
+            val recovered = killTesterAndRecover()
+            if (isFinishing || isActivityDestroyed) return@launch
+            Toast.makeText(this@SwitchFinderActivity, if (recovered) R.string.find_switch_cancelled_restored else R.string.error_occurred, Toast.LENGTH_LONG).show()
+            binding.switchFinderProgress.visibility = View.GONE
+            binding.switchFinderCancelButton.isEnabled = true
+            binding.switchFinderCancelButton.setText(R.string.close)
+            if (recovered) finish() else setHeader(getString(R.string.error_occurred))
         }
     }
 
     /**
      * Robust stop + recover. `pkill -f acc-compat` alone only SIGTERMs the top `sh`; its children (the
-     * layer sub-tests + their `sleep`s) survive and the run keeps going. So: SIGTERM the tester AND its
-     * children (the trap restores the snapshot), grace, force-KILL stragglers, THEN restart ACC so charging
-     * is re-enabled even if the trap was cut short (the user-reported "phone doesn't recover after cancel").
+     * layer sub-tests + their `sleep`s) survive and the run keeps going. So: request cooperative exit, then SIGTERM the tester and its
+     * scan processes if needed, wait for exit, THEN restart ACC so charging
+     * can resume without interrupting the restore trap (the user-reported "phone doesn't recover after cancel").
      * submit() runs on libsu's own worker so it completes even after this activity closes.
      */
-    private fun killTester()
-    {
-        // Cooperative cancel FIRST, on the SEPARATE control shell (NOT queued behind the tester on the main
-        // shell). The tester polls $STOPF and exits via its EXIT trap (restores snapshot + restarts ACC). The
-        // pgrep/pkill is a backstop; ACC restart runs last so charging is never left disabled. Off-thread so
-        // onDestroy never blocks.
-        Thread {
-            controlExec("echo 1 > $STOPF")
-            try { Thread.sleep(6000) } catch (_: InterruptedException) {}
-            controlExec("for p in \$(pgrep -f acc-compat 2>/dev/null); do for c in \$(pgrep -P \$p 2>/dev/null); do kill -TERM \$c 2>/dev/null; done; kill -TERM \$p 2>/dev/null; done")
-            // 15s (not 3s): the engine's EXIT-trap restore replays the whole node snapshot in up to
-            // 3 timeout-guarded passes and can legitimately run >3s on a deep scan; a SIGKILL landing
-            // mid-replay leaves the last tested node in its off/test state.
-            try { Thread.sleep(15000) } catch (_: InterruptedException) {}
-            controlExec("pkill -KILL -f acc-compat 2>/dev/null; /data/adb/vr25/acc/acca.sh -D restart 2>/dev/null || /dev/.vr25/acc/acca -D restart 2>/dev/null || acc -D restart 2>/dev/null || true")
-        }.start()
+    private fun killTester() {
+        cancelling = true
+        Thread { runBlocking { killTesterAndRecover() } }.start()
     }
 
     /** Blocking variant (for the Cancel button): kill + recover synchronously so we can show progress and
      *  only close once charging is being restored. */
-    private suspend fun killTesterAndRecover() = withContext(Dispatchers.IO)
-    {
-        try
-        {
-            // Write the stop-flag the tester polls, on the SEPARATE control shell so it runs NOW instead of
-            // queuing behind the tester that holds libsu's main shell (the cancel bug). The tester then exits
-            // via its EXIT trap (restores native charging + restarts ACC). Wait for it to act, then backstop-
-            // kill any straggler and make sure ACC is running again regardless.
-            controlExec("echo 1 > $STOPF")
-            Thread.sleep(6000)
-            controlExec("for p in \$(pgrep -f acc-compat 2>/dev/null); do for c in \$(pgrep -P \$p 2>/dev/null); do kill -TERM \$c 2>/dev/null; done; kill -TERM \$p 2>/dev/null; done")
-            // 15s, matching killTester(): give the EXIT-trap snapshot-restore time to finish before
-            // the last-resort SIGKILL so a node is never left in its test state.
-            Thread.sleep(15000)
-            controlExec("pkill -KILL -f acc-compat 2>/dev/null; /data/adb/vr25/acc/acca.sh -D restart 2>/dev/null || /dev/.vr25/acc/acca -D restart 2>/dev/null || acc -D restart 2>/dev/null || true")
+    private suspend fun killTesterAndRecover(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            if (!controlExec("echo 1 > $STOPF")) return@withContext false
+            repeat(2) { attempt ->
+                repeat(30) {
+                    // Exit 1 means no matching process; a shell/search error is not proof of exit.
+                    if (controlExec("pgrep -f '[a]cc-compat[.]sh' >/dev/null 2>&1; [ \$? = 1 ]")) {
+                        controlExec(Acc.instance.getAccRestartDaemon())
+                        delay(2500)
+                        val status = Acc.instance.getAccRestartDaemon().removeSuffix(" restart")
+                        return@withContext controlExec("$status >/dev/null 2>&1; rc=\$?; [ \"\$rc\" = 0 ] || [ \"\$rc\" = 8 ]")
+                    }
+                    delay(2000)
+                }
+                if (attempt == 0) controlExec("pkill -TERM -f '[a]cc-compat[.]sh' 2>/dev/null")
+            }
+            // Do not SIGKILL an EXIT trap that may still be restoring charging controls.
+            false
+        } catch (ex: Exception) {
+            LogExt().e(javaClass.simpleName, "killTesterAndRecover() failed: $ex")
+            false
         }
-        catch (ex: Exception) { LogExt().e(javaClass.simpleName, "killTesterAndRecover() failed: $ex") }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean

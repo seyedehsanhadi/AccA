@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
 # AMPS - Adaptive Multi-device Probe & Selector.
-V=7.3.0
+V=7.3.1
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
 _AMPSID="$( { sha256sum "$0" 2>/dev/null || sha1sum "$0" 2>/dev/null || md5sum "$0" 2>/dev/null; } | cut -c1-8 )"
@@ -506,6 +506,10 @@ drop_finalist(){ _df_lbl="$1"; _df_cfg="$2"
   [ "$CFG_BYPASS" = "$_df_cfg" ] && CFG_BYPASS=
   [ "$CFG_CUT" = "$_df_cfg" ] && CFG_CUT=
   [ "$CFG_DRAIN" = "$_df_cfg" ] && CFG_DRAIN=
+  [ "$CFG_LEVEL" = "$_df_cfg" ] && CFG_LEVEL=
+  if [ -s "$REG" ]; then
+    awk -F'\t' -v l="$_df_lbl" -v c="$_df_cfg" '$4 != l && $2 != c' "$REG" > "$REG.tmp" && mv -f "$REG.tmp" "$REG"
+  fi
   _df_path="$(printf '%s' "$_df_cfg" | awk '{print $1}')"
   if [ -n "$_df_path" ]; then
     ADDLINES="$(printf '%s\n' "$ADDLINES" | awk -v p="$_df_path " 'index($0,p)==0')"
@@ -516,10 +520,68 @@ drop_finalist(){ _df_lbl="$1"; _df_cfg="$2"
     BUILT="$(printf '%s' "$BUILT" | tr '|' '\n' | awk -v p="$_df_path" 'NF && index($0,p)==0 {printf "|%s",$0}')"
   fi
   case "$WORKING" in "$_df_lbl ("*)
-    WORKING=; _df_next="$(printf '%s' "$BYPASS" | tr '|' '\n' | sed -n '1p')"; [ -n "$_df_next" ] && WORKING="$_df_next (BYPASS)"
-    [ -n "$WORKING" ] || { _df_next="$(printf '%s' "$CUT" | tr '|' '\n' | sed -n '1p')"; [ -n "$_df_next" ] && WORKING="$_df_next (CUT)"; }
-    [ -n "$WORKING" ] || { _df_next="$(printf '%s' "$DRAIN" | tr '|' '\n' | sed -n '1p')"; [ -n "$_df_next" ] && WORKING="$_df_next (DRAIN)"; };;
+    WORKING=; _df_next="$(printf '%s' "$BYPASS" | tr '|' '\n' | sed '/^$/d' | sed -n '1p')"; [ -n "$_df_next" ] && WORKING="$_df_next (BYPASS)"
+    [ -n "$WORKING" ] || { _df_next="$(printf '%s' "$CUT" | tr '|' '\n' | sed '/^$/d' | sed -n '1p')"; [ -n "$_df_next" ] && WORKING="$_df_next (CUT)"; }
+    [ -n "$WORKING" ] || { _df_next="$(printf '%s' "$DRAIN" | tr '|' '\n' | sed '/^$/d' | sed -n '1p')"; [ -n "$_df_next" ] && WORKING="$_df_next (DRAIN)"; };;
   esac
+}
+native_stress(){
+  local label cfg node on start orig sorig cap stop cycle verdict wait
+  label="$1"; cfg="$2"; set -- $cfg; node="$1"; on="$2"; start=
+  _FS_UNVERIFIED="$label"
+  [ "${ACTIVE:-0}" = 1 ] && [ "${BLINDV:-1}" = 0 ] && [ "${CUR_USABLE:-0}" = 1 ] && ! over || {
+    log "  $label: native cycle not measured (baseline/sensor/deadline); needs re-test."; return 0; }
+  cap="$(san "$(read1 "$BATT/capacity")")"
+  [ "$cap" -ge 15 ] && [ "$cap" -lt 85 ] && [ "${3:-}" = pcap ] || return 0
+  case "$node" in
+    */charge_stop_level) start="${node%/*}/charge_start_level";;
+    */charge_control_end_threshold) start="${node%/*}/charge_control_start_threshold";;
+  esac
+  [ -n "$start" ] && [ -w "$start" ] || start=
+  orig="$(read1 "$node")"; sorig=
+  [ "$orig" -eq "$orig" ] 2>/dev/null && [ "$on" -eq "$on" ] 2>/dev/null || return 0
+  if [ -n "$start" ]; then
+    sorig="$(read1 "$start")"
+    case "$sorig" in ''|*[!0-9]*) return 0;; esac
+    [ "$on" -gt "$cap" ] 2>/dev/null || return 0
+    snap_add "$start"
+  fi
+  snap_add "$node"; stop=$((cap-5)); cycle=0; verdict=CLEAN
+  log "  $label: native paired pause/resume verification (current anchored)"
+  while [ "$cycle" -lt "${STRESS_CYCLES:-2}" ]; do
+    stop_check
+    if over || [ "$(batt_temp)" -ge "${TMAX:-450}" ]; then verdict=INCONCLUSIVE; break; fi
+    wr "$node" "$on"
+    [ -z "$start" ] || wr "$start" "$((on-1))"
+    wait=0
+    while [ "$wait" -lt 30 ] && [ "$(chg_now)" != 1 ]; do sleep 2; wait=$((wait+2)); done
+    [ "$(chg_now)" = 1 ] || { verdict=NO-BASELINE; break; }
+    [ -z "$start" ] || wr "$start" "$((stop-8))"
+    wr "$node" "$stop"
+    [ "$(read1 "$node")" = "$stop" ] || { verdict=WRITE-REJECTED; break; }
+    sleep "$SETTLE"; hold_probe
+    [ "$(native_verdict "$SAMP_LAST" "$SAMP_N" "$BLINDV" 0)" = verified ] || { verdict=NO-PAUSE; break; }
+    sleep 6; hold_probe
+    [ "$(native_verdict "$SAMP_LAST" "$SAMP_N" "$BLINDV" 0)" = verified ] || { verdict=LEAK; break; }
+    wr "$node" "$on"
+    [ -z "$start" ] || wr "$start" "$((on-1))"
+    wait=0
+    while [ "$wait" -lt 30 ] && [ "$(chg_now)" != 1 ]; do sleep 2; wait=$((wait+2)); done
+    [ "$(chg_now)" = 1 ] || { verdict=RESUME-FAIL; break; }
+    cycle=$((cycle+1)); log "    native cycle $cycle: pause held; charging resumed after ~${wait}s"
+  done
+  # Bridge above the saved start before restoring the pair; stop must exceed start.
+  [ -z "$start" ] || { wr "$node" "$on"; wr "$start" "$sorig"; }
+  wr "$node" "$orig"
+  [ "$(read1 "$node")" = "$orig" ] && { [ -z "$start" ] || [ "$(read1 "$start")" = "$sorig" ]; } || verdict=RESTORE-FAIL
+  if [ "$verdict" = CLEAN ] && [ "$cycle" -gt 0 ]; then
+    _FS_UNVERIFIED=; log "    -> CONFIRMED: native limit paused and resumed ${cycle}x."; return 0
+  fi
+  log "    -> native cycle $verdict: not confirmed this run."
+  case "$verdict" in INCONCLUSIVE|NO-BASELINE|CLEAN) return 0;; esac
+  drop_finalist "$label" "$cfg"
+  LEVELOK="$(list_drop "$LEVELOK" "$label")"; le_enf=; LVL_BY_ACC=0
+  return 1
 }
 finalist_stress(){
   local _fs_lbl _fs_cfg _fs_cls _fs_group _fs_nodes _fs_node _fs_primary _fs_ev _fs_orig
@@ -545,10 +607,11 @@ finalist_stress(){
     if [ "${LVL_BY_ACC:-0}" = 1 ]; then
       log "  $_fs_lbl: native %-limit taken from ACC's own working configuration -- this run never saw it engage (the battery did not cross the limit while scanning), so there is nothing here to re-hammer. Not independently confirmed."
     else
-      log "  $_fs_lbl: native %-limit -- enforcement was measured during the engage test (current anchor, held for the full observation window); the hammer's signals do not apply to a firmware-managed level node. CONFIRMED."
+      native_stress "$_fs_lbl" "$_fs_cfg"; return $?
     fi
     return 0
   fi
+  _FS_UNVERIFIED="$_fs_lbl"
   case " ${_FS_SEEN:-} " in *" $_fs_lbl "*) return 0;; esac
   _FS_SEEN="${_FS_SEEN:-} $_fs_lbl"
   set -- $_fs_cfg
@@ -557,10 +620,14 @@ finalist_stress(){
   _fs_nodes="$BK/fstress.tsv"; : > "$_fs_nodes" 2>/dev/null
   while [ "$#" -ge 3 ]; do
     _fs_node="$1"; _fs_ev="$3"
-    case "$_fs_ev" in ''|*[!0-9-]*) return 0;; esac
+    case "$_fs_node" in /*) :;; *) _fs_node="$PSY/$_fs_node";; esac
+    _fs_ev="$(printf '%s' "$_fs_ev" | sed 's/::/ /g')"
+    [ -n "$_fs_ev" ] || return 0
     [ -n "$_fs_node" ] && [ -w "$_fs_node" ] || return 0
+    _fs_orig="$(rd "$_fs_node" | sed -n '1p')"
+    [ -n "$_fs_orig" ] || return 0
     snap_add "$_fs_node"
-    printf '%s\t%s\t%s\n' "$_fs_node" "$_fs_ev" "$(read1 "$_fs_node")" >> "$_fs_nodes"
+    printf '%s\t%s\t%s\n' "$_fs_node" "$_fs_ev" "$_fs_orig" >> "$_fs_nodes"
     shift 3
     [ "$_fs_group" = 1 ] || break
   done
@@ -576,7 +643,7 @@ finalist_stress(){
     stop_check; _fs_changed=0
     while IFS="	" read -r _fs_node _fs_ev _fs_orig; do
       wr "$_fs_node" "$_fs_ev"
-      [ "$(read1 "$_fs_node")" != "$_fs_ev" ] && _fs_changed=1
+      [ "$(rd "$_fs_node" | sed -n '1p')" != "$_fs_ev" ] && _fs_changed=1
     done < "$_fs_nodes"
     sleep 1; [ "$_fs_changed" = 1 ] && _fs_ov=$(( _fs_ov + 1 ))
     [ "$(chg_now)" = 1 ] && _fs_chg=$(( _fs_chg + 1 ))
@@ -611,6 +678,7 @@ finalist_stress(){
     fi
     return 1
   fi
+  _FS_UNVERIFIED=
   log "    -> CONFIRMED: held under load; keeping it as the top pick."
   return 0; }
 
@@ -674,7 +742,7 @@ conf_resume(){ _crc="$1"; _crl="$2"; _crr="$3"
   [ "$_crc" = verified ] || { printf '%s' "$_crc"; return; }
   case "$_crr" in
     slow) case "$_crl" in level|native-level) :;; *) _crc=needs-test;; esac;;
-    after-reset|after-rekick|stuck|unknown) _crc=needs-test;;
+    after-reset|after-rekick|stuck|unknown|na|'') _crc=needs-test;;
   esac
   printf '%s' "$_crc"; }
 
@@ -808,7 +876,7 @@ selftest(){ _sp=0; _sf=0
   _ck cr_rekick    "$(conf_resume verified drain after-rekick)" needs-test
   _ck cr_unknown   "$(conf_resume verified bypass unknown)"     needs-test
   _ck cr_ok        "$(conf_resume verified cut ok)"             verified
-  _ck cr_na        "$(conf_resume verified cut na)"             verified
+  _ck cr_na        "$(conf_resume verified cut na)"             needs-test
   _ck cr_keepslow  "$(conf_resume unconfirmed cut stuck)"       unconfirmed
   _ck up_hw_wins   "$(unit_pick uA 1 mA)"                       uA
   _ck up_hw_agrees "$(unit_pick uA 1 uA)"                       uA
@@ -2068,7 +2136,6 @@ test_switch(){
       if [ "$leak" = 0 ]; then
         wr "$p" "$offv"; sleep "$POLL"
         if [ "$BLINDV" = 1 ]; then hold_probe; k0="$(classify_held)"
-          [ "$k0" = NOT-HELD ] && k0=CUT
         else _kon=0; _kdr=0; for _ki in 1 2 3; do online_now && _kon=$((_kon+1)); _kc="$(med_cur)"; { [ "$(sgn "$_kc")" != "$CHGDIR" ] && [ "$(abs "$_kc")" -gt "$IDLE" ] 2>/dev/null; } && _kdr=$((_kdr+1)); sleep 1; done
           if [ "$_kon" -lt 2 ]; then k0=CUT-input; elif [ "$_kdr" -ge 2 ]; then k0=DRAIN; else k0=BYPASS; fi; fi
         STAB=daemon-held
@@ -2452,7 +2519,7 @@ if [ "$ACTIVE" = 1 ] && [ "${UNKNOWN:-0}" != 1 ]; then
         log "  pixel-group[$gn current paths -> 0] -> last=$CL [no effect]"
       fi
       while IFS="	" read -r f v; do [ -n "$f" ] && wr "$f" "$v"; done < "$BK/grp.tsv"
-      [ "$ghit" = 1 ] && resume_check "pixel-group" || sleep 1
+      [ "$ghit" = 1 ] && resume_check "pixel-group($gn paths)" || sleep 1
     fi
   fi
   cz=0
@@ -2526,7 +2593,7 @@ if [ "$ACTIVE" = 1 ] && [ "${MODE:-quick}" = complete ] && [ "${UNKNOWN:-0}" != 
             log "  [ACC group] $_gn nodes -> last=$CL [no effect]"
           fi
           while IFS="	" read -r _rf _rv; do [ -n "$_rf" ] && wr "$_rf" "$_rv"; done < "$BK/acc_grp.tsv"
-          [ "$_ghit" = 1 ] && resume_check "acc-group" || sleep 1
+          [ "$_ghit" = 1 ] && resume_check "acc-group($_gn nodes)" || sleep 1
           _ac=$((_ac+1))
         fi
         continue
@@ -2810,7 +2877,7 @@ if [ "$ACTIVE" = 1 ] && q_more && [ "$SKIPALL" = 0 ] && [ "$cn" -ge 2 ] 2>/dev/n
       log "  combo[$cn observed nodes together] -> last=$CL [no effect]"
     fi
     while IFS="	" read -r p von voff; do wr "$p" "$von"; done < "$COMBO"
-    if [ "$cheld" = 1 ]; then resume_check "firmware-combo"; else sleep 1; fi
+    if [ "$cheld" = 1 ]; then resume_check "firmware-combo($cn)"; else sleep 1; fi
   fi
 else
   if [ "$cn" -gt 0 ] 2>/dev/null; then log "  (combo skipped: $cn candidate(s), a single observed switch already worked: $GEN_SINGLE_HIT)"; else log "  (no combo candidates)"; fi
@@ -2934,7 +3001,7 @@ if [ "$ACTIVE" = 1 ] && [ "${EARLY_DONE:-0}" = 0 ] && q_more && [ "$SKIPALL" = 0
         log "  teach-combo[$lc] -> no hold (those nodes were effects, not causes)"
       fi
       while IFS='	' read -r p von voff; do wr "$p" "$von"; done < "$BK/teach_combo.tsv"
-      [ "$tcheld" = 1 ] && resume_check "teach-combo" || sleep 1
+      [ "$tcheld" = 1 ] && resume_check "teach-combo($lc)" || sleep 1
     fi
   fi
 else
@@ -3123,7 +3190,7 @@ emit_alts(){
     case "$_seen" in *"|$_ctrl|"*) continue;; esac
     _seen="$_seen$_ctrl|"
     _an=$((_an+1))
-    _res=ok; case "$RESUMES" in *"|$_lbl=after-reset"*) _res=after-reset;; *"|$_lbl=after-rekick"*) _res=after-rekick;; *"|$_lbl=SLOW"*) _res=slow;; *"|$_lbl=STUCK"*) _res=stuck;; *"|$_lbl=UNKNOWN"*) _res=unknown;; esac
+    _res=na; case "$RESUMES" in *"|$_lbl=STUCK"*) _res=stuck;; *"|$_lbl=UNKNOWN"*) _res=unknown;; *"|$_lbl=after-reset"*) _res=after-reset;; *"|$_lbl=after-rekick"*) _res=after-rekick;; *"|$_lbl=SLOW"*) _res=slow;; *"|$_lbl=OK"*) _res=ok;; esac
     _lat=no; case "|$STUCKS|" in *"|$_lbl|"*) _lat=yes;; esac; [ "$_stab" = leaky ] && _lat=yes
     case "$_cls" in
       native-accepts) _cf=accepts;;
@@ -3215,7 +3282,7 @@ fi
 }
 compute_reco
 _fsr=0
-while [ "$_fsr" -lt 2 ] && [ -n "$RECO_LBL" ] && [ "$RECO_LATCH" = 0 ]; do
+while [ -n "$RECO_LBL" ] && [ "$RECO_LATCH" = 0 ]; do
   case "$RECO_CLS" in native-level|cut|bypass|drain) ;; *) break;; esac
   _fs_sug="${SUGGEST%%" ("*}"
   if finalist_stress "$RECO_LBL" "$_fs_sug" "$RECO_CLS"; then break; fi
@@ -3416,6 +3483,7 @@ case "$RECO" in
   none) aconf=none;; *LATCHES*) aconf=latch-needs-rearm;; *"accepts values"*) aconf=unconfirmed;; *history*|*ACC-confirmed*) aconf=from-ACC-history;; *) aconf=verified;;
 esac
 [ "${LVL_BY_ACC:-0}" = 1 ] && aconf=from-ACC-history
+[ -n "${_FS_UNVERIFIED:-}" ] && [ "$RECO_LBL" = "$_FS_UNVERIFIED" ] && aconf=needs-test
 LONG_PICK=0
 [ -n "${RECO_LBL:-}" ] && case "|${LONGOK:-}|" in *"|$RECO_LBL|"*) LONG_PICK=1;; esac
 aconf="$(pump_conf "$aconf" "$acls" "${DRVS:-}" "$LONG_PICK")"
@@ -3424,12 +3492,12 @@ _advc="$(getprop ro.product.device 2>/dev/null)"; [ -n "$_advc" ] || _advc="$(ge
 _advs="$(getprop ro.board.platform 2>/dev/null)"; [ -n "$_advs" ] || _advs="$(getprop ro.hardware 2>/dev/null)"
 RESUME_OK=na
 [ -n "${RECO_LBL:-}" ] && case "$RESUMES" in
-  *"|$RECO_LBL=OK"*)           RESUME_OK=ok;;
   *"|$RECO_LBL=after-reset"*)  RESUME_OK=after-reset;;
   *"|$RECO_LBL=after-rekick"*) RESUME_OK=after-rekick;;
   *"|$RECO_LBL=SLOW"*)         RESUME_OK=slow;;
   *"|$RECO_LBL=STUCK"*)        RESUME_OK=stuck;;
   *"|$RECO_LBL=UNKNOWN"*)      RESUME_OK=unknown;;
+  *"|$RECO_LBL=OK"*)           RESUME_OK=ok;;
 esac
 aconf="$(conf_resume "$aconf" "$acls" "$RESUME_OK")"
 REARM_DONE=no; printf '%s' "${SUGGEST:-}" | grep -Eq "$REARM_RE" && REARM_DONE=yes

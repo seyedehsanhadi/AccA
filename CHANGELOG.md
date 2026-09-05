@@ -8,6 +8,7 @@ Pairs with ACC v2025.5.18-6.5.1-rc24. Install both.
 
 Added
 - Home-screen widget that works on Android 12 and later.
+- Bundled AMPS v7.3.1, byte-identical to the module's copy, replacing v7.3.0.
 - Schedules remember which configuration sections they were written with.
 - Bundled AMPS switch-finder v7.3.0, byte-identical to the module's copy.
 - CI runs the unit tests and lint before it builds anything, on a recorded lint baseline.
@@ -33,6 +34,13 @@ Fixed
 - Cloud backup uploaded the root scripts database; it is now excluded.
 - The app resolves its real files directory, so a clone or secondary user can start the app-managed ACC install.
 - AMPS recorded a probe-collapsed 0 as a current-limit node's original value, which let a restore replay 0 and leave the port at no input current.
+- A switch artifact was accepted when it was incomplete, carried duplicate keys or lacked its end sentinel, and an unknown device could still be granted verified confidence.
+- A native limit marked needs-test could be pinned without a rescan.
+- Relative and grouped node paths were checked inconsistently across screens, and paths were interpolated into double-quoted shell.
+- A successful config write hid a failed daemon restart, so the app could name a profile ACC was not holding.
+- The scanner matched its own shell when searching for the engine process, kept a stale result on a failed start, started its elapsed counter before the run, and could report recovery it had not checked.
+- Cancelling could force-kill the engine mid-restore; it now waits for the restore trap.
+- Newer Android APIs were called unguarded on a declared minSdk 16.
 
 ## 2.0.1-rc21 (221)
 

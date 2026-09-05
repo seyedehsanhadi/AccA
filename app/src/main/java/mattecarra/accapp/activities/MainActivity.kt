@@ -200,7 +200,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                         1   // fall through to the install dialog on any failure
                     }
                     djsNavInFlight = false
-                    if (isFinishing || isDestroyed) return@launch
+                    if (isFinishing || isActivityDestroyed) return@launch
                     when (state) {
                         // re-select the tab; the re-entry consumes loadSchedulesOnSelect + loads it
                         0 -> { loadSchedulesOnSelect = true; binding.mainBottomNav.selectedItemId = R.id.botNav_schedules }
@@ -353,7 +353,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             try {
                 // readDefaultConfig() does blocking root work -> off the main thread.
                 val defaultConfig = withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() }
-                if (isFinishing || isDestroyed) return@launch
+                if (isFinishing || isActivityDestroyed) return@launch
                 Intent(this@MainActivity, AccConfigEditorActivity::class.java).also { intent ->
                     intent.putExtra(Constants.TITLE_KEY, this@MainActivity.getString(R.string.profile_creator))
                     intent.putExtra(Constants.ACC_CONFIG_KEY, defaultConfig)
@@ -519,7 +519,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
 
                     // Guard against showing a dialog on a finishing/destroyed activity after the
                     // network suspend -> android.view.WindowManager$BadTokenException.
-                    if (isFinishing || isDestroyed) return@launch
+                    if (isFinishing || isActivityDestroyed) return@launch
 
                     MaterialDialog(this@MainActivity).show {
                         title(R.string.install_update_dialog)
@@ -537,7 +537,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                                     dialog.cancel()
 
                                     // The upgrade suspends; the activity may be gone by now.
-                                    if (isFinishing || isDestroyed) return@launch
+                                    if (isFinishing || isActivityDestroyed) return@launch
 
                                     when (res?.code) {
                                         6 ->
@@ -608,7 +608,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                 } catch (e: Exception) { "" }
                 if (latest.isBlank() || current.isBlank()) return@launch
                 if (!VersionCompare.isNewer(latest, current)) return@launch
-                if (isFinishing || isDestroyed) return@launch
+                if (isFinishing || isActivityDestroyed) return@launch
                 // Pre-releases default ON, so this can auto-offer a beta/RC. Label it (inferred from
                 // the tag) so a charge-critical app never nudges a user onto a less-tested build
                 // silently. The manual update list already labels "(pre-release)"; match it here.
@@ -919,7 +919,7 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                             // readDefaultConfig() blocks on root -> resolve it before building the
                             // intent and guard the activity before navigating.
                             val defaultConfig = withContext(Dispatchers.IO) { Acc.instance.readDefaultConfig() }
-                            if (isFinishing || isDestroyed) return@launch
+                            if (isFinishing || isActivityDestroyed) return@launch
                             Intent(
                                 this@MainActivity,
                                 AccConfigEditorActivity::class.java

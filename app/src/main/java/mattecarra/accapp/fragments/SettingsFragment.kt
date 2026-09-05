@@ -384,6 +384,6 @@ class SettingsFragment : PreferenceFragmentCompat(), CoroutineScope {
         val i = pref.findIndexOfValue(pref.value)
         val label = if (i >= 0) pref.entries[i] else pref.value ?: ""
         pref.summary = getString(R.string.ui_refresh_pref_summary_selected, label) +
-            System.lineSeparator() + getString(R.string.ui_refresh_pref_summary)
+            "\n" + getString(R.string.ui_refresh_pref_summary)
     }
 }

@@ -10,6 +10,8 @@ import kotlin.coroutines.CoroutineContext
 
 abstract class ScopedAppActivity: AppCompatActivity(), CoroutineScope {
     protected lateinit var job: Job
+    protected var isActivityDestroyed = false
+        private set
 
     // Swallow any exception escaping a launch{} so a single coroutine failure
     // never crashes the whole process. Just log it.
@@ -26,6 +28,7 @@ abstract class ScopedAppActivity: AppCompatActivity(), CoroutineScope {
     }
 
     override fun onDestroy() {
+        isActivityDestroyed = true
         super.onDestroy()
         job.cancel()
     }

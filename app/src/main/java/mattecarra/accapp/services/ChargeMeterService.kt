@@ -174,7 +174,7 @@ class ChargeMeterService : Service() {
     private val handler = Handler(Looper.getMainLooper())
 
     // Ground truth for "is the screen on", independent of whether a SCREEN_OFF broadcast arrived.
-    private fun screenReallyOn(): Boolean = try { pm?.isInteractive ?: screenOn } catch (e: Exception) { screenOn }
+    private fun screenReallyOn(): Boolean = try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) pm?.isInteractive ?: screenOn else pm?.isScreenOn ?: screenOn } catch (e: Exception) { screenOn }
     private var promoted = false
     private var receiver: BroadcastReceiver? = null
 
@@ -396,7 +396,7 @@ class ChargeMeterService : Service() {
     // never the static battery glyph even for a moment. Synchronous, no root: BatteryManager
     // current (mA) if readable, else battery %. Sign by plug state.
     private fun quickIcon(): Pair<String, String>? {
-        val curUa = try { bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) } catch (e: Exception) { Long.MIN_VALUE }
+        val curUa = try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) else Long.MIN_VALUE } catch (e: Exception) { Long.MIN_VALUE }
         val signedMa = if (curUa == Long.MIN_VALUE || curUa == 0L) null
                        else signedFromState(curUa / stateCurrentDivisor()).toLong()
         val maAbs = signedMa?.let { kotlin.math.abs(it).toInt() }
@@ -448,7 +448,7 @@ class ChargeMeterService : Service() {
         if (stopped) return
         if (!prefs.chargeMeterEnabled) { stopMeter(); return }
         scope.launch {
-            val curUa = try { bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) } catch (e: Exception) { Long.MIN_VALUE }
+            val curUa = try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) else Long.MIN_VALUE } catch (e: Exception) { Long.MIN_VALUE }
             // BATTERY_PROPERTY_CURRENT_NOW is documented as microamps, but OEMs that report
             // milliamps exist and read 1000x low here. ACC has already learned this device's
             // node scale and sign in --state, so use those instead of assuming.
@@ -682,7 +682,7 @@ class ChargeMeterService : Service() {
             wantNumber -> numberIcon("·", "", null)   // placeholder dot, never a battery glyph
             else -> null
         }
-        if (icon != null) b.setSmallIcon(icon) else b.setSmallIcon(R.drawable.ic_battery_charging_full)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && icon != null) b.setSmallIcon(icon) else b.setSmallIcon(R.drawable.ic_battery_charging_full)
 
         // Shade content. "mini" = the smallest row Android allows: title only, no detail
         // line, no expanded dashboard. A status-bar icon CANNOT exist without its shade row

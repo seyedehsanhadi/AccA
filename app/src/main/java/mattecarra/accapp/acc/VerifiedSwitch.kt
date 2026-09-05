@@ -2,6 +2,8 @@ package mattecarra.accapp.acc
 
 import androidx.annotation.WorkerThread
 import com.topjohnwu.superuser.Shell
+import kotlinx.coroutines.delay
+import mattecarra.accapp.acc._interface.AccInterface
 
 /**
  * Reads and SAFETY-GATES the verified-switch artifact written by the acc-compat tester
@@ -64,42 +66,39 @@ sealed class VerifiedSwitch {
             val res = Shell.su("cat $ARTIFACT 2>/dev/null").exec()
             if (!res.isSuccess || res.out.isEmpty()) return None
 
-            val kv = HashMap<String, String>()
-            for (line in res.out) {
-                val i = line.indexOf('=')
-                if (i > 0) kv[line.substring(0, i).trim()] = line.substring(i + 1).trim()
+            val result = parseArtifact(res.out, getprop("ro.product.device"), getprop("ro.board.platform"))
+            val sw = when (result) {
+                is Verified -> result.switch
+                is NeedsTest -> result.switch
+                else -> return result
             }
+            return if (pathsExist(sw)) result else None
+        }
 
-            // Precondition stop (battery/thermal): written atomically with ok=0 and a reason. Check it
-            // BEFORE the ok=1 sentinel so the user sees WHY it stopped instead of a generic "no switch".
-            if (kv["result"] == "precondition") return Precondition(kv["reason"].orEmpty())
-
-            // Sentinel + schema: a complete write ends with ok=1; reject a truncated/partial file.
-            if (kv["ok"] != "1" || kv["schema"] != "1") return None
-            if (kv["result"] == "no-switch") return NoSwitch
-
-            val sw = kv["charging_switch"]?.takeIf { it.isNotBlank() } ?: return None
+        internal fun parseArtifact(lines: List<String>, liveDevice: String, liveSoc: String): VerifiedSwitch {
+            val kv = HashMap<String, String>()
+            for (line in lines) {
+                val i = line.indexOf('=')
+                if (i <= 0) return None
+                val key = line.substring(0, i).trim()
+                if (kv.put(key, line.substring(i + 1).trim()) != null) return None
+            }
+            if (kv["schema"] != "1") return None
+            val precondition = kv["result"] == "precondition"
+            if (lines.lastOrNull()?.trim() != if (precondition) "ok=0" else "ok=1") return None
             val device = kv["device"].orEmpty()
             val soc = kv["soc"].orEmpty()
-
-            // Fingerprint gate: the artifact must be for THIS exact device (device + soc).
-            // If either side is unknown we don't hard-fail on it, but a positive mismatch is fatal.
-            val liveDevice = getprop("ro.product.device")
-            val liveSoc = getprop("ro.board.platform")
             if (device.isNotEmpty() && liveDevice.isNotEmpty() && device != liveDevice) return DeviceMismatch
             if (soc.isNotEmpty() && liveSoc.isNotEmpty() && soc != liveSoc) return DeviceMismatch
-
-            // Path-exists gate: EVERY node of the switch must really exist on THIS device -- a
-            // grouped multi-path spec with one vanished path must not be offered for a direct pin.
-            val paths = sw.trim().split(' ').filter { it.startsWith("/") }
-            if (paths.isNotEmpty()) {
-                val check = paths.joinToString(" && ") { "[ -e \"$it\" ]" }
-                if (!Shell.su(check).exec().isSuccess) return None
-            }
+            if (precondition) return Precondition(kv["reason"].orEmpty())
+            if (kv["result"] == "no-switch") return NoSwitch
+            val sw = kv["charging_switch"]?.takeIf { switchPaths(it) != null } ?: return None
 
             val klass = kv["class"].orEmpty()
-            val conf = kv["conf"].orEmpty()
-            val alts = parseAlts(kv)
+            val conf = kv["conf"].orEmpty().let {
+                if (it == "verified" && (device.isBlank() || liveDevice.isBlank())) "needs-test" else it
+            }
+            val alts = parseAlts(kv).map { if ((device.isBlank() || liveDevice.isBlank()) && it.conf == "verified") it.copy(conf = "needs-test") else it }
             val accSw = kv["acc_current_switch"]?.takeIf { it.isNotBlank() }
             val accCls = kv["acc_current_class"]?.takeIf { it.isNotBlank() }
             val recStab = kv["rec_stability"].orEmpty()
@@ -115,7 +114,8 @@ sealed class VerifiedSwitch {
             val out = ArrayList<Alt>()
             var i = 1
             while (i <= 256) {
-                val sw = kv["alt${i}_switch"]?.takeIf { it.isNotBlank() } ?: break
+                val sw = kv["alt${i}_switch"] ?: break
+                if (switchPaths(sw) == null) { i++; continue }
                 out.add(
                     Alt(
                         sw, kv["alt${i}_class"].orEmpty(), kv["alt${i}_conf"].orEmpty(),
@@ -126,6 +126,35 @@ sealed class VerifiedSwitch {
                 i++
             }
             return out
+        }
+
+        /** ACC specs are path/on/off triples; relative nodes live under power_supply. */
+        internal fun switchPaths(spec: String): List<String>? {
+            val fields = spec.trim().split(Regex("\\s+"))
+            if (fields.size < 3 || fields.size % 3 != 0) return null
+            return fields.chunked(3).map { triple ->
+                val node = triple[0]
+                if (node.split('/').any { it == ".." } || node == "/") return null
+                if (node.startsWith('/')) node else "/sys/class/power_supply/$node"
+            }
+        }
+
+        @WorkerThread
+        fun pathsExist(spec: String): Boolean {
+            val paths = switchPaths(spec) ?: return false
+            val check = paths.joinToString(" && ") { "[ -e '" + it.replace("'", "'\\''") + "' ]" }
+            return try { Shell.su(check).exec().isSuccess } catch (_: Exception) { false }
+        }
+
+        /** A saved pin is not success until the selected handler confirms a running daemon. */
+        suspend fun pinAndRestart(acc: AccInterface, spec: String): Boolean {
+            if (!acc.updateAccChargingSwitch(spec, false)) return false
+            repeat(2) {
+                val restarted = acc.accRestartDaemon()
+                delay(2500)
+                if (restarted && acc.isAccdRunning()) return true
+            }
+            return false
         }
 
         @WorkerThread
@@ -144,15 +173,15 @@ sealed class VerifiedSwitch {
          */
         fun applyMode(klass: String, conf: String): ApplyMode = when {
             conf == "verified"          -> ApplyMode.PIN_DIRECT
-            klass.equals("level", true) -> if (conf == "needs-test") ApplyMode.PIN_DIRECT else ApplyMode.LEVEL_RERUN
+            klass.equals("level", true) -> ApplyMode.LEVEL_RERUN
             else                        -> ApplyMode.LIVE_TEST
         }
     }
 
     /**
-     * PIN_DIRECT  - proof already in hand (conf=verified, or an engage-proven level cap that is only
-     *               slow to re-arm): lock straight away, no acc -t, no "connect charger".
-     * LEVEL_RERUN - a %-cap whose enforcement was NOT proven (unconfirmed / pump). acc -t can only
+     * PIN_DIRECT  - proof already in hand (conf=verified):
+     *               lock straight away, no acc -t, no "connect charger".
+     * LEVEL_RERUN - a %-cap without verified confidence (needs-test / unconfirmed / pump). acc -t can only
      *               ever FALSE-fail it from below the cap, so ask for a re-run at a lower % instead.
      * LIVE_TEST   - a cut / bypass / drain switch acc -t CAN judge (status flips): run it.
      */

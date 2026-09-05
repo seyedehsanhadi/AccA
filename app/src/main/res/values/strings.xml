@@ -706,7 +706,7 @@
     <string name="find_switch_status_done">Done</string>
     <string name="find_switch_status_no_switch">No reliable switch found</string>
     <string name="find_switch_status_cancelling">Cancelling — restoring charging…</string>
-    <string name="find_switch_cancelled_restored">Cancelled. Charging restored.</string>
+    <string name="find_switch_cancelled_restored">Scan stopped. ACC is running.</string>
     <string name="find_switch_status_error">Could not run AMPS</string>
     <string name="close">Close</string>
 
