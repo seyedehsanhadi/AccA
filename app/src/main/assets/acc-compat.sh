@@ -541,7 +541,7 @@ finalist_stress(){
   fi
   if [ "$_fs_cls" = native-level ]; then
     log ""
-    log "==== FINALIST STRESS-TEST (re-hammer the winning pick to catch an intermittent re-arm) ===="
+    log "==== FINALIST STRESS-TEST (native level limit: engage already measured) ===="
     if [ "${LVL_BY_ACC:-0}" = 1 ]; then
       log "  $_fs_lbl: native %-limit taken from ACC's own working configuration -- this run never saw it engage (the battery did not cross the limit while scanning), so there is nothing here to re-hammer. Not independently confirmed."
     else
