@@ -1,6 +1,6 @@
 #!/system/bin/sh
 
-# Setup
+# AMPS - Adaptive Multi-device Probe & Selector.
 V=7.3.0
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
