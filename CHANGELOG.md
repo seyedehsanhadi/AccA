@@ -41,6 +41,7 @@ Fixed
 - The scanner matched its own shell when searching for the engine process, kept a stale result on a failed start, started its elapsed counter before the run, and could report recovery it had not checked.
 - Cancelling could force-kill the engine mid-restore; it now waits for the restore trap.
 - Newer Android APIs were called unguarded on a declared minSdk 16.
+- The widget's root reads had no ceiling, so a render that landed while a switch scan held the root shell could hold the broadcast open past Android's limit and raise "AccA isn't responding". Reproduced on a Pixel 6a by cancelling a quick scan.
 
 ## 2.0.1-rc21 (221)
 

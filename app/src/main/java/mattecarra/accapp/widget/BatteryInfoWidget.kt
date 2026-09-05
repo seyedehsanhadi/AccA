@@ -20,6 +20,9 @@ import androidx.core.content.ContextCompat.startActivity
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
 import mattecarra.accapp.Preferences
 import mattecarra.accapp.R
 import mattecarra.accapp.acc.Acc
@@ -61,6 +64,9 @@ const val WIDGET_SCURRENT = "_scurrent"
 const val WIDGET_STEMP = "_stemp"
 const val WIDGET_SVOLT = "_svolt"
 const val WIDGET_SPROFILE = "_sprofile"
+
+/** Ceiling for the root reads behind one widget render, inside the broadcast receiver's window. */
+const val WIDGET_READ_BUDGET_MS = 4000L
 
 class BatteryInfoWidget : AppWidgetProvider()
 {
@@ -203,8 +209,19 @@ class BatteryInfoWidget : AppWidgetProvider()
 
             try {
 
-            val dashboardValues =
+            // A broadcast receiver is on a clock even after goAsync(), and these are root calls.
+            // While a switch scan runs, ACC is stopped and the root shell is busy, so the three
+            // reads below can each sit at the 10s shell timeout -- long enough for Android to
+            // raise "AccA isn't responding" against WIDGET_ALL_UPDATE. Measured on a Pixel 6a by
+            // cancelling a quick scan. Bound the whole read and keep the stale render instead.
+            // The reads block, so they run in their own job and this one waits on it with a
+            // deadline. Awaiting is a suspension point, which a bare withTimeoutOrNull around a
+            // blocking call is not: that would only return once the call had already finished.
+            val reading = GlobalScope.async(Dispatchers.IO) {
                 DashboardValues(Acc.instance.getBatteryInfo(), Acc.instance.isAccdRunning())
+            }
+            val dashboardValues = withTimeoutOrNull(WIDGET_READ_BUDGET_MS) { reading.await() }
+                ?: return@launch
             // `acc -i` alone cannot say whether the raw current sign is trustworthy, nor whether
             // ACC is holding the input open. The daemon's --state snapshot carries polarity,
             // measuredClass and the charger side, and the dashboard already reads it -- the widget
@@ -212,7 +229,10 @@ class BatteryInfoWidget : AppWidgetProvider()
             // The meter tick that triggered this render has usually just read --state. Reuse it
             // rather than spawning a second root shell for the same answer a moment later; falls
             // back to reading when it is stale or the meter is not running.
-            val accState = ChargeMeterService.recentState() ?: Acc.instance.getState()
+            val accState = ChargeMeterService.recentState() ?: run {
+                val pending = GlobalScope.async(Dispatchers.IO) { Acc.instance.getState() }
+                withTimeoutOrNull(WIDGET_READ_BUDGET_MS) { pending.await() }
+            }
             with(dashboardValues) {
 
                 val swidgetId = widgetId.toString()
