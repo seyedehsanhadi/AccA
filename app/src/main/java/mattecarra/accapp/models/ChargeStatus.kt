@@ -40,6 +40,11 @@ const val IDLE_BAND_MA = 50f
  * `signedMa` is the last resort for a daemon that reports neither a class nor a usable status.
  */
 fun isChargingNow(measuredClass: String?, status: String?, signedMa: Float? = null): Boolean = when {
+    // A sustained negative current is a measurement; the class and the kernel status are both
+    // inferences and both have been observed wrong together. A laurus charger that collapsed to
+    // 5 mA, and a native level latch, each left "charging"/"Charging" standing while the pack
+    // drained. Where a real reading contradicts them, the reading wins.
+    signedMa != null && signedMa < -IDLE_BAND_MA -> false
     measuredClass.equals("drain", true) || measuredClass.equals("discharging", true) ||
     measuredClass.equals("bypass", true) || measuredClass.equals("idle", true) ||
     measuredClass.equals("standby", true) || measuredClass.equals("cut", true) ||

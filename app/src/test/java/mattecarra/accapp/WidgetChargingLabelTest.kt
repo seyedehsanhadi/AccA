@@ -80,4 +80,17 @@ class WidgetChargingLabelTest {
         assertEquals("Idle", chargeStatusWord(true, "cut", "Charging", -3f))
         assertEquals("Idle", chargeStatusWord(true, "cut-input", "Charging", null))
     }
+
+    // A collapsed charger (laurus, HVDCP_3 negotiated, ~5 mA delivered) and a latched native
+    // limit both leave class and kernel status claiming Charging while the pack drains.
+    @Test fun aMeasuredDrainOverridesBothInferences() {
+        assertFalse(isChargingNow("charging", "Charging", -311f))
+        assertEquals("Draining", chargeStatusWord(true, "charging", "Charging", -311f))
+    }
+
+    @Test fun realChargingIsUnaffectedByTheGuard() {
+        assertTrue(isChargingNow("charging", "Charging", 1333f))
+        assertTrue(isChargingNow("charging", "Charging", -4f))
+        assertEquals("Charging", chargeStatusWord(true, "charging", "Charging", 1944f))
+    }
 }

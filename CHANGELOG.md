@@ -2,6 +2,38 @@
 
 Notable changes to this fork. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version numbers match the app's own versionName.
 
+## 2.0.1-rc23 (223)
+
+Pairs with ACC v2025.5.18-6.5.1-rc24. Install both.
+
+Added
+- Home-screen widget that works on Android 12 and later.
+- Schedules remember which configuration sections they were written with.
+- Bundled AMPS switch-finder v7.3.0, byte-identical to the module's copy.
+- CI runs the unit tests and lint before it builds anything, on a recorded lint baseline.
+
+Fixed
+- Boot receiver no longer reachable from other applications.
+- Widget crashed on Android 12 and later (missing FLAG_IMMUTABLE).
+- Widget refreshes from the charge meter instead of an exact alarm.
+- Widget applied the current sign twice, so an inverted-polarity phone flipped between plus and minus.
+- Widget printed charger watts on a row labelled "To battery".
+- Dashboard and widget disagreed about whether the phone was charging; one rule now answers it everywhere.
+- A held input read as Idle instead of a cut.
+- Idle now means the pack is sitting still, not merely plugged and not charging.
+- A measured drain overrides both the daemon's class and the kernel status. A collapsed charger and a latched native limit each printed Charging over a negative current.
+- Charger row hid itself at a 0 W hold; it now shows the plug state and input voltage.
+- Flipping a schedule's checkbox rewrote it with voltage, current and temperature control switched back on.
+- Schedules ignored the DJS cue and rebuilt the command with every gate enabled.
+- A daemon error payload was parsed as a real reading, showing -1%, 0 mA, 0 V instead of falling back to the legacy path.
+- A truncated state document was accepted the same way.
+- Celsius turned into Fahrenheit on stock installs; the unit preferences are three-valued, not two.
+- A failed apply was still recorded as the current profile, so the screen could name profile B while ACC held profile A.
+- Voltage and current-max are gated independently.
+- Cloud backup uploaded the root scripts database; it is now excluded.
+- The app resolves its real files directory, so a clone or secondary user can start the app-managed ACC install.
+- AMPS recorded a probe-collapsed 0 as a current-limit node's original value, which let a restore replay 0 and leave the port at no input current.
+
 ## 2.0.1-rc21 (221)
 
 Pairs with ACC v2025.5.18-6.5.1-rc22. Install both.
