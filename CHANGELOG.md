@@ -10,9 +10,18 @@ Added
 - Home-screen widget that works on Android 12 and later.
 - Bundled AMPS switch-finder v7.3.1, byte-identical to the module's copy.
 - Schedules remember which configuration sections they were written with.
+- Profiles carry their own section gates, so a profile applies what it was saved with.
+- The battery level appears on the dashboard as a number.
 - CI runs the unit tests and lint before it builds anything, on a recorded lint baseline.
 
 Fixed
+- "Allow custom shell scripts" hid the add button and the edit menu but never gated RUNNING, and import had no check either, so an imported script body ran as root on a swipe with the preference off.
+- Settings wrote `ui_refresh` through a bare `acc`, which is not on the app shell's PATH; it exited 127 and the setting never landed.
+- The cool-down sentinel 101 was rendered as "Start at: 101%" and the editor's picker clamped it to 100, so opening the editor and saving armed cool-down at 100%.
+- The cool-down percentage followed the load-time value instead of the picker, and was reset when the charge/pause ratio was cleared.
+- The status-bar meter mixed the charger and battery sides, producing readings like "Charging 1.0 W 0.00 A"; both numbers now come from the same side, chosen by measured flow rather than by the cable.
+- Switching a section off no longer blocks clearing what it already set: with `cueVoltage` / `cueCurrMax` off the editor stops offering a control that would silently do nothing, and a skipped section is logged.
+- 19 locales labelled the resume-temperature field "Pause seconds" and 14 printed a raw `%3$ds`; the stale translations fall back to English.
 - Boot receiver no longer reachable from other applications.
 - Widget crashed on Android 12 and later (missing FLAG_IMMUTABLE).
 - Widget refreshes from the charge meter instead of an exact alarm.
