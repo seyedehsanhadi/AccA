@@ -4,6 +4,8 @@
 V=7.3.0
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
+_AMPSID="$( { sha256sum "$0" 2>/dev/null || sha1sum "$0" 2>/dev/null || md5sum "$0" 2>/dev/null; } | cut -c1-8 )"
+case "$_AMPSID" in ''|*[!0-9a-f]*) _AMPSID=;; esac
 SUPER=1; UNKNOWN=0
 case "$*" in *--unknown*) UNKNOWN=1; SUPER=1;; esac
 MODE=quick
@@ -966,7 +968,7 @@ selftest(){ _sp=0; _sf=0
 
 case "${1:-}" in
   --selftest) selftest; exit $?;;
-  --version)  echo "AMPS v$V (Adaptive Multi-device Probe & Selector)"; exit 0;;
+  --version)  echo "AMPS v$V${_AMPSID:+ [$_AMPSID]} (Adaptive Multi-device Probe & Selector)"; exit 0;;
   --probe)    PROBE=1;;
 esac
 med3(){ a="$1"; b="$2"; c="$3"
@@ -1307,7 +1309,7 @@ log "collected in report: phone model, soc, android+kernel build, charge-node na
 log "SAFE MODE: every write is snapshotted first and replayed at the end. WRITTEN: the well-known reversible charge switches (ACC's standard enable/suspend set), native %-limits, and unknown vendor nodes that pass the safety deny-list -- that last group is how a switch is found on a phone nobody has scanned before. NEVER WRITTEN: anything matching the deny-list -- bypass/regulator/OTG/PD/fuel-gauge, display, modem, storage, security. Battery protection is never disabled. Anything that took the phone down once is blacklisted and never written again."
 _scanmode="Quick"; [ "${MODE:-quick}" = complete ] && _scanmode="Deep"; [ "${WANT_UNPLUG:-0}" = 1 ] && _scanmode="Highest-accuracy (Deep + unplug)"
 _scantime="~2-5 min"; [ "$_scanmode" = Deep ] && _scantime="~5-15 min"; case "$_scanmode" in Highest*) _scantime="~10-20 min + unplug prompts";; esac
-log "SCAN: $_scanmode   |   AMPS v$V   |   $(date '+%Y-%m-%d %H:%M' 2>/dev/null)   |   est. $_scantime"
+log "SCAN: $_scanmode   |   AMPS v$V${_AMPSID:+ [$_AMPSID]}   |   $(date '+%Y-%m-%d %H:%M' 2>/dev/null)   |   est. $_scantime"
 log "TIME: keep the charger plugged in + the screen on; everything restores automatically at the end. (Deep skips redundant re-grades and re-onlines a dropped charger.)"
 log ""
 log "==== LAYER 0 - root + battery interface ===="
@@ -3566,7 +3568,7 @@ else
   log "|  -> input ~${_iin}mA (up to ${_imax}mA) / battery ~${_ib}mA -- source+IC are delivering; compare against the stock-ROM number for the fast-charge target."
 fi
 log "+===================================================="
-log "|  VERDICT  (AMPS v$V)"
+log "|  VERDICT  (AMPS v$V${_AMPSID:+ [$_AMPSID]})"
 log "|  Device:       $(getprop ro.product.model 2>/dev/null) [$_advc / $_advs]"
 log "|  Best switch:  ${SUGGEST:-none}"
 log "|  Type: $acls    Confidence: $aconf"
