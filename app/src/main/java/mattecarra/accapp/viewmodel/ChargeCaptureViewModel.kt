@@ -163,6 +163,13 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
             adapter(rt).let { it.contains("PD") || it.contains("Quick") }
         val w = inW?.let { String.format("%.0f", it) } ?: "?"
         val base = when {
+            // A negotiated 9V, or a PD flag, says the ADAPTER agreed to a high-voltage contract.
+            // It does not say power is flowing: a collapsed supply keeps the voltage and delivers
+            // nothing, which is exactly the FP5 case. Claiming "FAST charging is WORKING - ~?W"
+            // off a voltage reading with no measured wattage is the app answering for the charger.
+            fastActive && inW == null ->
+                "a high-voltage contract is negotiated (${vbusV?.let { String.format("%.1f", it) } ?: "?"}V${if (pd) ", PD" else ""}), " +
+                "but the input power could not be measured, so whether it is actually charging fast is unproven."
             fastActive -> "FAST charging is WORKING — ~${w}W (${vbusV?.let { String.format("%.1f", it) }}V${if (pd) ", PD" else ""})."
             fastCapable -> "fast-capable adapter but only ~${vbusV?.let { String.format("%.1f", it) }}V negotiated (~${w}W) — likely a cable/port/handshake problem; try the OEM cable and another port."
             else -> "standard charging ~${w}W (adapter ${adapter(rt)}, 5V) — this is NOT a fast charger."

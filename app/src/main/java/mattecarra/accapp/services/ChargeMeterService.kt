@@ -60,7 +60,7 @@ internal object MeterSource
     /** Power in TENTHS of a watt from millivolts x milliamps. Null when either side is
      *  missing or the current is below [minMa], which keeps noise out of the reading. */
     fun wattsX10(mV: Int?, mA: Int?, minMa: Int): Int? =
-        if (mV != null && mA != null && mV > 0 && mA > minMa)
+        if (mV != null && mA != null && mV in 1000..50000 && mA in 0..100000 && mA > minMa)
             (mV.toLong() * mA / 100000L).toInt()
         else null
 
@@ -195,6 +195,7 @@ class ChargeMeterService : Service() {
     private var curRingN = 0
     private var curRingI = 0
     private fun smoothedAbsMa(sample: Int?): Int? {
+        if (sample == null) { curRingN = 0; curRingI = 0; return null }
         if (sample != null) {
             curRing[curRingI] = kotlin.math.abs(sample); curRingI = (curRingI + 1) % curRing.size
             if (curRingN < curRing.size) curRingN++
@@ -375,16 +376,6 @@ class ChargeMeterService : Service() {
     // ACC publishes what it learned about this device's current node in `acca --state`:
     // "currentUnits" (uA|mA) and "polarity" (normal|inverted). Default to the common
     // case (microamps, normal) until a snapshot has been read.
-    private fun stateCurrentDivisor(): Long =
-        if (lastState?.currentUnits.equals("mA", true)) 1L else 1000L
-
-    /** Apply the daemon's polarity to a magnitude read from BatteryManager. Delegates to the
-     *  one rule in AccState so "unstable" (dual-path PMIC) behaves the same everywhere: this
-     *  used to flip only on "inverted" and got the direction wrong on those devices. */
-    private fun signedFromState(rawMa: Long): Int =
-        mattecarra.accapp.models.AccState.normaliseMilliAmps(rawMa.toFloat(), lastState?.polarity,
-                                    lastState?.measuredClass, lastState?.status).toInt()
-
     private fun batteryLevelPct(): Int? {
         val bs = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
         val lvl = bs.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -396,9 +387,7 @@ class ChargeMeterService : Service() {
     // never the static battery glyph even for a moment. Synchronous, no root: BatteryManager
     // current (mA) if readable, else battery %. Sign by plug state.
     private fun quickIcon(): Pair<String, String>? {
-        val curUa = try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) else Long.MIN_VALUE } catch (e: Exception) { Long.MIN_VALUE }
-        val signedMa = if (curUa == Long.MIN_VALUE || curUa == 0L) null
-                       else signedFromState(curUa / stateCurrentDivisor()).toLong()
+        val signedMa = lastState?.signedCurrentMilliAmps()?.takeIf { it.isFinite() }?.toLong()
         val maAbs = signedMa?.let { kotlin.math.abs(it).toInt() }
         val sign = if (signedMa != null && signedMa != 0L) (if (signedMa > 0L) "+" else "-")
                    else if (plugged) "+" else "-"
@@ -416,7 +405,7 @@ class ChargeMeterService : Service() {
     private fun batteryTempDeciC(): Int? {
         val bs = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null
         val t = bs.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
-        return if (t == Int.MIN_VALUE) null else t
+        return t.takeIf { it in -1000..2000 }
     }
 
     // Same C->F formula as BatteryInfo.getTemperature, so the meter and the dashboard can never
@@ -448,21 +437,12 @@ class ChargeMeterService : Service() {
         if (stopped) return
         if (!prefs.chargeMeterEnabled) { stopMeter(); return }
         scope.launch {
-            val curUa = try { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) else Long.MIN_VALUE } catch (e: Exception) { Long.MIN_VALUE }
-            // BATTERY_PROPERTY_CURRENT_NOW is documented as microamps, but OEMs that report
-            // milliamps exist and read 1000x low here. ACC has already learned this device's
-            // node scale and sign in --state, so use those instead of assuming.
-            val curMa: Int? = if (curUa == Long.MIN_VALUE) null
-                              else signedFromState(curUa / stateCurrentDivisor())
-            // Median of recent samples, not one raw reading -> smooth + accurate, spikes removed.
-            val maAbs = smoothedAbsMa(curMa)
-
-            // Rich watts + class from ACC --state (read-only, root). Only re-read every ROOT_EVERY
-            // ticks; reuse the cached value otherwise so we don't spawn a root shell every tick.
             if (refreshState) {
-                val fresh = try { withContext(Dispatchers.IO) { Acc.instance.getState() } } catch (e: Exception) { null }
-                if (fresh != null) { lastState = fresh; publishState(fresh) }
+                lastState = try { withContext(Dispatchers.IO) { Acc.instance.getState() } } catch (e: Exception) { null }
+                lastState?.let { publishState(it) }
             }
+            val curMa = lastState?.signedCurrentMilliAmps()?.takeIf { it.isFinite() }?.toInt()
+            val maAbs = smoothedAbsMa(curMa)
             val st = lastState
             val cls = st?.chargeClass
             val vin = st?.inputVoltageMv
@@ -575,6 +555,7 @@ class ChargeMeterService : Service() {
                 "Idle" -> getString(R.string.status_idle)
                 "Draining" -> getString(R.string.status_draining)
                 "Bypass" -> getString(R.string.status_bypass)
+                "Unknown" -> getString(R.string.status_unknown)
                 else -> word
             }
             val title = listOf(classWord, numbers).filter { it.isNotBlank() }.joinToString("  ·  ")

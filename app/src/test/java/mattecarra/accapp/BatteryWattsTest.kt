@@ -21,6 +21,6 @@ class BatteryWattsTest {
     @Test fun aMillivoltScaleReadingIsFoldedUp() =
         assertEquals(AccState.batteryWatts(1000f, 3800000L), AccState.batteryWatts(1000f, 3800L), 0.01f)
 
-    @Test fun nonsenseVoltageYieldsZeroRatherThanANonsenseWattage() =
-        assertEquals(0f, AccState.batteryWatts(2000f, 4L), 0.001f)
+    @Test fun nonsenseVoltageIsUnavailable() =
+        org.junit.Assert.assertTrue(AccState.batteryWatts(2000f, 4L).isNaN())
 }

@@ -1,7 +1,7 @@
 #!/system/bin/sh
 
 # AMPS - Adaptive Multi-device Probe & Selector.
-V=7.3.1
+V=7.3.2
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
 _AMPSID="$( { sha256sum "$0" 2>/dev/null || sha1sum "$0" 2>/dev/null || md5sum "$0" 2>/dev/null; } | cut -c1-8 )"
@@ -411,7 +411,7 @@ sgn(){ case "$1" in -*) echo n;; *) echo p;; esac; }
 is_charging(){ local c m; c="$1"; case "$c" in ''|*[!0-9-]*) echo 1; return;; esac
   m="${c#-}"; [ "$m" -gt "$THR" ] 2>/dev/null || { echo 0; return; }
   [ "$(sgn "$c")" = "$CHGDIR" ] && echo 1 || echo 0; }
-is_idle(){ local bct bd bs bv m; m="$(abs "$1")"; [ "$m" -le "$IDLE" ] 2>/dev/null && echo 1 || echo 0; }
+is_idle(){ local bct bd bs bv m; case "$1" in unknown|'') echo 0; return;; esac; m="$(abs "$1")"; [ "$m" -le "$IDLE" ] 2>/dev/null && echo 1 || echo 0; }
 
 _norm(){ case "$2" in
     inverted) case "$1" in -*) printf '%s\n' "${1#-}";; 0) echo 0;; *) printf '%s\n' "-$1";; esac;;
@@ -424,10 +424,56 @@ learn_chgdir(){ case "$3" in 1) ;; *) echo "p low"; return;; esac
       [ "$2" = p ] && echo "n high" || echo "p high";;
     *) echo "$2 med";; esac; }
 
-classify_state(){ _csc="$(_norm "$3" "$4")"; _csp=0; { [ "$1" = 1 ] || [ "$2" = 1 ]; } && _csp=1; _csm="${_csc#-}"
+node_unit(){
+  local n v u peer pv
+  n="$1"; u=
+  if [ "$n" = "${CURF:-}" ]; then
+    u="${AMPS_CURRENT_UNIT:-${CUR_UNIT:-}}"
+  elif [ "$n" = "${CHGIN:-}" ]; then
+    u="${AMPS_INPUT_UNIT:-${CHGIN_UNIT:-}}"
+  fi
+  case "$u" in '') :;; mA|uA|unknown) echo "$u"; return;; *) echo unknown; return;; esac
+  v="$(abs "$(san "$(read1 "$n")")")"
+  case "$n" in "$BATT/current_now"|"$BATT/current_avg")
+    if [ "$v" -gt 0 ] && [ "$v" -lt 16000 ]; then
+      # A second gauge reading the SAME current settles the unit: bms first, because it measures the
+      # pack current and should land within a quarter of this node once both are in the same unit.
+      for peer in "$PSY/bms/current_now" "$PSY/bms/current_avg"; do
+        [ "$peer" = "$n" ] && continue
+        pv="$(abs "$(san "$(read1 "$peer")")")"
+        if [ "$pv" -ge 16000 ] && [ "$pv" -ge $((v * 750)) ] && [ "$pv" -le $((v * 1250)) ]; then echo mA; return; fi
+      done
+    fi
+    if [ "$n" = "$BATT/current_now" ]; then
+      case "${ST_UNIT:-}" in mA|uA) echo "$ST_UNIT"; return;; esac
+    fi
+    # Still nothing, and no bms to ask (OnePlus 8 Pro, kona, oplus). Any other MEASUREMENT node
+    # settles it, but only at the same ~1000x ratio the bms rule uses: input and battery current
+    # differ physically by at most about 3x, so a factor that close to 1000 is a unit difference and
+    # nothing else. Ranked below ST_UNIT on purpose - a reported unit beats a ratio.
+    if [ "$v" -gt 0 ] && [ "$v" -lt 16000 ]; then
+      for peer in $PSY/*/current_now $PSY/*/current_avg $PSY/*/input_current_now; do
+        [ "$peer" = "$n" ] && continue
+        # -e inline, not ex(): node_unit is lifted by name into fixtures, and a reader that grows a
+        # dependency they do not lift reports the product as broken. Same trap the _se_* helpers hit.
+        [ -e "$peer" ] || continue
+        pv="$(abs "$(san "$(read1 "$peer")")")"
+        [ "$pv" -ge 16000 ] 2>/dev/null || continue
+        if [ "$pv" -ge $((v * 750)) ] && [ "$pv" -le $((v * 1250)) ]; then echo mA; return; fi
+      done
+    fi;;
+  esac
+  [ "$v" -ge 16000 ] && { echo uA; return; }
+  echo unknown
+}
+counter_value(){ local v; v="$(rd "$1")"; case "$v" in +*) v=${v#+};; esac; case "$v" in ''|*[!0-9]*) return 1;; esac; [ "${#v}" -le 32 ] || return 1; v="$(san "$v")"; [ "${#v}" -le 9 ] && [ "$v" -gt 0 ] || return 1; echo "$v"; }
+rd_current(){ local r raw u suffix=; raw="$(rd "$1")"; case "$raw" in *' mA') suffix=mA; raw=${raw%' mA'};; *' uA') suffix=uA; raw=${raw%' uA'};; esac; r="$raw"; case "$r" in +*|-*) r="${r#?}";; esac; case "$r" in ''|*[!0-9]*) return 1;; esac; [ "${#r}" -le 32 ] || return 1; u="${2:-$(node_unit "$1")}"; [ -z "$suffix" ] || [ "$u" = "$suffix" ] || return 1; raw="$(san "$raw")"; r="${raw#-}"; case "$u" in mA) [ "${#r}" -le 6 ] && [ "$r" -le 100000 ] || return 1; echo $((raw * 1000));; uA) [ "${#r}" -le 9 ] && [ "$r" -le 100000000 ] || return 1; echo "$raw";; *) return 1;; esac; }
+rd_ma(){ local c; c="$(rd_current "$@")" || return 1; echo $((c / 1000)); }
+classify_state(){ local _raw="$3"; case "$_raw" in +*|-*) _raw=${_raw#?};; esac; case "$_raw" in ''|*[!0-9]*) echo UNKNOWN; return;; esac; case "$4" in normal|inverted) :;; *) echo UNKNOWN; return;; esac; _csc="$(_norm "$3" "$4")"; _csp=0; { [ "$1" = 1 ] || [ "$2" = 1 ]; } && _csp=1; _csm="${_csc#-}"
   if [ "$_csp" = 0 ]; then
     case "$_csc" in -*) echo DISCHARGING; return;; esac
     [ "${_csm:-0}" -gt "$5" ] 2>/dev/null && echo MISLABEL || echo STANDBY; return; fi
+  if [ "${_csm:-0}" -le "$5" ] 2>/dev/null; then [ "$2" = 1 ] && echo BYPASS || echo CUT; return; fi
   case "$_csc" in
     -*) if [ "$2" = 1 ] && [ "${_csm:-0}" -gt "$5" ] 2>/dev/null; then echo DRAIN; else echo CUT; fi;;
     *)  if [ "${_csm:-0}" -gt "$5" ] 2>/dev/null; then echo CHARGING
@@ -753,27 +799,31 @@ classify_held(){
   local cin onl v
   if [ "$BLINDV" = 1 ]; then
     [ "$BL_ONLINE" = 0 ] && { echo CUT-input; return; }
-    if ex "$BATT/charge_counter" && [ -n "$(read1 "$BATT/charge_counter")" ]; then
-      _bcc0="$(san "$(read1 "$BATT/charge_counter")")"
+    _bcc0="$(counter_value "$BATT/charge_counter")"
+    if [ -n "$_bcc0" ]; then
       sleep 4
-      _bcc1="$(san "$(read1 "$BATT/charge_counter")")"
-      _bccd=$(( ${_bcc1:-0} - ${_bcc0:-0} ))
-      _bccda="${_bccd#-}"
-      [ "$_bccd" -lt -500 ] 2>/dev/null && { echo DRAIN; return; }
-      if [ "${_bccda:-99999}" -lt 500 ] 2>/dev/null; then
-        if online_now && [ -n "$CHGIN" ] && ! chgin_low; then echo BYPASS; else echo CUT; fi
-        return
+      _bcc1="$(counter_value "$BATT/charge_counter")"
+      if [ -n "$_bcc1" ]; then
+        _bccd=$((_bcc1 - _bcc0)); _bccda=${_bccd#-}
+        if [ "$_bccda" -le 120000 ]; then
+          [ "$_bccd" -lt -500 ] && { echo DRAIN; return; }
+          if [ "$_bccda" -lt 500 ]; then
+            if online_now && [ -n "$CHGIN" ] && [ "$(abs "$(rd_current "$CHGIN")")" -gt "$IDLE" ] 2>/dev/null; then echo BYPASS; else echo CUT; fi
+            return
+          fi
+          [ "$_bccd" -gt 500 ] && { echo NOT-HELD; return; }
+        fi
       fi
-      [ "$_bccd" -gt 500 ] 2>/dev/null && { echo NOT-HELD; return; }
     fi
     case "$(read_st)" in Discharging|discharging) [ "${WEAK_CHARGER:-0}" = 1 ] || { echo DRAIN; return; };; esac
-    echo CUT; return
+    case "$(read_st)" in 'Not charging'|'Not-charging'|Idle) echo CUT;; *) echo NOT-HELD;; esac; return
   fi
+  case "$CL" in unknown|'') echo NOT-HELD; return;; esac
   online_now || { echo CUT-input; return; }
   if [ "${WEAK_CHARGER:-0}" != 1 ] && [ "$(sgn "$CL")" != "$CHGDIR" ] && [ "$(abs "$CL")" -gt "$IDLE" ] 2>/dev/null; then echo DRAIN; return; fi
   if [ "$(is_idle "$CL")" = 1 ]; then
     onl=1; online_now || onl=0
-    cin=0; [ -n "$CHGIN" ] && { v="$(abs "$(san "$(read1 "$CHGIN")")")"; [ "$v" -gt "$IDLE" ] 2>/dev/null && cin=1; }
+    cin=0; [ -n "$CHGIN" ] && { v="$(abs "$(rd_current "$CHGIN")")"; [ "$v" -gt "$IDLE" ] 2>/dev/null && cin=1; }
     if [ "$onl" = 0 ]; then echo CUT-input
     elif [ "$cin" = 1 ]; then echo BYPASS
     else echo CUT; fi
@@ -1435,16 +1485,20 @@ THERMOK=0; [ -n "$TEMPF" ] && THERMOK=1
 [ "$THERMOK" = 1 ] || warn "no battery temp sensor -> thermal guard off; tests STILL run (every test write is charge-STOP direction = non-heating, and battery protection is left intact) -- just watch the phone temperature manually."
 [ "$CURAVG" = 1 ] && { POLL=10; warn "only current_avg present (slow-moving) -> using longer ${POLL}s polls; a real cut may still read as 'no effect'."; }
 VOLTF=; for vf in "$BATT/voltage_now" "$BATT/voltage_avg" "$PSY/bms/voltage_now"; do ex "$vf" && { VOLTF="$vf"; break; }; done
-vmv(){ local va vb vc vm vma; [ -n "$VOLTF" ] || { echo 0; return; }
-  va="$(san "$(read1 "$VOLTF")")"; vb="$(san "$(read1 "$VOLTF")")"; vc="$(san "$(read1 "$VOLTF")")"; vm="$(med3 "$va" "$vb" "$vc")"
-  vma="${vm#-}"; [ "$vma" -ge 1000000 ] 2>/dev/null && vm=$(( vm / 1000 )); echo "$vm"; }
+power_mw(){ awk -v v="$1" -v a="$2" 'BEGIN {if (v !~ /^[0-9]+$/ || a !~ /^-?[0-9]+$/ || v < 1000000 || v > 50000000 || a < -100000000 || a > 100000000) {print "n/a"; exit} if (a < 0) a=-a; printf "%.0f\n",int(v*a/1000000000)}'; }
+voltage_uv(){ local v; v="$(rd "$1")"; case "$v" in +*) v=${v#+};; esac; case "$v" in ''|*[!0-9]*) echo 0; return;; esac; [ "${#v}" -le 32 ] || { echo 0; return; }; v="$(san "$v")"; [ "${#v}" -le 8 ] || { echo 0; return; }; [ "$v" -ge 100000 ] || v=$((v * 1000)); if [ "$v" -ge 1000000 ] && [ "$v" -le 50000000 ]; then echo "$v"; else echo 0; fi; }
+voltage_mv(){ local v; v="$(voltage_uv "$1")"; echo $((v / 1000)); }
+
+vmv(){ local va vb vc; [ -n "$VOLTF" ] || { echo 0; return; }
+  va="$(voltage_mv "$VOLTF")"; vb="$(voltage_mv "$VOLTF")"; vc="$(voltage_mv "$VOLTF")"
+  [ "$va" -gt 0 ] && [ "$vb" -gt 0 ] && [ "$vc" -gt 0 ] && med3 "$va" "$vb" "$vc" || echo 0; }
 chg_type(){ rd "$BATT/charge_type" | sed -n '1p' | pclean; }
 ctype_charging(){ case "$1" in ''|0|1|N/A|n/a|None|none|Unknown|unknown|Not*|not*) echo 0;; *) echo 1;; esac; }
 inp_online(){ local pv; online_now && echo 1 || echo 0; }
 proof_available(){
   [ "$(read_st)" = Charging ] && return 0
   ex "$BATT/charge_type" && [ "$(ctype_charging "$(chg_type)")" = 1 ] && return 0
-  if [ -n "$CHGIN" ]; then pv="$(abs "$(san "$(read1 "$CHGIN")")")"; [ "$pv" -gt "${IDLE:-10000}" ] 2>/dev/null && return 0; fi
+  if [ -n "$CHGIN" ]; then pv="$(abs "$(rd_current "$CHGIN")")"; [ "$pv" -gt "${IDLE:-10000}" ] 2>/dev/null && return 0; fi
   [ "${VRISE:-0}" = 1 ] && return 0
   return 1; }
 [ -n "$VOLTF" ] && log "voltage sensor: $VOLTF"
@@ -1484,7 +1538,7 @@ present_now(){
     [ "$pv" = 1 ] && return 0
   done
   online_now && return 0
-  [ -n "${IDLE:-}" ] && [ -n "${CHGIN:-}" ] && { _pcv="$(abs "$(san "$(read1 "$CHGIN")")")"; [ "$_pcv" -gt "$IDLE" ] 2>/dev/null && return 0; }
+  [ -n "${IDLE:-}" ] && [ -n "${CHGIN:-}" ] && { _pcv="$(abs "$(rd_current "$CHGIN")")"; [ "$_pcv" -gt "$IDLE" ] 2>/dev/null && return 0; }
   case "$(read_st)" in Charging|charging|Full|full) return 0;; esac
   return 1
 }
@@ -1499,8 +1553,9 @@ chgin_node(){ local n; for _d in "$PSY"/*; do
 CHGIN="$(chgin_node)"
 
 med_cur(){ local x y z; [ -n "$CURF" ] || { echo 0; return; }
-  x="$(san "$(read1 "$CURF")")"; y="$(san "$(read1 "$CURF")")"; z="$(san "$(read1 "$CURF")")"; med3 "$x" "$y" "$z"; }
-cur_blind(){ [ -z "${CURF:-}" ] || [ "${CUR_FROZEN:-0}" = 1 ]; }
+  x="$(rd_current "$CURF")"; y="$(rd_current "$CURF")"; z="$(rd_current "$CURF")";
+  [ -n "$x" ] && [ -n "$y" ] && [ -n "$z" ] || { echo unknown; return; }; med3 "$x" "$y" "$z"; }
+cur_blind(){ [ -z "${CURF:-}" ] || [ "${CUR_FROZEN:-0}" = 1 ] || [ "${CUR_UNIT:-}" = unknown ]; }
 
 log ""
 # Live probes
@@ -1592,15 +1647,20 @@ stop_check; acc_hold_off
 log "==== LAYER 3 - current sign + unit auto-learn (ACC method) ===="
 P1=no; plugged && P1=yes
 ST="$(rd $BATT/status | sed -n '1p' | pclean)"
+CUR_UNIT="$(node_unit "$CURF")"; CHGIN_UNIT="$(node_unit "$CHGIN")"
+UNIT=uA; THR=50000; IDLE=10000
+log "  sensor units: battery=$CUR_UNIT input=$CHGIN_UNIT; comparisons normalized to uA"
+[ "$CUR_UNIT" != unknown ] || warn "battery current unit is ambiguous; using BLIND verification. Set AMPS_CURRENT_UNIT=mA or uA only after checking this sensor's driver."
+[ -z "$CHGIN" ] || [ "$CHGIN_UNIT" != unknown ] || warn "input current unit is ambiguous; input-current evidence unavailable (AMPS_INPUT_UNIT=mA or uA can specify this sensor)."
 RAW=0; CUR_FROZEN=0
-_cc0="$(san "$(read1 "$BATT/charge_counter")")"
+_cc0="$(counter_value "$BATT/charge_counter")"
 if [ -n "$CURF" ]; then
-  cb1="$(san "$(read1 "$CURF")")"; sleep 1
-  cb2="$(san "$(read1 "$CURF")")"; sleep 1
-  cb3="$(san "$(read1 "$CURF")")"; sleep 1
-  cb4="$(san "$(read1 "$CURF")")"; sleep 1
-  cb5="$(san "$(read1 "$CURF")")"; sleep 1
-  cb6="$(san "$(read1 "$CURF")")"
+  cb1="$(rd_current "$CURF")" || { cb1=0; CUR_UNIT=unknown; }; sleep 1
+  cb2="$(rd_current "$CURF")" || { cb2=0; CUR_UNIT=unknown; }; sleep 1
+  cb3="$(rd_current "$CURF")" || { cb3=0; CUR_UNIT=unknown; }; sleep 1
+  cb4="$(rd_current "$CURF")" || { cb4=0; CUR_UNIT=unknown; }; sleep 1
+  cb5="$(rd_current "$CURF")" || { cb5=0; CUR_UNIT=unknown; }; sleep 1
+  cb6="$(rd_current "$CURF")" || { cb6=0; CUR_UNIT=unknown; }
   RAW="$(med3 "$cb2" "$cb4" "$cb6")"
   clo="$cb1"; chi="$cb1"
   for cq in "$cb2" "$cb3" "$cb4" "$cb5" "$cb6"; do
@@ -1611,15 +1671,6 @@ if [ -n "$CURF" ]; then
   [ "$cspread" -eq 0 ] && CUR_FROZEN=1
 fi
 ABSB="$(abs "$RAW")"
-UNIT=mA; THR=50; IDLE=10; UNIT_HW=0
-if [ "$ABSB" -ge 16000 ] 2>/dev/null; then UNIT=uA; THR=50000; IDLE=10000; UNIT_HW=1; fi
-if [ "$UNIT" = mA ]; then
-  for ucf in "$BATT/constant_charge_current" "$BATT/constant_charge_current_max" $PSY/*/current_max $PSY/*/input_current_limit; do
-    ex "$ucf" || continue
-    uv="$(san "$(read1 "$ucf")")"
-    [ "${uv#-}" -ge 100000 ] 2>/dev/null && { UNIT=uA; THR=50000; IDLE=10000; UNIT_HW=1; log "  unit corrected to uA (ctrl node $ucf=$uv)"; break; }
-  done
-fi
 SIGN_UNSTABLE=0
 if [ -n "$CURF" ]; then
   _sgp=0; _sgn=0
@@ -1636,20 +1687,13 @@ if command -v dumpsys >/dev/null 2>&1; then
 fi
 EFFST="$ST"
 case "$EFFST" in ''|Unknown|unknown) EFFST="$AST";; esac
-if [ -n "$ST_UNIT" ]; then
-  _upk="$(unit_pick "$UNIT" "${UNIT_HW:-0}" "$ST_UNIT")"
-  [ "${UNIT_HW:-0}" = 1 ] && [ "$ST_UNIT" != "$UNIT" ] \
-    && log "  ACC reports currentUnits=$ST_UNIT but the hardware says $UNIT -- keeping $UNIT (measured beats reported)"
-  UNIT="$_upk"
-fi
-case "$UNIT" in uA) THR=50000; IDLE=10000;; *) THR=50; IDLE=10;; esac
 CS="$(sgn "$RAW")"; _gt=0; [ "$ABSB" -gt "$THR" ] 2>/dev/null && _gt=1
 _lc="$(learn_chgdir "$EFFST" "$CS" "$_gt")"; CHGDIR="${_lc%% *}"; SIGN_CONF="${_lc##* }"; POL_SRC=live
-_cc1="$(san "$(read1 "$BATT/charge_counter")")"
+_cc1="$(counter_value "$BATT/charge_counter")"
 SIGN_MODE_DEP=0
 if [ -n "$_cc0" ] && [ -n "$_cc1" ] && present_now; then
   _ccd=$(( _cc1 - _cc0 ))
-  if [ "$_ccd" -ge 150 ] 2>/dev/null && [ "${SIGN_UNSTABLE:-0}" = 0 ]; then
+  if [ "$_ccd" -ge 150 ] 2>/dev/null && [ "$_ccd" -le 300000 ] 2>/dev/null && [ "${SIGN_UNSTABLE:-0}" = 0 ]; then
     if [ "${_sgp:-0}" -ge 3 ] && [ "${_sgn:-0}" -le 1 ]; then CHGDIR=p; SIGN_CONF=high; POL_SRC=cc-physics
     elif [ "${_sgn:-0}" -ge 3 ] && [ "${_sgp:-0}" -le 1 ]; then CHGDIR=n; SIGN_CONF=high; POL_SRC=cc-physics; fi
   fi
@@ -1680,6 +1724,7 @@ if cur_blind && [ "$_bp" = 1 ]; then
   _bst="$(read_st)"
   _bwhy="this kernel publishes no current_now or current_avg"
   [ -n "${CURF:-}" ] && _bwhy="the current sensor is frozen (identical across every read)"
+  [ "${CUR_UNIT:-}" = unknown ] && _bwhy="the current sensor unit is ambiguous"
   case "$_bst" in
     Charging|charging|Full|full)
       BASE_STATE=CHARGING
@@ -1726,10 +1771,10 @@ if [ "$_bp" = 1 ] && [ "${_bcap:-0}" -lt 95 ] 2>/dev/null && [ "$BASE_STATE" != 
     if cur_blind; then
       warn "could NOT establish a charging baseline, and this phone has no usable current reading to check it with. If the battery IS gaining charge, this is a reporting gap in the ROM rather than a charger fault; re-run once the status reads Charging. Stopping so the result is not built on a baseline nothing could measure."
     else
-    warn "could NOT reach native charging (baseline=$BASE_STATE). The charger likely dropped its negotiation -- UNPLUG and RE-PLUG (try another cable/port), then run again. Stopping so the result is not built on a dead baseline."
+    warn "could NOT reach native charging (baseline=$BASE_STATE). Charging could not be verified; check sensor units, charging policy, temperature and charger connection before retrying. Stopping so the result is not built on a dead baseline."
     fi
     _snd="$(getprop ro.product.device 2>/dev/null)"
-    { printf 'schema=1\nresult=precondition\nreason=could not reach native charging (baseline=%s) -- replug the charger and retry\ncapacity=%s\ndevice=%s\nscript=acc-compat\ntester_version=%s\nok=0\n' "$BASE_STATE" "${_bcap:-?}" "$_snd" "$V"; } > "${ART}.tmp" 2>/dev/null
+    { printf 'schema=1\nresult=precondition\nreason=could not reach native charging (baseline=%s) -- check telemetry, charging policy and charger connection\ncapacity=%s\ndevice=%s\nscript=acc-compat\ntester_version=%s\nok=0\n' "$BASE_STATE" "${_bcap:-?}" "$_snd" "$V"; } > "${ART}.tmp" 2>/dev/null
     { [ -s "${ART}.tmp" ] && mv -f "${ART}.tmp" "$ART" 2>/dev/null && chmod 0644 "$ART" 2>/dev/null; } || rm -f "${ART}.tmp" 2>/dev/null
     log ""; log "  -- read-only candidate switches (paste back; even without a live baseline we can map them) --"
     for _cd in $DDIRS; do ex "$_cd" || continue
@@ -1741,7 +1786,7 @@ if [ "$_bp" = 1 ] && [ "${_bcap:-0}" -lt 95 ] 2>/dev/null && [ "$BASE_STATE" != 
         bool_like "$_cv" && log "    [RW bool] $_cf = $_cv"
       done
     done
-    log ""; log "===== STOPPED: not native-charging. Replug + re-run (the candidates above are usable). ====="
+    log ""; log "===== STOPPED: charging baseline unconfirmed. Candidates above have not been verified by this run. ====="
     exit 3
   fi
 fi
@@ -1772,7 +1817,7 @@ if [ -n "$VOLTF" ]; then
   VRISE=0; [ "$VNOISE" -ge 8 ] 2>/dev/null && VRISE=1
 fi
 CUR_USABLE=1
-[ -z "$CURF" ] && CUR_USABLE=0
+cur_blind && CUR_USABLE=0
 [ "$CUR_FROZEN" = 1 ] && CUR_USABLE=0
 [ "$ABSB" -le "$THR" ] 2>/dev/null && CUR_USABLE=0
 [ "${POL_CONFLICT:-0}" = 1 ] && CUR_USABLE=0
@@ -1802,9 +1847,10 @@ bcharge(){
   bs="$(read_st)"
   st_notchg "$bs" && { echo 0; return; }
   if ex "$BATT/charge_type"; then bct="$(chg_type)"; [ "$(ctype_charging "$bct")" = 0 ] && [ "$(ctype_charging "$CTYPE0")" = 1 ] && { echo 0; return; }; fi
-  if [ -n "$VOLTF" ] && [ "$V0" -gt 0 ] 2>/dev/null; then bv="$(vmv)"; bd=$(( V0 - bv )); [ "$bd" -ge "$VDROP" ] 2>/dev/null && { echo 0; return; }; fi
+  if [ -n "$VOLTF" ] && [ "$V0" -gt 0 ] 2>/dev/null; then bv="$(vmv)"; bd=$(( V0 - bv )); [ "$bv" -gt 0 ] && [ "$bd" -ge "$VDROP" ] 2>/dev/null && { echo 0; return; }; fi
   echo 1; }
 chg_now(){ if [ "$BLINDV" = 1 ]; then bcharge; else cc="$(med_cur)"
+    case "$cc" in unknown|'') echo 0; return;; esac
     { [ "$(is_charging "$cc")" = 1 ] || { [ "${CUR_USABLE:-1}" = 0 ] && [ "$(read_st)" = Charging ]; }; } && echo 1 || echo 0; fi; }
 resume_desc(){ if [ "$BLINDV" = 1 ]; then printf 'status=%s %smV' "$(read_st)" "$(vmv)"; else med_cur; fi; }
 
@@ -1886,7 +1932,7 @@ _obs_legend(){
   log "                   current goes to ~0 (or reverses) and STAYS; it did NOT hold if it stays"
   log "                   at the native charging value. Voltage sags a little once charging stops."
 }
-_mA(){ local bg1 bg2 bg3 bg4 c2 c3 c4 ct g1 g2 g3 g4 v; _mv="$1"; _mn=""; case "$_mv" in -*) _mn="-"; _mv="${_mv#-}";; esac; case "$_mv" in ''|*[!0-9]*) echo 0; return;; esac; [ "${UNIT:-uA}" = mA ] && echo "${_mn}${_mv}" || echo "${_mn}$(( _mv / 1000 ))"; }
+_mA(){ local c; case "$1" in unknown|'') echo n/a; return;; esac; c="$(san "$1")"; echo $((c / 1000)); }
 hold_probe(){
   stop_check
   SAMP_N=0; SAMP_FIRST=1; SAMP_LAST=1; C1=0; CL=0; ST3=Charging; ST4=Charging
@@ -1932,7 +1978,7 @@ hold_probe(){
   fi; }
 st_notchg(){ local v; case "$1" in Discharging|discharging|"Not charging"|"not charging"|NotCharging|notcharging) return 0;; *) return 1;; esac; }
 chgin_low(){ [ -n "$CHGIN" ] || return 1
-  v="$(abs "$(san "$(read1 "$CHGIN")")")"; [ "$v" -le "$IDLE" ] 2>/dev/null; }
+  v="$(rd_current "$CHGIN")" || return 1; v="${v#-}"; [ "$v" -le "$IDLE" ] 2>/dev/null; }
 
 reg_add(){ _rga="$(printf '%s' "$1" | tr 'A-Z' 'a-z')"; case "$_rga" in cut-*) _rga=cut;; esac
   printf '%s\t%s\t%s\t%s\n' "$_rga" "${2:--}" "${3:--}" "${4:--}" >> "$REG" 2>/dev/null; }
@@ -2075,20 +2121,20 @@ test_switch(){
     else
     _pg="$(awk -F'\t' -v n="$p" '$1==n{v=$2} END{print v}' "$BK/graded" 2>/dev/null)"
     if [ -n "$_pg" ]; then
-      _gc0="$(san "$(read1 "$BATT/charge_counter")")"; _gci=0; _gleak=0
+      _gc0="$(counter_value "$BATT/charge_counter")"; _gci=0; _gleak=0
       while [ "$_gci" -lt 2 ]; do over && break; stop_check; wr "$p" "$offv" 2>/dev/null; sleep 5; _gci=$((_gci+1))
-        _gcn="$(san "$(read1 "$BATT/charge_counter")")"; [ -n "$_gc0" ] && [ "${_gcn:-0}" -gt "$(( ${_gc0:-0} + 4000 ))" ] 2>/dev/null && { _gleak=1; break; }
+        _gcn="$(counter_value "$BATT/charge_counter")"; [ -n "$_gc0" ] && [ "${_gcn:-0}" -gt "$(( ${_gc0:-0} + 4000 ))" ] 2>/dev/null && { _gleak=1; break; }
       done
       if [ "$_gleak" = 1 ]; then STAB=leaky; else STAB="$_pg"; fi
       log "  $lbl -> off=$offv $det [$k0] [$STAB -- same node already graded; short $(( _gci*5 ))s re-confirm]"
     else
-    lcap0="$(san "$(read1 "$BATT/capacity")")"; lcc0="$(san "$(read1 "$BATT/charge_counter")")"; rwi=0; rcons=0; rearmed=0; _rdl=0
+    lcap0="$(san "$(read1 "$BATT/capacity")")"; lcc0="$(counter_value "$BATT/charge_counter")"; rwi=0; rcons=0; rearmed=0; _rdl=0
     _rwmax=4; { [ "${MODE:-quick}" = complete ] || [ "${CHG_FAMILY:-}" = oplus ]; } && _rwmax=8
     while [ "$rwi" -lt "$_rwmax" ]; do
       over && { _rdl=1; break; }; stop_check; sleep 6; rwi=$((rwi+1))
       if [ "$(chg_now)" = 1 ]; then rcons=$((rcons+1)); [ "$rcons" -ge 2 ] && { rearmed=1; break; }; else rcons=0; fi
       lcapn="$(san "$(read1 "$BATT/capacity")")"; [ "${lcapn:-0}" -gt "${lcap0:-0}" ] 2>/dev/null && { rearmed=1; break; }
-      lccn="$(san "$(read1 "$BATT/charge_counter")")"; [ -n "$lcc0" ] && [ "${lccn:-0}" -gt "$(( ${lcc0:-0} + 1500 ))" ] 2>/dev/null && { rearmed=1; break; }
+      lccn="$(counter_value "$BATT/charge_counter")"; [ -n "$lcc0" ] && [ "${lccn:-0}" -gt "$(( ${lcc0:-0} + 1500 ))" ] 2>/dev/null && { rearmed=1; break; }
     done
     if [ "$rearmed" = 0 ] && [ "$_rdl" = 1 ]; then
       STAB=inconclusive
@@ -2097,13 +2143,13 @@ test_switch(){
       STAB=holds-alone; [ "$rwi" -ge "$_rwmax" ] && LONGOK="$LONGOK|$lbl"
       log "  $lbl -> off=$offv $det [$k0] HELD-ALONE (+$(( rwi*6 ))s passive, no re-arm)"
     else
-      dcap0="$(san "$(read1 "$BATT/capacity")")"; dcc0="$(san "$(read1 "$BATT/charge_counter")")"; di=0; leak=0; _flat=0; _ldl=0
+      dcap0="$(san "$(read1 "$BATT/capacity")")"; dcc0="$(counter_value "$BATT/charge_counter")"; di=0; leak=0; _flat=0; _ldl=0
       while [ "$di" -lt 8 ]; do
         over && { _ldl=1; break; }; stop_check
         wr "$p" "$offv" 2>/dev/null
         sleep 5; di=$((di+1))
         dcapn="$(san "$(read1 "$BATT/capacity")")"; [ "${dcapn:-0}" -gt "${dcap0:-0}" ] 2>/dev/null && { leak=1; break; }
-        dccn="$(san "$(read1 "$BATT/charge_counter")")"
+        dccn="$(counter_value "$BATT/charge_counter")"
         if [ -n "$dcc0" ] && [ "${dccn:-0}" -gt "$(( ${dcc0:-0} + 4000 ))" ] 2>/dev/null; then leak=1; break; fi
         if [ -n "$dcc0" ] && [ "${dccn:-0}" -le "${dcc0:-0}" ] 2>/dev/null; then _flat=$((_flat+1)); [ "$_flat" -ge 3 ] && break; else _flat=0; fi
       done
@@ -2125,11 +2171,11 @@ test_switch(){
     { [ "$STAB" != leaky ] && [ -z "$TEACH_P" ]; } && case "$k0" in CUT*|BYPASS) TEACH_P="$p"; TEACH_ON="${cur:-$onv}"; TEACH_OFF="$offv";; esac
   else
     if [ "$SAMP_FIRST" = 0 ] && [ "$SAMP_LAST" = 1 ]; then
-      dcap0="$(san "$(read1 "$BATT/capacity")")"; dcc0="$(san "$(read1 "$BATT/charge_counter")")"; di=0; leak=0; _flat=0
+      dcap0="$(san "$(read1 "$BATT/capacity")")"; dcc0="$(counter_value "$BATT/charge_counter")"; di=0; leak=0; _flat=0
       while [ "$di" -lt 8 ]; do
         over && break; stop_check; wr "$p" "$offv" 2>/dev/null; sleep 5; di=$((di+1))
         dcapn="$(san "$(read1 "$BATT/capacity")")"; [ "${dcapn:-0}" -gt "${dcap0:-0}" ] 2>/dev/null && { leak=1; break; }
-        dccn="$(san "$(read1 "$BATT/charge_counter")")"
+        dccn="$(counter_value "$BATT/charge_counter")"
         if [ -n "$dcc0" ] && [ "${dccn:-0}" -gt "$(( ${dcc0:-0} + 4000 ))" ] 2>/dev/null; then leak=1; break; fi
         if [ -n "$dcc0" ] && [ "${dccn:-0}" -le "${dcc0:-0}" ] 2>/dev/null; then _flat=$((_flat+1)); [ "$_flat" -ge 3 ] && break; else _flat=0; fi
       done
@@ -2364,7 +2410,7 @@ if [ "$ACTIVE" = 1 ] && gate; then
     log "  charger removed -- reading the firmware's own switch writes..."
     et=0
     while [ "$et" -lt 4 ]; do
-      log "    event t=${et}s status=$(read_st) current=$(san "$(read1 "$CURF")") online=$(online_now && echo 1 || echo 0)"
+      log "    event t=${et}s status=$(read_st) current=$(rd_current "$CURF") online=$(online_now && echo 1 || echo 0)"
       sleep 1; et=$((et+1))
     done
     state_dump "$SUNP"
@@ -3506,7 +3552,7 @@ _recstab="$(awk -F'\t' -v l="${RECO_LBL:-}" '$1==l{v=$2} END{print v}' "$BK/stab
 _reclat=no; case "$RECO" in *LATCHES*) _reclat=yes;; esac; case "|${STUCKS:-}|" in *"|${RECO_LBL:-_NONE_}|"*) _reclat=yes;; esac
 case "$(artifact_kind "$aconf" "${SUGGEST:-}")" in
   switch)
-    { printf 'schema=1\ncharging_switch=%s\nclass=%s\nconf=%s\nrec_stability=%s\nrec_latch=%s\npolarity=%s\nunits=%s\nresume=%s\nweak_charger=%s\nrearm_checked=%s\ndevice=%s\nsoc=%s\nscript=acc-compat\ntester_version=%s\nts=%s\n' "$SUGGEST" "$acls" "$aconf" "$_recstab" "$_reclat" "${POLARITY:-normal}" "${UNIT:-mA}" "$RESUME_OK" "${WEAK_CHARGER:-0}" "$REARM_DONE" "$_advc" "$_advs" "$V" "${TS:-}"
+    { printf 'schema=1\ncharging_switch=%s\nclass=%s\nconf=%s\nrec_stability=%s\nrec_latch=%s\npolarity=%s\nunits=%s\nresume=%s\nweak_charger=%s\nrearm_checked=%s\ndevice=%s\nsoc=%s\nscript=acc-compat\ntester_version=%s\nts=%s\n' "$SUGGEST" "$acls" "$aconf" "$_recstab" "$_reclat" "${POLARITY:-normal}" "${CUR_UNIT:-unknown}" "$RESUME_OK" "${WEAK_CHARGER:-0}" "$REARM_DONE" "$_advc" "$_advs" "$V" "${TS:-}"
       [ -n "$ACCCUR" ] && printf '%s\n' "$ACCCUR"
       [ -n "$ALTS" ] && printf '%s\n' "$ALTS"
       printf 'ok=1\n'; } > "${ART}.tmp" 2>/dev/null ;;
@@ -3526,7 +3572,7 @@ if [ -s "$SNAP" ]; then
 fi
 # Charger report
 _csr(){ cat "$1" 2>/dev/null | sed -n '1p'; }
-_csn(){ _v=$(_csr "$1"); _v=${_v#-}; case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$_v" -ge 100000 ] && echo $((_v/1000)) || echo "$_v";; esac; }
+_csn(){ local c; c="$(rd_ma "$1")" || { echo 0; return 1; }; echo "${c#-}"; }
 _cscap(){ _v=$(_csr "$1"); case "$_v" in ''|*[!0-9]*) echo 0;; *) [ "$_v" -ge 100000 ] && echo $((_v/1000)) || echo "$_v";; esac; }
 _ct="$(_csr $PSY/battery/charge_type)"; _stt="$(_csr $PSY/battery/status)"
 _imax=0; _iin=0; _vbus=0; _src=none
@@ -3556,8 +3602,8 @@ if [ "$_src" != none ] || [ "$_stt" = Charging ] || [ "$_stt" = Full ]; then
     case "$_u" in dc|wireless) [ "$_src" = "$_u" ] || continue;; esac
     _uc=$(_cscap "$PSY/$_u/current_max")
     [ "${_uc:-0}" -gt "${_imax:-0}" ] 2>/dev/null && _imax=$_uc
-    [ "$_vbus" != 0 ] || _vbus=$(_cscap "$PSY/$_u/voltage_now")
-    [ "$_iin" != 0 ] || { _iin=$(_cscap "$PSY/$_u/input_current_now"); [ "$_iin" != 0 ] || _iin=$(_cscap "$PSY/$_u/current_now"); }
+    [ "$_vbus" != 0 ] || _vbus=$(voltage_mv "$PSY/$_u/voltage_now")
+    [ "$_iin" != 0 ] || { _iin=$(_csn "$PSY/$_u/input_current_now"); [ "$_iin" != 0 ] || _iin=$(_csn "$PSY/$_u/current_now"); }
   done
 fi
 _ptype=
@@ -3578,10 +3624,10 @@ case "$_ptype" in
   *HVDCP*|*hvdcp*|*PD*|*pps*|*PPS*|*QC*|*SCP*|*VOOC*|*WARP*|*DASH*|*DCP*|Mains|AC|ac) _fastport=1;;
 esac
 _ccc=$(_cscap $PSY/battery/constant_charge_current_max); [ "$_ccc" = 0 ] && _ccc=$(_cscap $PSY/main/constant_charge_current_max)
-_ib=$(_csn $PSY/battery/current_now); _vb=$(_cscap $PSY/battery/voltage_now)
+_ibvalid=1; _ibua=$(rd_current "$CURF") || { _ibvalid=0; _ibua=0; }; _ib=$(( ${_ibua#-} / 1000 )); _vbuv=$(voltage_uv "$BATT/voltage_now"); _vb=$((_vbuv / 1000))
 _ibbad=0
 [ "${_ccc:-0}" -gt 0 ] 2>/dev/null && [ "${_ib:-0}" -gt "$(( _ccc * 3 / 2 ))" ] 2>/dev/null && _ibbad=1
-_iinbad=0; [ "${_iin:-0}" -gt 0 ] 2>/dev/null && [ "${_vbus:-0}" -gt 0 ] 2>/dev/null && [ "${_ib:-0}" -gt 0 ] 2>/dev/null && [ "${_vb:-0}" -gt 0 ] 2>/dev/null && [ "$(( _iin * _vbus / 1000 ))" -lt "$(( _ib * _vb / 2000 ))" ] 2>/dev/null && _iinbad=1
+_iinbad=0; [ "${_iin:-0}" -gt 0 ] 2>/dev/null && [ "${_vbus:-0}" -gt 0 ] 2>/dev/null && [ "${_ib:-0}" -gt 0 ] 2>/dev/null && [ "${_vb:-0}" -gt 0 ] 2>/dev/null && [ "$(power_mw "$((_vbus * 1000))" "$((_iin * 1000))")" -lt "$(( $(power_mw "$_vbuv" "$_ibua") / 2 ))" ] 2>/dev/null && _iinbad=1
 [ "$_ibbad" = 1 ] && _iinbad=0
 [ "${_imax:-0}" -gt 0 ] 2>/dev/null && [ "${_iin:-0}" -gt "$(( _imax * 2 ))" ] 2>/dev/null && _iinbad=1
 case "${_stt:-}" in
@@ -3596,11 +3642,17 @@ _cccd="${_ccc}mA"; [ "$_ccc" -gt 0 ] 2>/dev/null || _cccd="n/a"
 _ibd=
 if [ "$_ibbad" = 1 ]; then _ibd=" (stale/implausible sample -- exceeds the charge-IC ceiling)"
 else case "${_stt:-}" in Charging|charging|Full|full) :;; *) [ "${_ib:-0}" -gt 0 ] 2>/dev/null && _ibd=" (magnitude only -- status is '${_stt:-?}', so this is current LEAVING the pack)";; esac; fi
-log "|  battery: I=${_ib}mA  V=${_vb}mV  (~$((_ib*_vb/1000))mW)${_ibd}   IC cap (CCC)=${_cccd}"
-if [ "$_src" = none ] && [ "$_stt" != Charging ] && [ "$_stt" != Full ]; then
+if [ "${CUR_UNIT:-unknown}" = unknown ] || [ "${_ibvalid:-1}" != 1 ]; then
+  log "|  battery: I=n/a V=${_vb}mV power=n/a   IC cap (CCC)=${_cccd}"
+else
+  log "|  battery: I=${_ib}mA  V=${_vb}mV  (~$(power_mw "$_vbuv" "$_ibua")mW)${_ibd}   IC cap (CCC)=${_cccd}"
+fi
+if [ "${CUR_UNIT:-unknown}" = unknown ] || [ "${_ibvalid:-1}" != 1 ]; then
+  log "|  -> battery current unit or reading unknown; battery current/power unavailable. No charger-speed diagnosis."
+elif [ "$_src" = none ] && [ "$_stt" != Charging ] && [ "$_stt" != Full ]; then
   log "|  -> not plugged"
-elif [ -n "${STUCKS:-}" ]; then
-  log "|  -> POST-PROBE RECOVERY REQUIRED: a tested switch is still latched. Ignore charger-speed"
+elif [ -n "${STUCKS:-}" ] && [ "$(chg_now)" != 1 ]; then
+  log "|  -> POST-PROBE RECOVERY REQUIRED: charging has not been confirmed after testing. Ignore charger-speed"
   log "|     numbers from this instant; physically unplug + re-plug, then measure again. This is not"
   log "|     evidence of a weak cable or a normal input cap. Latching: ${STUCKS#\|}"
 elif [ "${_ibbad:-0}" = 1 ]; then
@@ -3610,7 +3662,7 @@ elif [ "${_ibbad:-0}" = 1 ]; then
 elif [ "$_imax" = 0 ] && [ "$_iin" = 0 ]; then
   _sd="$_src"; [ "$_sd" != none ] || _sd="an unnamed path"
   log "|  -> charging via $_sd, but this kernel publishes no input telemetry on any supply. Speed is"
-  log "|     judged from the battery side (~$((_ib*_vb/1000))mW). This is a reporting gap, NOT a fault"
+  log "|     judged from the battery side (~$(power_mw "$_vbuv" "$_ibua")mW). This is a reporting gap, NOT a fault"
   log "|     and NOT an ACC limit."
 elif [ "$_fastport" = 1 ] && [ "$_imax" -gt 0 ] 2>/dev/null && [ "$_imax" -le 510 ] 2>/dev/null; then
   _cvn=
@@ -3631,7 +3683,7 @@ elif [ "$_imax" -gt 0 ] 2>/dev/null && [ "$_imax" -le 510 ] 2>/dev/null && [ "${
 elif [ "$_ccc" -gt 0 ] 2>/dev/null && [ "$_imax" -gt 0 ] 2>/dev/null && [ "$_ccc" -lt "$_imax" ] 2>/dev/null; then
   log "|  -> IC/THERMAL-CAPPED: CCC ${_ccc}mA < input ${_imax}mA. The charge IC or thermal mitigation is the ceiling, not the charger."
 elif [ "${_iinbad:-0}" = 1 ]; then
-  log "|  -> battery drawing ~${_ib}mA (~$((_ib*_vb/1000))mW); input negotiated up to ${_imax}mA. (Iin=${_iin}mA is a stale/low sample -- input and battery nodes were not sampled at the same instant; trust the battery-side power.)"
+  log "|  -> battery drawing ~${_ib}mA (~$(power_mw "$_vbuv" "$_ibua")mW); input negotiated up to ${_imax}mA. (Iin=${_iin}mA is a stale/low sample -- input and battery nodes were not sampled at the same instant; trust the battery-side power.)"
 else
   log "|  -> input ~${_iin}mA (up to ${_imax}mA) / battery ~${_ib}mA -- source+IC are delivering; compare against the stock-ROM number for the fast-charge target."
 fi

@@ -273,8 +273,15 @@ class BatteryDialogActivity : ScopedAppActivity()
                         try
                         {
                             val limit = getCustomView().findViewById<NumberPicker>(R.id.charging_limit).value
-                            Toast.makeText(context, getString(R.string.done_applied_charge_limit, limit), Toast.LENGTH_LONG).show()
-                            Acc.instance.setChargingLimitForOneCharge(limit)
+                            // The toast used to be printed BEFORE the call, so it announced a
+                            // charge that had not started yet and could not report one that failed.
+                            val ok = Acc.instance.setChargingLimitForOneCharge(limit)
+                            Toast.makeText(
+                                context,
+                                if (ok) getString(R.string.done_applied_charge_limit, limit)
+                                else getString(R.string.charge_once_did_not_start),
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                         catch (ex: Exception)
                         {
@@ -288,6 +295,28 @@ class BatteryDialogActivity : ScopedAppActivity()
                 negativeButton(android.R.string.cancel) {
                     Toast.makeText(context, R.string.charge_limit_not_applied, Toast.LENGTH_LONG).show()
                     finish()
+                }
+                // The widget dialog is the surface most likely to be open while a charge once is
+                // already running, and it was the one with no way to end one.
+                neutralButton(R.string.charge_once_cancel) {
+                    launch {
+                        try
+                        {
+                            val ended = Acc.instance.cancelChargingLimitForOneCharge()
+                            Toast.makeText(
+                                context,
+                                if (ended) R.string.charge_once_cancelled
+                                else R.string.charge_once_not_cancelled,
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        catch (ex: Exception)
+                        {
+                            LogExt().e(javaClass.simpleName, "cancelChargingLimitForOneCharge() failed: $ex")
+                            Toast.makeText(context, R.string.error_occurred, Toast.LENGTH_SHORT).show()
+                        }
+                        finish()
+                    }
                 }
             }
 

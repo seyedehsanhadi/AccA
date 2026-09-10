@@ -456,6 +456,7 @@ open class AccHandler(override val version: Int) : AccInterface {
             Thread.sleep(500)
             val out = Shell.su(
                 "echo LVL=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null); " +
+                "echo ST=$(cat /sys/class/power_supply/battery/status 2>/dev/null); " +
                 "echo RUN=$(ps -A -o ARGS 2>/dev/null | grep -c \'[a]ccd.*acc-f-config\'); " +
                 "grep -m1 \'^capacity=\' /dev/.vr25/acc/.acc-f-config 2>/dev/null"
             ).exec().out
@@ -475,6 +476,13 @@ open class AccHandler(override val version: Int) : AccInterface {
             // matching capacity, which also accepted a leftover file from an earlier run while
             // nothing at all was running - reporting success for a request that never started.
             if (level != null && level >= limit) { engaged = true; break }
+            // ...and the second way ACC ends a one-time charge: status=Full. An aged pack whose
+            // charge_full has fallen below its design capacity terminates BELOW the requested
+            // percentage - the FP5 whose gauge stops at 88% of design will never satisfy `acc -f
+            // 100` by level. ACC's completion hook already treats Full as the end of the charge,
+            // so this loop must too, or it reports failure for a request the daemon carried out
+            // and then correctly finished.
+            if (field("ST").equals("Full", true)) { engaged = true; break }
         }
         engaged
     }

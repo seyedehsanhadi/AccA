@@ -2,6 +2,8 @@ package mattecarra.accapp
 
 import mattecarra.accapp.models.BatteryInfo
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -11,8 +13,8 @@ import org.junit.Test
  */
 class BatteryInfoConvertersTest {
 
-    private fun info(currentNow: Float = 0f, voltageNow: Float = 0f) = BatteryInfo(
-        name = "battery", isInputSuspend = false, status = "Discharging", health = "Good",
+    private fun info(currentNow: Float = 0f, voltageNow: Float = 0f, status: String = "Discharging") = BatteryInfo(
+        name = "battery", isInputSuspend = false, status = status, health = "Good",
         present = 1, chargeType = "USB", capacity = 50, chargerTemp = -1, chargerTempMax = -1,
         isInputCurrentLimited = false, voltageNow = voltageNow, voltageMax = -1, voltageQnovo = -1,
         currentNow = currentNow, currentQnovo = -1, constantChargeCurrentMax = -1,
@@ -42,11 +44,10 @@ class BatteryInfoConvertersTest {
         assertEquals(-350f, info(currentNow = -350000f).getCurrentNow(CurrentUnit.uA), 0.01f)
     }
 
-    // The magnitude guard folds an impossible reading back rather than printing millions of mA.
     @Test
-    fun outOfRangeMagnitudeIsFoldedBack() {
+    fun outOfRangeMagnitudeIsUnavailable() {
         val out = info(currentNow = -350000f).getCurrentNow(CurrentUnit.A)
-        assertEquals(-350f, out, 0.01f)
+        org.junit.Assert.assertTrue(out.isNaN())
     }
 
     @Test
@@ -64,5 +65,35 @@ class BatteryInfoConvertersTest {
     @Test
     fun zeroVoltageIsPassedThroughUntouched() {
         assertEquals(0f, info(voltageNow = 0f).getVoltageNow(VoltageUnit.V), 0.001f)
+    }
+
+    // THE LEGACY DASHBOARD PATH BELIEVES THE STATUS WORD, AND SOME KERNELS LIE WITH IT.
+    //
+    // Fairphone 5, 2026-09-09: battery/status held "Charging" with no pause anywhere while the pack
+    // left at -1.33 A and the level walked 23 -> 21%. `isCharging()` was `status == "Charging"`,
+    // full stop, so DashboardFragment's fallback branch and BatteryInfoWidget's `?:` fallback both
+    // printed the charging label over a negative current. isChargingNow() has settled this rule for
+    // every other surface since the Pixel 6a native-limit report; these two never called it.
+    //
+    // The reading wins over the word. With no reading to offer, the word still decides, so a caller
+    // that has no scaled current is unaffected.
+    @Test
+    fun aLyingChargingStatusLosesToANegativeCurrent() {
+        val lying = info(currentNow = -1.33f, status = "Charging")
+        assertTrue(lying.isCharging())
+        assertFalse(lying.isCharging(lying.getCurrentNow(CurrentUnit.A)))
+    }
+
+    @Test
+    fun anHonestChargingStatusSurvivesAPositiveCurrent() {
+        val real = info(currentNow = 1.85f, status = "Charging")
+        assertTrue(real.isCharging(real.getCurrentNow(CurrentUnit.A)))
+    }
+
+    // The dead band: a pack doing nothing must not flip the label on sensor noise.
+    @Test
+    fun aTinyNegativeCurrentDoesNotOverturnTheStatus() {
+        val idle = info(currentNow = -0.02f, status = "Charging")
+        assertTrue(idle.isCharging(idle.getCurrentNow(CurrentUnit.A)))
     }
 }

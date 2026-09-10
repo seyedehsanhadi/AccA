@@ -133,6 +133,28 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
             if (failed == true)
                 Toast.makeText(this, getString(R.string.error_occurred), Toast.LENGTH_LONG).show()
         })
+
+        // ACC adjusts a value it cannot take literally and explains why on stdout. That explanation
+        // was thrown away, so a corrected threshold appeared as if the app had ignored the entry.
+        _sharedViewModel.observeAccNotice(this, Observer { notice ->
+            if (!notice.isNullOrBlank())
+                Toast.makeText(this, notice, Toast.LENGTH_LONG).show()
+        })
+
+        // A scheduled apply runs while nobody is looking, and its commands are joined with ';' so
+        // a later success used to erase an earlier refusal. Each one now leaves a marker; report
+        // them the first time the app is opened afterwards, then clear.
+        launch {
+            try {
+                val failed = Acc.instance.takeScheduleFailures()
+                if (failed.isNotEmpty())
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.schedule_partly_failed, failed.joinToString(", ")),
+                        Toast.LENGTH_LONG
+                    ).show()
+            } catch (e: Exception) { }
+        }
         }
 
         // Set Bottom Navigation Bar Item Selected Listener

@@ -481,6 +481,9 @@ class DashboardFragment : ScopedFragment()
             "Idle" -> getString(R.string.status_idle)
             "Draining" -> getString(R.string.status_draining)
             "Bypass" -> getString(R.string.status_bypass)
+            // Unknown must not fall through to "Charging": the else arm below is the charging arm,
+            // so an unanswered state export used to read as a confirmed charge.
+            "Unknown" -> getString(R.string.status_unknown)
             else -> if (state.status.equals("Full", true)) state.status else getString(R.string.charge_meter_charging)
         }
     }
@@ -582,7 +585,10 @@ class DashboardFragment : ScopedFragment()
                     // missing reading look like a measured one, on the exact row that exists to
                     // explain why a plugged phone is not charging.
                     iin?.let { String.format("%.2f", it / 1000f) } ?: "—",
-                    watts ?: 0.0
+                    // Same rule for the wattage: 0.000 W is a measurement, and ACC not having one
+                    // is not that. This row exists to explain a plugged phone that is not charging,
+                    // so an invented zero is the worst possible filler for it.
+                    watts?.let { String.format("%.3f", it) } ?: "—"
                 )
             !charging || watts == null || clsRes == null -> null
             vinOk != null && iinOk != null && vbat in 3000..4600 -> {

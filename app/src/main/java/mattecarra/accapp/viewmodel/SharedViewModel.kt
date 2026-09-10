@@ -22,6 +22,11 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
     private val mApplyFailed: MutableLiveData<Boolean> = MutableLiveData()
     val applyFailed: LiveData<Boolean> get() = mApplyFailed
 
+    // What ACC said while applying: the explanation it prints when it CORRECTS a value rather
+    // than taking it literally. Recorded by the update commands, published once per apply.
+    private val mAccNotice: MutableLiveData<String> = MutableLiveData()
+    val accNotice: LiveData<String> get() = mAccNotice
+
     /**
      * Re-read ACC's config and publish it. For when something OUTSIDE AccA changed it -- a script,
      * a DJS schedule, an edit to config.txt -- which no writer here would have posted.
@@ -69,6 +74,13 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
      */
     fun observeApplyFailed(owner: LifecycleOwner, observer: Observer<Boolean>) {
         mApplyFailed.observe(owner, observer)
+    }
+
+    /**
+     * Sets an observer for ACC's own explanation of an adjustment it made during an apply.
+     */
+    fun observeAccNotice(owner: LifecycleOwner, observer: Observer<String>) {
+        mAccNotice.observe(owner, observer)
     }
 
     /*
@@ -134,8 +146,10 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
     {
         val cue = ConfigUpdaterEnable(mSharedPrefs).let { c -> enables?.let { c.forProfile(it) } ?: c }
         var applyOk = false
+        mattecarra.accapp.models.AccNotices.take()   // drop anything left from a previous apply
         Acc.instance.updateAccConfig(value, cue).also {
             applyOk = it.isSuccessful()
+            mattecarra.accapp.models.AccNotices.take()?.let { notice -> mAccNotice.postValue(notice) }
 
             if (it.isSuccessful())
             {
@@ -178,16 +192,12 @@ class SharedViewModel(application: Application) : AndroidViewModel(application)
                 }
                 catch (ex: Exception)
                 {
-                    try
-                    {
-                        LogExt().e("saveAccConfig()","Error in readConfig() -> readDefaultConfig()")
-                        Acc.instance.readDefaultConfig()
-                    }
-                    catch (ex2: Exception)
-                    {
-                        LogExt().e("saveAccConfig()","readDefaultConfig() also failed: ${ex2.message}")
-                        null
-                    }
+                    // NOT readDefaultConfig(). Falling back to the defaults answered "what is ACC
+                    // enforcing?" with "what ACC would enforce out of the box" - the same invention
+                    // the empty-read guard in the handler exists to stop, one layer up. A failed
+                    // read has no answer; say so and let the UI show the failure.
+                    LogExt().e("saveAccConfig()", "read-back failed after a failed apply: ${ex.message}")
+                    null
                 }
 
                 config.postValue(Pair(currentConfigVal, null))

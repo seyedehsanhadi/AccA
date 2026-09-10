@@ -64,7 +64,7 @@ class AccStateTest {
              "sensing":{"currentUnits":"uA","polarity":"normal"},"switch":{"userLocked":true,"measuredClass":"charging"}}
         """.trimIndent()
         val s = AccState.parseState(json)!!
-        assertEquals(19, s.chargeWatts)
+        assertEquals(19.0, s.chargeWatts)
         assertEquals("fast", s.chargeClass)
         assertNull("null reason must stay null", s.chargeReason)
         assertFalse(s.chargeApprox)
@@ -79,7 +79,7 @@ class AccStateTest {
              "sensing":{"currentUnits":"uA","polarity":"normal"},"switch":{"userLocked":false,"measuredClass":"charging"}}
         """.trimIndent()
         val s = AccState.parseState(json)!!
-        assertEquals(2, s.chargeWatts)
+        assertEquals(2.0, s.chargeWatts)
         assertEquals("slow", s.chargeClass)
         assertEquals("taper", s.chargeReason)
         assertTrue(s.chargeApprox)
@@ -191,5 +191,44 @@ class AccStateTest {
         assertFalse(shutdownTempValid(50, 71))
         // typical default config (max 50, shutdown 55) is valid.
         assertTrue(shutdownTempValid(50, 55))
+    }
+
+    // The unplugged rc25 payload, captured verbatim from a Mi A3 on 2026-09-08. Every field the
+    // daemon cannot measure with no charger attached is a JSON null, and that is the shape the
+    // dashboard sees for most of the day.
+    private val rc25Unplugged = """
+        {"schemaVersion":1,"ts":1788861553,"device":{"model":"MI A3"},
+         "acc":{"version":"v2025.5.18-6.5.1-rc25-test","versionCode":"202505334"},
+         "battery":{"capacityPct":29,"current_raw":893097,"voltage_raw":3638,"temp_deci_c":435,"status":"Discharging"},
+         "plugged":false,"input":{"voltageMv":null,"currentMa":null},
+         "charge":{"watts":null,"class":null,"reason":null,"approx":false},
+         "native":{"enabled":false},
+         "sensing":{"currentUnits":"uA","polarity":"inverted","polaritySource":"learned","statusTrust":"trusted","confidence":"high","ccDir":"unknown"},
+         "switch":{"locked":"battery/input_suspend 0 1 --","userLocked":true,"measuredClass":"discharging"}}
+    """.trimIndent()
+
+    @Test
+    fun `a json null charge class is absent, not the word null`() {
+        val s = AccState.parseState(rc25Unplugged)
+        assertNotNull(s)
+        // Android's JSONObject.optString returns "null" for a JSON null rather than the fallback,
+        // so a nullable string field read that way is non-blank and survives every isNotBlank()
+        // guard - the dashboard then prints the word null where a charge class belongs.
+        assertNull("chargeClass", s!!.chargeClass)
+        assertNull("chargeReason", s.chargeReason)
+        assertNull("chargeWatts", s.chargeWatts)
+        assertNull("inputVoltageMv", s.inputVoltageMv)
+        assertNull("inputCurrentMa", s.inputCurrentMa)
+    }
+
+    @Test
+    fun `an unplugged rc25 payload still parses its battery reading`() {
+        val s = AccState.parseState(rc25Unplugged)!!
+        assertEquals(29, s.capacityPct)
+        assertEquals("uA", s.currentUnits)
+        assertEquals("inverted", s.polarity)
+        assertFalse(s.plugged)
+        // inverted polarity: a positive raw reading is a discharge
+        assertTrue(s.signedCurrentMilliAmps() < 0f)
     }
 }

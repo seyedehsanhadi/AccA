@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import mattecarra.accapp.acc.Acc
 import mattecarra.accapp.acc.ConfigUpdateResult
+import mattecarra.accapp.acc.ConfigUpdater
 import mattecarra.accapp.acc.ConfigUpdaterEnable
 import mattecarra.accapp.models.AccConfig
 import mattecarra.accapp.models.AccState
@@ -91,6 +92,23 @@ interface AccInterface {
      */
     suspend fun cancelChargingLimitForOneCharge(): Boolean = false
 
+    /**
+     * Read and clear the markers a scheduled apply leaves behind when one of its commands fails.
+     * Returns the ACC keys that did not take, so a schedule that half-applied at 3am can still be
+     * reported the next time the app is opened.
+     */
+    suspend fun takeScheduleFailures(): List<String> = withContext(Dispatchers.IO) {
+        val dir = ConfigUpdater.MARKER_DIR
+        val prefix = ConfigUpdater.MARKER_PREFIX
+        // -a, because the markers are DOTFILES: a plain `ls` lists none of them and this returned
+        // an empty list every time while the failures sat on disk. Caught on laurus with three
+        // markers present and the reader reporting none.
+        val keys = Shell.su("ls -a $dir 2>/dev/null | grep '^$prefix'").exec().out
+            .mapNotNull { it.trim().removePrefix(prefix).ifBlank { null } }
+        if (keys.isNotEmpty()) Shell.su("rm -f $dir/$prefix* 2>/dev/null").exec()
+        keys
+    }
+
     suspend fun updateAccConfig(accConfig: AccConfig, cue: ConfigUpdaterEnable): ConfigUpdateResult
 
     /**
@@ -146,7 +164,12 @@ interface AccInterface {
     fun getUpdateAccTemperatureCommand(coolDownTemperature: Int, temperatureMax: Int, wait: Int, shutdownTemperature: Int): String
     suspend fun updateAccTemperature(coolDownTemperature: Int, temperatureMax: Int, wait: Int, shutdownTemperature: Int) : Boolean = withContext(
         Dispatchers.IO) {
-        Shell.su(getUpdateAccTemperatureCommand(coolDownTemperature, temperatureMax, wait, shutdownTemperature)).exec().isSuccess
+        // ACC does not only accept or refuse a temperature: out-of-order thresholds are CORRECTED
+        // and explained on stdout. That output was discarded, so the app reported success and then
+        // displayed a value the user never chose with nothing to say why. Keep the explanation.
+        val res = Shell.su(getUpdateAccTemperatureCommand(coolDownTemperature, temperatureMax, wait, shutdownTemperature)).exec()
+        mattecarra.accapp.models.AccNotices.record(res.out + res.err)
+        res.isSuccess
     }
 
     /**
@@ -160,7 +183,11 @@ interface AccInterface {
     fun getUpdateAccCapacityCommand(shutdown: Int, coolDown: Int, resume: Int, pause: Int): String
     suspend fun updateAccCapacity(shutdown: Int, coolDown: Int, resume: Int, pause: Int) : Boolean = withContext(
         Dispatchers.IO) {
-        Shell.su(getUpdateAccCapacityCommand(shutdown, coolDown, resume, pause)).exec().isSuccess
+        // Same reason as the temperature command above: ACC corrects a resume that is not below
+        // its pause and says so.
+        val res = Shell.su(getUpdateAccCapacityCommand(shutdown, coolDown, resume, pause)).exec()
+        mattecarra.accapp.models.AccNotices.record(res.out + res.err)
+        res.isSuccess
     }
 
     /**

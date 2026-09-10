@@ -22,8 +22,22 @@ fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? =
     // while the current beside it was negative. Route the tail through the one rule.
     isChargingNow(measuredClass, status, signedMa) -> "Charging"
     signedMa != null && signedMa < -IDLE_BAND_MA -> "Draining"
-    else -> "Idle"
+    // Idle is a MEASUREMENT: the pack is sitting inside the band, either way. Saying it without a
+    // reading was an answer invented out of nothing - a plugged phone whose daemon reported no
+    // class, no status and no current printed "Idle" with the same confidence as one measured at
+    // 3 mA, and an unrecognised class ("trickle", a vendor word, a future ACC state) landed there
+    // too. Name the absence instead.
+    signedMa != null -> "Idle"
+    hasEvidence(measuredClass, status) -> "Idle"
+    else -> "Unknown"
 }
+
+/**
+ * Did the daemon tell us anything at all? A blank class and a blank status mean the state export
+ * did not answer, which is not the same as answering "nothing is happening".
+ */
+private fun hasEvidence(measuredClass: String?, status: String?): Boolean =
+    !measuredClass.isNullOrBlank() || !status.isNullOrBlank()
 
 /** Below this, in either direction, the pack is doing nothing worth naming. */
 const val IDLE_BAND_MA = 50f

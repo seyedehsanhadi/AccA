@@ -168,33 +168,53 @@ data class ConfigUpdater(val accConfig: AccConfig, val cue: ConfigUpdaterEnable)
     fun concatenateCommands(acc: AccInterface): String
     {
         return listOfNotNull(
-            if (!cue.sendCapacity) null else acc.getUpdateAccCapacityCommand(
+            if (!cue.sendCapacity) null else tag("capacity", acc.getUpdateAccCapacityCommand(
                 accConfig.configCapacity.shutdown,
                 // Same rule as the live path above: the cool-down PERCENTAGE is its own ACC key and
                 // must survive the ratio being cleared. This sibling still wrote the disable value,
                 // so every schedule/boot/DJS apply silently reset it.
                 accConfig.coolDownPercent(),
                 accConfig.configCapacity.resume,
-                accConfig.configCapacity.pause ),
-            if (!cue.sendVoltage) null else acc.getUpdateAccVoltControlCommand(
+                accConfig.configCapacity.pause)),
+            if (!cue.sendVoltage) null else tag("voltage", acc.getUpdateAccVoltControlCommand(
                 accConfig.configVoltage.controlFile,
-                accConfig.configVoltage.max ),
-            if (!cue.sendCurrMax) null else acc.getUpdateAccCurrentMaxCommand(accConfig.configCurrMax),
-            if (!cue.sendTemperature) null else acc.getUpdateAccTemperatureCommand(
+                accConfig.configVoltage.max)),
+            if (!cue.sendCurrMax) null else tag("current", acc.getUpdateAccCurrentMaxCommand(accConfig.configCurrMax)),
+            if (!cue.sendTemperature) null else tag("temperature", acc.getUpdateAccTemperatureCommand(
                 accConfig.configTemperature.coolDownTemperature,
                 accConfig.configTemperature.maxTemperature,
                 accConfig.configTemperature.pause,
-                accConfig.configTemperature.shutdown ),
-            if (!cue.sendCoolDown) null else acc.getUpdateAccCoolDownCommand(
+                accConfig.configTemperature.shutdown)),
+            if (!cue.sendCoolDown) null else tag("cooldown", acc.getUpdateAccCoolDownCommand(
                 accConfig.configCoolDown?.charge,
-                accConfig.configCoolDown?.pause ),
-            if (!cue.sendResetUnplugged) null else acc.getUpdateResetUnpluggedCommand(accConfig.configResetUnplugged),
-            if (!cue.sendResetBsOnPause) null else acc.getUpdateResetOnPauseCommand(accConfig.configResetBsOnPause),
-            if (!cue.sendOnBoot) null else acc.getUpdateAccOnBootCommand(accConfig.configOnBoot),
-            if (!cue.sendOnPlug) null else acc.getUpdateAccOnPluggedCommand(accConfig.configOnPlug),
-            if (!cue.sendChargeSwitch) null else acc.getUpdateAccChargingSwitchCommand(accConfig.configChargeSwitch, accConfig.configIsAutomaticSwitchingEnabled),
-            if (!cue.sendBatteryIdleMode) null else acc.getUpdatePrioritizeBatteryIdleModeCommand(accConfig.prioritizeBatteryIdleMode)
+                accConfig.configCoolDown?.pause)),
+            if (!cue.sendResetUnplugged) null else tag("resetunplugged", acc.getUpdateResetUnpluggedCommand(accConfig.configResetUnplugged)),
+            if (!cue.sendResetBsOnPause) null else tag("resetonpause", acc.getUpdateResetOnPauseCommand(accConfig.configResetBsOnPause)),
+            if (!cue.sendOnBoot) null else tag("onboot", acc.getUpdateAccOnBootCommand(accConfig.configOnBoot)),
+            if (!cue.sendOnPlug) null else tag("onplug", acc.getUpdateAccOnPluggedCommand(accConfig.configOnPlug)),
+            if (!cue.sendChargeSwitch) null else tag("switch", acc.getUpdateAccChargingSwitchCommand(accConfig.configChargeSwitch, accConfig.configIsAutomaticSwitchingEnabled)),
+            if (!cue.sendBatteryIdleMode) null else tag("idlemode", acc.getUpdatePrioritizeBatteryIdleModeCommand(accConfig.prioritizeBatteryIdleMode))
         ).filter { it.isNotBlank() }.joinToString("; ")
+    }
+
+    /**
+     * A scheduled apply is one config line that ACC sources, and `;` between commands means the
+     * LAST one decides what the shell reports. A capacity write that was refused was therefore
+     * erased by a temperature write that succeeded a millisecond later, and the schedule looked
+     * like it had run cleanly. Joining with `&&` instead would be worse: one refused key would
+     * abandon every key after it.
+     *
+     * So keep the semantics and record the loss. Each command drops a marker named after its own
+     * key when it fails; MARKER_DIR is on persistent storage, so a failure that happened at 3am
+     * survives to be shown. `touch` takes a fixed path with no spaces or quotes, which is what
+     * makes this safe to embed in a config line ACC will source.
+     */
+    private fun tag(key: String, cmd: String): String =
+        if (cmd.isBlank()) cmd else "{ $cmd; } || touch $MARKER_DIR/$MARKER_PREFIX$key"
+
+    companion object {
+        const val MARKER_DIR = "/data/adb/vr25/acc-data/logs"
+        const val MARKER_PREFIX = ".sched-fail-"
     }
 }
 

@@ -78,9 +78,18 @@ class BatteryInfo(val name: String,
 {
     /**
      * Returns whether the battery is charging or not.
-     * @return if battery is charging.
+     *
+     * `status == "Charging"` on its own is the kernel's word, and some kernels lie with it. A
+     * Fairphone 5 held "Charging" with no pause anywhere while the pack left at -1.33 A and the
+     * level walked 23 -> 21%; the two surfaces that fall back to this call -- DashboardFragment's
+     * branch for when `acca --state` returns nothing, and BatteryInfoWidget's `?:` -- printed the
+     * charging label over a negative current. isChargingNow() has settled this rule for every other
+     * surface since the Pixel 6a native-limit report, and these were the two that never asked it.
+     *
+     * Pass the current in MILLIAMPS, signed, when the caller has it: a reading beats the word.
+     * With none to offer the word still decides, so a caller with no scale is unaffected.
      */
-    fun isCharging(): Boolean = status == "Charging"
+    fun isCharging(signedMa: Float? = null): Boolean = isChargingNow(null, status, signedMa)
 
     fun getRawVoltageNow(): Float = voltageNow
     fun getRawCurrentNow(): Float = currentNow
@@ -109,6 +118,7 @@ class BatteryInfo(val name: String,
 
     fun getVoltageNow(input: VoltageUnit, output: VoltageUnit, withMeaUnit: Boolean): String
     {
+        if (!getVoltageNow(input).isFinite()) return "—"
         return if (output == VoltageUnit.V) { String.format("%.3f",getVoltageNow(input)) + if (withMeaUnit) " V" else "" }
         else (getVoltageNow(input) * 1000f).toInt().toString() + if (withMeaUnit) " mV" else ""
     }
@@ -122,17 +132,12 @@ class BatteryInfo(val name: String,
         var mA = if (unit == CurrentUnit.uA) (currentNow / 1000f)
         else if(unit == CurrentUnit.mA) currentNow
         else (currentNow * 1000) // CurrentUnit.A --> mA !!
-        // Safety net for a mis-scaled feed (the historical uA-reported-as-A bug that printed
-        // "impossible" millions of mA on the dashboard): a phone cell's current is physically
-        // well under 20 A, so fold an out-of-range magnitude back by 1000 until it is sane.
-        // With a correctly-scaled daemon this never triggers. Display only.
-        var guard = 0
-        while ((mA > 20000f || mA < -20000f) && guard < 3) { mA /= 1000f; guard++ }
-        return mA
+        return mA.takeIf { it.isFinite() && kotlin.math.abs(it) <= 100000f } ?: Float.NaN
     }
 
     fun getCurrentNow(input: CurrentUnit, output: CurrentUnit, positive: Boolean, withMeaUnit: Boolean): String
     {
+        if (!getCurrentNow(input).isFinite()) return "—"
         val rmd = if (positive) 1 else -1
         return if (output == CurrentUnit.A) { String.format("%.3f", getCurrentNow(input) / 1000f * rmd) + if (withMeaUnit) " A" else "" }
         else (getCurrentNow(input) * rmd).toInt().toString() + if (withMeaUnit) " mA" else ""
@@ -146,6 +151,7 @@ class BatteryInfo(val name: String,
         // Display-only; runs on every dashboard/widget refresh. A locale-formatted
         // string round-trip could throw NumberFormatException, so parse defensively
         // and fall back to the raw arithmetic value (never crash the UI).
+        if (temperature !in -100..200) return Float.NaN
         val fahrenheit = (temperature * 1.8f + 32f)
         return if (unit == TemperatureUnit.C) temperature.toFloat()
         else String.format("%.1f", fahrenheit).replace(",", ".", true).toFloatOrNull() ?: fahrenheit
@@ -153,6 +159,7 @@ class BatteryInfo(val name: String,
 
     fun getTemperature(unit: TemperatureUnit, withMeaUnit: Boolean): String
     {
+        if (!getTemperature(unit).isFinite()) return "—"
         return if (unit == TemperatureUnit.C) { getTemperature(unit).toInt().toString() + if (withMeaUnit) " "+Typography.degree+"C" else "" }
         else if (unit == TemperatureUnit.F) { getTemperature(unit).toString() + if (withMeaUnit) " "+Typography.degree+"F" else "" }
         else { getTemperature(TemperatureUnit.C, withMeaUnit) +"/"+ getTemperature(TemperatureUnit.F, withMeaUnit) }

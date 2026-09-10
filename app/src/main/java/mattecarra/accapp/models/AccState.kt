@@ -45,7 +45,7 @@ data class AccState(
     val nativeStartLevel: Int = -1,
     val inputVoltageMv: Int? = null,
     val inputCurrentMa: Int? = null,
-    val chargeWatts: Int? = null,
+    val chargeWatts: Double? = null,
     val chargeClass: String? = null,
     val chargeReason: String? = null,
     val chargeApprox: Boolean = false,
@@ -58,7 +58,9 @@ data class AccState(
      * a Pixel 6a: the card read "Resume: 70% - Stop: 75%" for minutes while the config said 19 20
      * and the firmware-limit row beside it, fed from --state, already said 19% - 20%.
      */
-    val configSignature: String? = null
+    val configSignature: String? = null,
+    val currentValid: Boolean = true,
+    val ccDir: String = "unknown"
 ) {
 
     /**
@@ -72,7 +74,19 @@ data class AccState(
      * it in [measuredClass]; take the magnitude and let the class/status decide the sign.
      */
     fun signedCurrentMilliAmps(): Float {
-        val mA = if (currentUnits.equals("uA", ignoreCase = true)) currentRaw / 1000f else currentRaw.toFloat()
+        if (!currentValid) return Float.NaN
+        val mA = when (currentUnits.lowercase()) {
+            "ua", "µa", "μa" -> currentRaw / 1000f
+            "ma" -> currentRaw.toFloat()
+            "a" -> currentRaw * 1000f
+            else -> return Float.NaN
+        }
+        if (!mA.isFinite() || kotlin.math.abs(mA) > 100000f) return Float.NaN
+        if (kotlin.math.abs(mA) >= 30f) {
+            if (ccDir == "falling") return -kotlin.math.abs(mA)
+            if (ccDir == "rising" && plugged) return kotlin.math.abs(mA)
+        }
+        if (polarity.lowercase() !in setOf("normal", "inverted", "unstable")) return Float.NaN
         return normaliseMilliAmps(mA, polarity, measuredClass, status)
     }
 
@@ -95,8 +109,9 @@ data class AccState(
          * computed this correctly but kept the formula to itself.
          */
         fun batteryWatts(signedMa: Float, voltageRaw: Long): Float {
-            val mv = if (voltageRaw >= 100000L) (voltageRaw / 1000L).toInt() else voltageRaw.toInt()
-            return if (mv > 1000) signedMa * mv / 1000000f else 0f
+            val volts = if (voltageRaw >= 100000L) voltageRaw / 1000000.0 else voltageRaw / 1000.0
+            return if (volts in 1.0..50.0 && signedMa.isFinite() && kotlin.math.abs(signedMa) <= 100000f)
+                (signedMa / 1000.0 * volts).toFloat() else Float.NaN
         }
 
         fun normaliseMilliAmps(rawMa: Float, polarity: String?, measuredClass: String?, status: String?): Float =
@@ -107,8 +122,12 @@ data class AccState(
                     // the same one rule every label uses. It had its own copy that took
                     // measuredClass at face value, which printed +268 mA on a Pixel 6a that was
                     // plugged, held at its native limit and draining.
+                    if (measuredClass?.lowercase() !in setOf("charging", "drain", "discharging", "bypass", "idle", "standby", "cut", "cut-input") &&
+                        status?.lowercase() !in setOf("charging", "discharging", "full", "not charging")) Float.NaN
+                    else {
                     val mag = kotlin.math.abs(rawMa)
                     if (isChargingNow(measuredClass, status)) mag else -mag
+                    }
                 }
                 else -> rawMa
             }
@@ -161,13 +180,15 @@ data class AccState(
                 AccState(
                     schemaVersion = schema,
                     capacityPct = battery.optInt("capacityPct", -1),
-                    currentRaw = battery.optLong("current_raw", 0L),
-                    voltageRaw = battery.optLong("voltage_raw", 0L),
-                    tempDeciC = battery.optInt("temp_deci_c", -1),
+                    currentRaw = battery.opt("current_raw")?.toString()?.toLongOrNull() ?: 0L,
+                    currentValid = battery.opt("current_raw")?.toString()?.toLongOrNull() != null,
+                    voltageRaw = battery.opt("voltage_raw")?.toString()?.toLongOrNull()?.takeIf { it in 1000L..50000L || it in 1000000L..50000000L } ?: 0L,
+                    tempDeciC = battery.opt("temp_deci_c")?.toString()?.toIntOrNull()?.takeIf { it in -1000..2000 } ?: Int.MIN_VALUE,
                     status = battery.optString("status", "Unknown"),
                     plugged = root.optBoolean("plugged", false),
-                    currentUnits = sensing.optString("currentUnits", "uA"),
-                    polarity = sensing.optString("polarity", "normal"),
+                    currentUnits = sensing.optString("currentUnits", "unknown"),
+                    polarity = sensing.optString("polarity", "unknown"),
+                    ccDir = sensing.optString("ccDir", "unknown"),
                     userLocked = sw.optBoolean("userLocked", false),
                     measuredClass = sw.optString("measuredClass", ""),
                     // versionCode is emitted as a string ("202505229"); accept either and
@@ -180,15 +201,15 @@ data class AccState(
                     // charger-INPUT telemetry (rc11+): live input volts/amps, null when the
                     // device has no readable input nodes or the daemon predates the field.
                     inputVoltageMv = root.optJSONObject("input")?.let { inp ->
-                        if (inp.isNull("voltageMv")) null else inp.optInt("voltageMv").takeIf { it > 0 }
+                        inp.opt("voltageMv")?.toString()?.toIntOrNull()?.takeIf { it in 1000..50000 }
                     },
                     inputCurrentMa = root.optJSONObject("input")?.let { inp ->
-                        if (inp.isNull("currentMa")) null else inp.optInt("currentMa")
+                        inp.opt("currentMa")?.toString()?.toIntOrNull()?.takeIf { it in -100000..100000 }
                     },
                     // charge-speed block (rc12 engine+): physics-only class from input watts.
                     // Nullable end to end so any older daemon just hides the dashboard line.
                     chargeWatts = root.optJSONObject("charge")?.let { ch ->
-                        if (ch.isNull("watts")) null else ch.optInt("watts")
+                        ch.opt("watts")?.toString()?.toDoubleOrNull()?.takeIf { it.isFinite() && it in 0.0..5000.0 }
                     },
                     chargeClass = root.optJSONObject("charge")?.optString("class", "")?.takeIf { it.isNotBlank() },
                     chargeReason = root.optJSONObject("charge")?.optString("reason", "")?.takeIf { it.isNotBlank() },

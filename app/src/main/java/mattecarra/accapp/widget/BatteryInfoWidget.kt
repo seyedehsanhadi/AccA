@@ -283,14 +283,15 @@ class BatteryInfoWidget : AppWidgetProvider()
                 // Give the rule its third input. measuredClass is refreshed on a slower cadence than the
                 // current, so a stale "charging" class over a freshly negative reading printed "Charging
                 // speed" above a discharging number. The signed current is the tie-break.
+                val prefc = Preferences(context)
                 val chargingNow = accState?.let { isChargingNow(it.measuredClass, it.status, it.signedCurrentMilliAmps()) }
-                    ?: batteryInfo.isCharging()
+                    // Same fallback, same trap: with no --state snapshot the status word is on its
+                    // own, and a Fairphone 5 kept it at "Charging" while the pack drained at 1.33 A.
+                    ?: batteryInfo.isCharging(batteryInfo.getCurrentNow(prefc.currentInputUnitOfMeasure))
 
                 widgetView.setTextViewText(R.id.charging_label, if (replaceLabel) "Ⓒ:"
                 else if (chargingNow) context.getString(R.string.info_charging_speed)
                      else context.getString(R.string.info_discharging_speed))
-
-                val prefc = Preferences(context)
 
                 // normaliseMilliAmps() takes the RAW reading out of --state. `acc -i` has ALREADY
                 // applied polarity, so feeding its value through it corrects an already-corrected

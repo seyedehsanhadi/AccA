@@ -293,7 +293,13 @@ class SwitchFinderActivity : ScopedAppActivity()
             assets.open(ASSET).use { input ->
                 appFile.outputStream().use { output -> input.copyTo(output) }
             }
-            Shell.su("rm -f $STOPF /data/local/tmp/acc-compat-verified; cp ${appFile.absolutePath} $TESTER_PATH; chmod 0755 $TESTER_PATH").exec().isSuccess
+            // `;` between the three means the result is chmod's alone. If the copy fails while a
+            // tester from an earlier run is still lying at TESTER_PATH, chmod succeeds on that old
+            // file and this reports true - so the finder would scan with a stale AMPS while the
+            // caller believed it had just staged the bundled one. `&&` makes the copy part of the
+            // answer; the rm stays separate because deleting absent markers is not a failure.
+            Shell.su("rm -f $STOPF /data/local/tmp/acc-compat-verified || true").exec()
+            Shell.su("cp ${appFile.absolutePath} $TESTER_PATH && chmod 0755 $TESTER_PATH").exec().isSuccess
         }
         catch (ex: Exception)
         {

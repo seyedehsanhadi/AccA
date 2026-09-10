@@ -513,6 +513,8 @@
     <string name="status_standby">Standby</string>
     <string name="status_draining">Draining</string>
     <string name="status_idle">Idle</string>
+    <string name="status_unknown">Unknown</string>
+    <string name="schedule_partly_failed">A scheduled profile did not fully apply. ACC refused: %1$s</string>
     <string name="status_discharging">Discharging</string>
     <string name="status_hint">Charging = battery filling. Idle = plugged in, battery resting (held/full). Bypass = plugged in, phone runs on the charger. Standby = unplugged. Draining = battery going down. The number next to it is the real rate.</string>
     <string name="about_attributes">Attributes</string>
@@ -557,7 +559,7 @@
     <string name="dash_charge_fmt_approx">From charger: ~%2$.3f W or more (%1$s, approximate)</string>
     <!-- ACC is holding the input: the charger is running the phone, none of it reaching the
          battery. Measured watts, deliberately no speed class - nothing is filling. -->
-    <string name="dash_charge_fmt_held">From charger: %1$s &#183; %2$s A &#183; %3$.3f W input</string>
+    <string name="dash_charge_fmt_held">From charger: %1$s &#183; %2$s A &#183; %3$s W input</string>
     <string name="charge_once_cancel">End charge once</string>
     <string name="charge_once_cancelled">Charge once ended; your saved limit is back in force</string>
     <string name="charge_once_not_cancelled">Nothing to end, or ACC did not hand back</string>

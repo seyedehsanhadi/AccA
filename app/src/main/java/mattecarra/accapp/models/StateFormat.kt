@@ -19,7 +19,7 @@ object StateFormat {
      * third as its neighbour. currentOutputUnitOfMeasure really can hold uA (Preferences maps the
      * stored string "uA"), so `unit == A` else mA printed microamps with a mA suffix.
      */
-    fun current(signedMilliAmps: Float, unit: CurrentUnit): String = when (unit) {
+    fun current(signedMilliAmps: Float, unit: CurrentUnit): String = if (!signedMilliAmps.isFinite()) "—" else when (unit) {
         CurrentUnit.A  -> String.format("%.3f", signedMilliAmps / 1000f) + " A"
         CurrentUnit.uA -> (signedMilliAmps * 1000f).toLong().toString() + " µA"
         else           -> signedMilliAmps.toInt().toString() + " mA"
@@ -35,6 +35,7 @@ object StateFormat {
      * the same screen.
      */
     fun temperature(tempDeciC: Int, unit: TemperatureUnit): String {
+        if (tempDeciC !in -1000..2000) return "—"
         val c = tempDeciC / 10f
         val f = c * 1.8f + 32f
         val deg = Typography.degree
@@ -50,10 +51,12 @@ object StateFormat {
      * millivolt-scale reading up rather than printing 0.004 V.
      */
     fun voltage(voltageRaw: Long, unit: VoltageUnit): String {
-        val mV = if (voltageRaw >= 100000L) voltageRaw / 1000L else voltageRaw
+        val microvolts = if (voltageRaw >= 100000L) voltageRaw else voltageRaw.takeIf { it in 1000L..50000L }?.times(1000L) ?: return "—"
+        if (microvolts !in 1000000L..50000000L) return "—"
+        val mV = microvolts / 1000L
         return when (unit) {
-            VoltageUnit.V  -> String.format("%.3f", mV / 1000f) + " V"
-            VoltageUnit.uV -> (mV * 1000L).toString() + " µV"
+            VoltageUnit.V  -> String.format("%.3f", microvolts / 1000000.0) + " V"
+            VoltageUnit.uV -> microvolts.toString() + " µV"
             else           -> mV.toString() + " mV"
         }
     }
