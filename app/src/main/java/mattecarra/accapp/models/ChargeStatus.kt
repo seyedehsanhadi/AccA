@@ -9,35 +9,40 @@ package mattecarra.accapp.models
 fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? = null,
                      signedMa: Float? = null): String = when {
     !plugged -> "Discharging"
+    // A DECISIVE MEASUREMENT OUTRANKS EVERY INFERENCE, IN BOTH DIRECTIONS.
+    //
+    // The negative half of this rule was already here and the positive half was missing, so the
+    // contradiction it exists to prevent came back mirrored: ACC reporting class "charging" while
+    // the kernel said "Not charging" fell past every arm to a bare `signedMa != null -> Idle`,
+    // and the dashboard printed "Idle" directly above "+1000 mA". A class of "idle", or a cut that
+    // is no longer holding, did the same. Current into the pack above the band IS charging,
+    // whatever the class and the kernel say about it.
+    signedMa != null && signedMa < -IDLE_BAND_MA -> "Draining"
+    signedMa != null && signedMa > IDLE_BAND_MA -> "Charging"
     measuredClass.equals("bypass", true) -> "Bypass"
     measuredClass.equals("idle", true) || measuredClass.equals("standby", true) -> "Idle"
     measuredClass.equals("drain", true) || measuredClass.equals("discharging", true) -> "Draining"
+    // A cut IS a statement: ACC is holding the input off. With no decisive current to contradict
+    // it, that earns Idle - unlike the token "unknown", which asserts nothing. Reached only after
+    // the measurement arms above, so a cut that is no longer holding still reads as charging.
+    measuredClass.equals("cut", true) || measuredClass.equals("cut-input", true) -> "Idle"
     // A cut means the input is held OFF: the cable is in, the battery is not charging. It used to
     // fall through to the "Charging" default, so every phone whose switch is an input cut reported
     // Charging while ACC was holding it. It then returned "Idle" unconditionally, which put the
-    // same contradiction back for a cut phone running off its own pack: Idle printed above -311 mA.
-    // A cut says nothing about which of the two is happening, so let the current decide, below.
-    // The word had its own copy of the rule and never looked at the kernel, so the same Pixel 6a
-    // that drained at -362 mA behind a native level limit printed "Charging" on the dashboard
-    // while the current beside it was negative. Route the tail through the one rule.
+    // same contradiction back for a cut phone running off its own pack. Both directions are
+    // settled by the two measurement arms above; what is left here is the inference-only case.
     isChargingNow(measuredClass, status, signedMa) -> "Charging"
-    signedMa != null && signedMa < -IDLE_BAND_MA -> "Draining"
-    // Idle is a MEASUREMENT: the pack is sitting inside the band, either way. Saying it without a
-    // reading was an answer invented out of nothing - a plugged phone whose daemon reported no
-    // class, no status and no current printed "Idle" with the same confidence as one measured at
-    // 3 mA, and an unrecognised class ("trickle", a vendor word, a future ACC state) landed there
-    // too. Name the absence instead.
+    // Inside the band, in either direction: the pack really is sitting still. This is the ONLY
+    // reading that earns the word.
     signedMa != null -> "Idle"
-    hasEvidence(measuredClass, status) -> "Idle"
+    // No reading at all. Only an EXPLICIT statement from the kernel justifies a word here -- Full,
+    // Not charging, Discharging. The literal token "unknown", which ACC exports for a class it
+    // could not determine and some kernels put in `status`, is not a statement: counting it as one
+    // is how "Idle" came to be printed for a phone that had told us nothing.
+    isNotChargingStatus(status) -> "Idle"
     else -> "Unknown"
 }
 
-/**
- * Did the daemon tell us anything at all? A blank class and a blank status mean the state export
- * did not answer, which is not the same as answering "nothing is happening".
- */
-private fun hasEvidence(measuredClass: String?, status: String?): Boolean =
-    !measuredClass.isNullOrBlank() || !status.isNullOrBlank()
 
 /** Below this, in either direction, the pack is doing nothing worth naming. */
 const val IDLE_BAND_MA = 50f
@@ -59,6 +64,10 @@ fun isChargingNow(measuredClass: String?, status: String?, signedMa: Float? = nu
     // 5 mA, and a native level latch, each left "charging"/"Charging" standing while the pack
     // drained. Where a real reading contradicts them, the reading wins.
     signedMa != null && signedMa < -IDLE_BAND_MA -> false
+    // ...and the mirror of it. A measured current INTO the pack above the band is charging, even
+    // when the class or the kernel says otherwise; without this the widget and the meter could
+    // still answer "not charging" over a positive reading.
+    signedMa != null && signedMa > IDLE_BAND_MA -> true
     measuredClass.equals("drain", true) || measuredClass.equals("discharging", true) ||
     measuredClass.equals("bypass", true) || measuredClass.equals("idle", true) ||
     measuredClass.equals("standby", true) || measuredClass.equals("cut", true) ||
@@ -74,7 +83,7 @@ fun isChargingNow(measuredClass: String?, status: String?, signedMa: Float? = nu
     else -> (signedMa ?: 0f) > 80f
 }
 
-private fun isNotChargingStatus(status: String?): Boolean =
+internal fun isNotChargingStatus(status: String?): Boolean =
     status?.let {
         it.contains("Discharging", true) || it.contains("Not charging", true) ||
         it.equals("Full", true)

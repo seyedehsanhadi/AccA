@@ -121,7 +121,8 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
                 val inAmp = snapshot?.inputCurrentMa?.let { kotlin.math.abs(it / 1000.0) }
                 val inW = if (vbusV != null && inAmp != null) vbusV * inAmp else null
                 lastCharger = chargerLine(online, realType, vbusV, inAmp, inW, pd, busVolts(vmax))
-                speedV = speedVerdict(online, realType, vbusV, inW, pd, busVolts(vmax), mcc)
+                speedV = speedVerdict(online, realType, vbusV, inW, pd, busVolts(vmax), mcc,
+                    snapshot?.chargeClass, snapshot?.chargeWatts, chg)
 
                 _state.postValue(State(fixed.toString() + "\n## charger / speed\n" + lastCharger + "\nverdict: " + speedV + "\n" + log.toString() + runningNote(t + 1, changes, stuck), true, t + 1, seconds))
                 // hold a true ~1s cadence: the root read above already spent ~0.4s, so delay only the remainder,
@@ -139,43 +140,13 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() { job?.cancel(); releaseWl() }
 
     // ---- charger / charging-speed ----
-    private fun adapter(realType: String?): String {
-        val r = (realType ?: "").uppercase()
-        return when {
-            r.contains("PPS") -> "USB-PD PPS"; r.contains("PD") -> "USB-PD"
-            r.contains("HVDCP_3") || r.contains("QC3") -> "QuickCharge 3"; r.contains("HVDCP") || r.contains("QC") -> "QuickCharge"
-            r.contains("DCP") -> "wall charger (DCP)"; r.contains("CDP") -> "USB port (CDP)"
-            r.contains("SDP") || r == "USB" -> "USB port (SDP)"
-            r.isBlank() || r == "?" || r.contains("UNKNOWN") || r.contains("FLOAT") -> "unknown"
-            else -> realType ?: "unknown"
-        }
-    }
     private fun chargerLine(online: Boolean, rt: String?, vbusV: Double?, inA: Double?, inW: Double?, pd: Boolean, vmaxV: Double?): String {
         if (!online) return "not charging (no charger online / input suspended)"
         return "adapter ${adapter(rt)}${if (pd) " (PD active)" else ""}, " +
             "in ${vbusV?.let { String.format("%.1f", it) } ?: "?"}V x ${inA?.let { String.format("%.2f", it) } ?: "?"}A = ${inW?.let { String.format("%.1f", it) } ?: "?"}W" +
             (vmaxV?.let { ", negotiated max ${String.format("%.0f", it)}V" } ?: "")
     }
-    private fun speedVerdict(online: Boolean, rt: String?, vbusV: Double?, inW: Double?, pd: Boolean, vmaxV: Double?, mcc: String?): String {
-        if (!online) return "not charging — plug the charger in and run again (if plugged, ACC may have paused at your limit)."
-        val fastActive = (vbusV != null && vbusV >= 8.5) || pd
-        val fastCapable = fastActive || (vmaxV != null && vmaxV >= 8.5) ||
-            adapter(rt).let { it.contains("PD") || it.contains("Quick") }
-        val w = inW?.let { String.format("%.0f", it) } ?: "?"
-        val base = when {
-            // A negotiated 9V, or a PD flag, says the ADAPTER agreed to a high-voltage contract.
-            // It does not say power is flowing: a collapsed supply keeps the voltage and delivers
-            // nothing, which is exactly the FP5 case. Claiming "FAST charging is WORKING - ~?W"
-            // off a voltage reading with no measured wattage is the app answering for the charger.
-            fastActive && inW == null ->
-                "a high-voltage contract is negotiated (${vbusV?.let { String.format("%.1f", it) } ?: "?"}V${if (pd) ", PD" else ""}), " +
-                "but the input power could not be measured, so whether it is actually charging fast is unproven."
-            fastActive -> "FAST charging is WORKING — ~${w}W (${vbusV?.let { String.format("%.1f", it) }}V${if (pd) ", PD" else ""})."
-            fastCapable -> "fast-capable adapter but only ~${vbusV?.let { String.format("%.1f", it) }}V negotiated (~${w}W) — likely a cable/port/handshake problem; try the OEM cable and another port."
-            else -> "standard charging ~${w}W (adapter ${adapter(rt)}, 5V) — this is NOT a fast charger."
-        }
-        return base + if (mcc != null && mcc != "" && mcc != "0") "  NOTE: ACC caps current to ${mcc} — that is YOUR charge-control setting, not the charger." else ""
-    }
+
 
     // ---- battery dynamics ----
     private fun runningNote(n: Int, changes: Int, stuck: Int): String {
@@ -199,6 +170,55 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
             chg && !not -> "steady charging, no pause in ${s}s (battery below the stop level)."
             !chg && not -> "steady paused/idle, no flicker — the limit is holding."
             else -> "no clear charge activity in ${s}s (unplugged?)."
+        }
+    }
+
+    companion object {
+        // Pure: it decides what the user is told about their charger, so it is pinned by tests
+        // and must not need a running capture to answer.
+        private fun adapter(realType: String?): String {
+            val r = (realType ?: "").uppercase()
+            return when {
+                r.contains("PPS") -> "USB-PD PPS"; r.contains("PD") -> "USB-PD"
+                r.contains("HVDCP_3") || r.contains("QC3") -> "QuickCharge 3"; r.contains("HVDCP") || r.contains("QC") -> "QuickCharge"
+                r.contains("DCP") -> "wall charger (DCP)"; r.contains("CDP") -> "USB port (CDP)"
+                r.contains("SDP") || r == "USB" -> "USB port (SDP)"
+                r.isBlank() || r == "?" || r.contains("UNKNOWN") || r.contains("FLOAT") -> "unknown"
+                else -> realType ?: "unknown"
+            }
+        }
+        internal fun speedVerdict(online: Boolean, rt: String?, vbusV: Double?, inW: Double?, pd: Boolean, vmaxV: Double?, mcc: String?,
+                                 accClass: String?, accWatts: Double?, charging: Boolean): String {
+            if (!online) return "not charging — plug the charger in and run again (if plugged, ACC may have paused at your limit)."
+            // ACC MEASURES this and names it: chargeClass is its own verdict over the input voltage,
+            // the input current and the pack current together. Prefer it. The voltage and the PD flag
+            // are what the ADAPTER agreed to, which is a different question.
+            val accSaysFast = accClass?.lowercase()?.let { it == "fast" || it == "superfast" || it == "hyper" } == true
+            val accSaysSlow = accClass?.lowercase()?.let { it == "slow" || it == "standard" } == true
+            // A wattage of zero is not a wattage: a collapsed supply holds 9V and delivers nothing,
+            // which is the whole shape of the Fairphone 5 report. Treat 0 like a missing reading.
+            val measuredW = (accWatts ?: inW)?.takeIf { it > 0.1 }
+            val contractHigh = (vbusV != null && vbusV >= 8.5) || pd
+            val fastActive = accSaysFast || (contractHigh && measuredW != null && charging && !accSaysSlow)
+            val fastCapable = fastActive || contractHigh || (vmaxV != null && vmaxV >= 8.5) ||
+                adapter(rt).let { it.contains("PD") || it.contains("Quick") }
+            val w = measuredW?.let { String.format("%.0f", it) } ?: "?"
+            val base = when {
+                // A negotiated 9V, or a PD flag, says the ADAPTER agreed to a high-voltage contract.
+                // It does not say power is flowing: a collapsed supply keeps the voltage and delivers
+                // nothing, which is exactly the FP5 case - 9V on the bus, 0W into the phone, and the
+                // old wording called that "FAST charging is WORKING".
+                contractHigh && !fastActive ->
+                    "a high-voltage contract is negotiated (${vbusV?.let { String.format("%.1f", it) } ?: "?"}V${if (pd) ", PD" else ""}), " +
+                    (if (measuredW == null) "but no power was measured coming in"
+                     else if (!charging) "but the battery is not taking charge"
+                     else "but ACC classes the rate as ${accClass ?: "unremarkable"}") +
+                    " — the adapter agreed to a fast contract that is not being delivered."
+                fastActive -> "FAST charging is WORKING — ~${w}W (${vbusV?.let { String.format("%.1f", it) } ?: "?"}V${if (pd) ", PD" else ""})."
+                fastCapable -> "fast-capable adapter but only ~${vbusV?.let { String.format("%.1f", it) }}V negotiated (~${w}W) — likely a cable/port/handshake problem; try the OEM cable and another port."
+                else -> "standard charging ~${w}W (adapter ${adapter(rt)}, 5V) — this is NOT a fast charger."
+            }
+            return base + if (mcc != null && mcc != "" && mcc != "0") "  NOTE: ACC caps current to ${mcc} — that is YOUR charge-control setting, not the charger." else ""
         }
     }
 }
