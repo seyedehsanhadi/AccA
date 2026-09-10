@@ -86,6 +86,8 @@
 
     <string name="reset_unplugged">Reset battery stats on unplug</string>
     <string name="reset_stats">Reset battery stats</string>
+    <string name="reset_stats_done">Battery stats reset</string>
+    <string name="reset_stats_failed">Could not reset battery stats</string>
     <string name="enable_cooldown">Enable cooldown cycle:</string>
     <string name="cooldown_capacity" formatted="false">Start cooling down at %:</string>
     <string name="resume_charge">Resume charging at:</string>
@@ -215,6 +217,7 @@
     <string name="edit_charging_limit_once_button">Charge once to #\%, without restrictions</string>
     <string name="done_applied_charge_limit">Charging to %1$d%%</string>
     <string name="charge_limit_not_applied">Apply charge limit canceled</string>
+    <string name="charge_once_did_not_start">Charge-once did not start. ACC could not take over charging on this device.</string>
     <string name="apply">Apply</string>
     <string name="done">Done</string>
     <string name="edit_charging_limit_once_dialog_msg">Your regular settings are automatically restored once the chosen battery level is reached.</string>
@@ -550,11 +553,14 @@
     <!-- Charger side, stated as such. The card also shows a battery-side wattage, and the two
          differ by conversion loss; leaving both unlabelled read as a contradiction. The old
          "(x1.0 to battery)" ratio was a 0.84-scaled voltage quotient no user could act on. -->
-    <string name="dash_charge_fmt">From charger: %1$s &#183; %2$s A &#183; %3$d W &#183; %4$s</string>
-    <string name="dash_charge_fmt_approx">From charger: ~%2$d W or more (%1$s, approximate)</string>
+    <string name="dash_charge_fmt">From charger: %1$s &#183; %2$s A &#183; %3$.3f W &#183; %4$s</string>
+    <string name="dash_charge_fmt_approx">From charger: ~%2$.3f W or more (%1$s, approximate)</string>
     <!-- ACC is holding the input: the charger is running the phone, none of it reaching the
          battery. Measured watts, deliberately no speed class - nothing is filling. -->
-    <string name="dash_charge_fmt_held">From charger: %1$s &#183; %2$s A &#183; %3$d W to battery</string>
+    <string name="dash_charge_fmt_held">From charger: %1$s &#183; %2$s A &#183; %3$.3f W input</string>
+    <string name="charge_once_cancel">End charge once</string>
+    <string name="charge_once_cancelled">Charge once ended; your saved limit is back in force</string>
+    <string name="charge_once_not_cancelled">Nothing to end, or ACC did not hand back</string>
     <!-- Status-bar charge meter (rc15) -->
     <string name="charge_meter_channel">Charging current meter</string>
     <string name="charge_meter_charging">Charging</string>

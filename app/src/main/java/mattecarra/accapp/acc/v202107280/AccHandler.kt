@@ -107,15 +107,32 @@ open class AccHandler(override val version: Int) : AccInterface {
     }
 
     override suspend fun readDefaultConfig(): AccConfig = withContext(Dispatchers.IO) {
-        val defaultConfig = Shell.su("/dev/.vr25/acc/acca --set --print-default").exec().out.joinToString(separator = "\n")
-
-        parseConfig(defaultConfig)
+        parseConfig(readOrThrow("/dev/.vr25/acc/acca --set --print-default", "default config"))
     }
 
     @Throws(IOException::class)
     @WorkerThread
-    open fun readConfigToString(): String {
-        return Shell.su("/dev/.vr25/acc/acca --set --print").exec().out.joinToString(separator = "\n")
+    open fun readConfigToString(): String = readOrThrow("/dev/.vr25/acc/acca --set --print", "config")
+
+    /**
+     * A failed read used to come back as an empty string, and parseConfig turns an empty string
+     * into the DEFAULT config: every regex misses, so every field takes its fallback. A phone whose
+     * daemon was down, or whose acca could not be reached, then showed 70/80 and a full set of
+     * temperature thresholds as though those limits were live and being enforced.
+     *
+     * `--set --print` emits long keys, one per line, and pause_capacity is the one whose absence
+     * produces the wrong answer: with no match the parser falls back to 80 and the dashboard
+     * shows a limit nobody set. Present in both --print and --print-default, verified on
+     * laurus and bluejay. Callers already treat readConfig() as throwing, so refusing here
+     * surfaces the failure instead of inventing an answer.
+     */
+    @Throws(IOException::class)
+    private fun readOrThrow(cmd: String, what: String): String {
+        val res = Shell.su(cmd).exec()
+        val out = res.out.joinToString(separator = "\n")
+        if (!out.contains("pause_capacity="))
+            throw IOException("could not read the ACC " + what + " (exit " + res.code + ", " + out.length + " bytes)")
+        return out
     }
 
     // Returns OnBoot value
@@ -219,9 +236,9 @@ open class AccHandler(override val version: Int) : AccInterface {
      */
     private val LEVEL_LOWER_REGEXP = """^\s*level (\d+)""".toRegex(RegexOption.MULTILINE)
     private val STATUS_LOWER_REGEXP = """^\s*status (.+)""".toRegex(RegexOption.MULTILINE)
-    private val TEMP_LOWER_REGEXP = """^\s*temp (\d+)""".toRegex(RegexOption.MULTILINE)
+    private val TEMP_LOWER_REGEXP = """^\s*temp ([-+]?\d+)""".toRegex(RegexOption.MULTILINE)
     private val VOLTAGE_NOW_LOWER_REGEXP = """^\s*voltage_now ([0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
-    private val CURRENT_NOW_LOWER_REGEXP = """^\s*current_now (-?[0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
+    private val CURRENT_NOW_LOWER_REGEXP = """^\s*current_now ([-+]?[0-9]*\.?[0-9]+)""".toRegex(RegexOption.MULTILINE)
     private val CHARGE_TYPE_LOWER_REGEXP = """^\s*charge_type (.+)""".toRegex(RegexOption.MULTILINE)
 
     private fun lowerStatus(info: String): String? =
@@ -269,13 +286,13 @@ open class AccHandler(override val version: Int) : AccInterface {
             CHARGER_TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: -1,
             CHARGER_TEMP_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: -1,
             INPUT_CURRENT_LIMITED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
-            VOLTAGE_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: VOLTAGE_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f,
+            VOLTAGE_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: VOLTAGE_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: Float.NaN,
             VOLTAGE_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             VOLTAGE_QNOVO_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            CURRENT_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: CURRENT_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: 0f,
+            CURRENT_NOW_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: CURRENT_NOW_LOWER_REGEXP.find(info)?.destructured?.component1()?.toFloatOrNull() ?: Float.NaN,
             CURRENT_QNOVO_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
             CONSTANT_CHARGE_CURRENT_MAX_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
-            TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: TEMP_LOWER_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: -1,
+            TEMP_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull()?.let { it/10 } ?: TEMP_LOWER_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() ?: Int.MIN_VALUE,
             TECHNOLOGY_REGEXP.find(info)?.destructured?.component1() ?: STRING_UNKNOWN,
             STEP_CHARGING_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
             SW_JEITA_ENABLED_REGEXP.find(info)?.destructured?.component1()?.toIntOrNull() == 1,
@@ -414,10 +431,73 @@ open class AccHandler(override val version: Int) : AccInterface {
     override suspend fun setChargingLimitForOneCharge(limit: Int): Boolean = withContext(Dispatchers.IO) {
         // `acc -f` blocks for the entire charge, so it must stay backgrounded. The bare-PATH
         // `command -v acc` probe silently no-ops on KernelSU (acc is not on PATH there), so use
-        // the absolute binary path used everywhere else in this handler. isSuccess reflects
-        // whether the command could be launched (catches acc absent) while the long charge
-        // itself still runs non-blocking in the background. "true" = launched, not done.
-        Shell.su("(/dev/.vr25/acc/acca -f $limit &)").exec().isSuccess
+        // the absolute binary path used everywhere else in this handler.
+        //
+        // The old return value was a lie. `( cmd & )` exits 0 whatever happens inside it - a
+        // missing binary, a refused capacity, a daemon that never took over - so isSuccess was
+        // always true and the caller showed "applied" over a mode that had not started. A user on
+        // an OnePlus 8 Pro reported the button doing nothing while the same command worked from a
+        // shell, and the app had no way to tell him which of the two had happened.
+        //
+        // acc -f writes a throwaway config and execs the daemon onto it, so the mode is engaged
+        // exactly when a daemon is running on that file with the capacity that was asked for.
+        // Poll for it rather than trust the launch.
+        //
+        // The window was 5s, on a measurement of about one second taken on a Pixel 6a. Re-measured
+        // on a Mi A3 the hand-off took 5 and 6 seconds across repeated runs -- the daemon has to be
+        // killed, the lock released and a new one started through service.sh -- so the budget was
+        // being spent exactly at the point the answer arrives. Losing that race shows
+        // "Charge-once did not start" over a mode that DID start, which is the confusion this poll
+        // was added to end. 15s costs nothing on success, because the loop still breaks the moment
+        // it sees the daemon; it only lengthens the wait before an honest failure is reported.
+        Shell.su("(/dev/.vr25/acc/acca -f $limit &)").exec()
+        var engaged = false
+        for (attempt in 1..30) {
+            Thread.sleep(500)
+            val out = Shell.su(
+                "echo LVL=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null); " +
+                "echo RUN=$(ps -A -o ARGS 2>/dev/null | grep -c \'[a]ccd.*acc-f-config\'); " +
+                "grep -m1 \'^capacity=\' /dev/.vr25/acc/.acc-f-config 2>/dev/null"
+            ).exec().out
+            fun field(k: String): String? =
+                out.firstOrNull { it.startsWith("$k=") }?.substringAfter('=')?.trim()
+            val running = field("RUN")?.toIntOrNull() ?: 0
+            val level = field("LVL")?.toIntOrNull()
+            // The daemon running on the throwaway config with the requested pause level is the
+            // only positive proof the mode engaged.
+            val cap = out.firstOrNull { it.startsWith("capacity=") }
+            val pause = cap?.substringAfter('(')?.substringBefore(')')?.trim()?.split(" ")?.getOrNull(3)
+            if (running > 0 && pause == limit.toString()) { engaged = true; break }
+            // A target at or below the current level is already satisfied: ACC applies it, the
+            // completion hook fires at once and the daemon hands straight back to config.txt, so
+            // there is no window in which this loop could see it running. That is success, not
+            // failure. The previous rule accepted any .acc-f-config younger than a minute with a
+            // matching capacity, which also accepted a leftover file from an earlier run while
+            // nothing at all was running - reporting success for a request that never started.
+            if (level != null && level >= limit) { engaged = true; break }
+        }
+        engaged
+    }
+
+    /**
+     * `acc -f 0` removes the throwaway config and re-execs the daemon onto the saved one, so the
+     * override is over exactly when that file is gone and nothing is running on it. Poll for both:
+     * the hand-off costs a daemon restart, measured at five to six seconds on a Mi A3.
+     */
+    override suspend fun cancelChargingLimitForOneCharge(): Boolean = withContext(Dispatchers.IO) {
+        Shell.su("/dev/.vr25/acc/acca -f 0").exec()
+        var ended = false
+        for (attempt in 1..30) {
+            Thread.sleep(500)
+            val out = Shell.su(
+                "echo RUN=$(ps -A -o ARGS 2>/dev/null | grep -c '[a]ccd.*acc-f-config'); " +
+                "echo FILE=$(test -e /dev/.vr25/acc/.acc-f-config && echo 1 || echo 0)"
+            ).exec().out
+            fun field(k: String): Int? =
+                out.firstOrNull { it.startsWith("$k=") }?.substringAfter('=')?.trim()?.toIntOrNull()
+            if ((field("RUN") ?: 1) == 0 && (field("FILE") ?: 1) == 0) { ended = true; break }
+        }
+        ended
     }
 
     /**

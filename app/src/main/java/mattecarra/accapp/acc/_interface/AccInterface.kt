@@ -81,6 +81,16 @@ interface AccInterface {
 
     suspend fun setChargingLimitForOneCharge(limit: Int): Boolean
 
+    /**
+     * End a charge-once override before it reaches its target.
+     *
+     * There was no way to do this from the app at all: the only exits were reaching the target or
+     * unplugging with -a, so a charge once started ran to completion. ACC ends it with `acc -f 0`.
+     * Handlers for ACC versions that predate that spelling keep the default and report failure
+     * rather than issuing a command those builds would read as "charge once to 0%".
+     */
+    suspend fun cancelChargingLimitForOneCharge(): Boolean = false
+
     suspend fun updateAccConfig(accConfig: AccConfig, cue: ConfigUpdaterEnable): ConfigUpdateResult
 
     /**

@@ -62,16 +62,6 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
             val acca = "/dev/.vr25/acc/acca"
             if (!Shell.rootAccess()) { _state.postValue(State("root: NOT GRANTED — cannot capture", false, 0, seconds)); return@launch }
 
-            // Ask the daemon how to read this device's current node before sampling it:
-            // currentUnits is uA or mA and polarity is normal or inverted. Hardcoding uA
-            // with an unsigned divide printed +117 mA on a Mi A3 that was discharging.
-            val sense = Shell.su("$acca --state 2>/dev/null").exec().out.joinToString("")
-            val curDiv = if (sense.contains("\"currentUnits\":\"mA\"")) 1L else 1000L
-            // "unstable" (dual-path PMIC) means the raw sign follows the charge PATH and carries
-            // no meaning; only "inverted" was handled, so those devices logged the wrong direction
-            // for the whole capture. Capture the daemon's own words and let AccState's rule decide.
-            val sensePolarity = Regex(""""polarity"\s*:\s*"([a-z]+)"""").find(sense)?.groupValues?.get(1) ?: "normal"
-            val senseClass = Regex(""""measuredClass"\s*:\s*"([a-z]+)"""").find(sense)?.groupValues?.get(1) ?: ""
             val head = Shell.su("$acca -sp charging_switch 2>/dev/null; $acca -sp capacity 2>/dev/null").exec().out.joinToString("\n")
             val sw = Regex("""charging_switch=(.*)""").find(head)?.groupValues?.get(1)?.trim()?.trim('"')?.ifBlank { null } ?: "(automatic)"
             val cap = Regex("""capacity=(.*)""").find(head)?.groupValues?.get(1)?.trim() ?: ""
@@ -100,14 +90,19 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
                 // battery
                 val lvl = f.getOrNull(0)?.ifBlank { null } ?: "?"
                 val st = f.getOrNull(1)?.ifBlank { null } ?: "?"
-                val iRaw = f.getOrNull(2)?.toLongOrNull(); val tRaw = f.getOrNull(3)?.toIntOrNull()
+                val snapshot = mattecarra.accapp.models.AccState.parseState(
+                    Shell.su("$acca --state 2>/dev/null").exec().out.joinToString(""))
                 val susp = f.getOrNull(4)?.ifBlank { null } ?: "?"
-                val mA = iRaw?.let {
-                    mattecarra.accapp.models.AccState
-                        .normaliseMilliAmps((it / curDiv).toFloat(), sensePolarity, senseClass, st).toLong()
-                }; val tempC = tRaw?.div(10)
+                val mA = snapshot?.signedCurrentMilliAmps()?.takeIf { it.isFinite() }?.toLong()
+                val tempC = snapshot?.tempDeciC?.takeIf { it in -1000..2000 }?.div(10)
                 log.append(String.format("%2d  %-4s %-13s %-9s %-4s %s\n", t, "$lvl%", st, mA?.toString() ?: "?", susp, tempC?.let { "${it}C" } ?: "?"))
-                val chg = st.contains("Charging", true) && !st.contains("Not", true)
+                // The kernel status alone decided this, so a capture taken behind a hold recorded
+                // "charging" for its whole run: a Pixel 6a at its native level limit reports
+                // Charging while the pack drains, and a laurus whose charger collapsed does the
+                // same. Ask the one rule every other surface uses, which lets a measured negative
+                // current overrule both the class and the status.
+                val chg = mattecarra.accapp.models.isChargingNow(
+                    snapshot?.measuredClass, st, mA?.toFloat())
                 if (chg) { sawChg = true; if (mA != null && mA in -30..30) stuck++ } else if (st != "?") sawNot = true
                 if (prev != null && prev != st) changes++; prev = st
                 if (tempC != null && tempC > maxT) maxT = tempC
@@ -118,25 +113,12 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
                 val realType = f.getOrNull(6)?.ifBlank { null } ?: f.getOrNull(7)?.ifBlank { null } ?: "?"
                 val vbus = f.getOrNull(8)?.toLongOrNull(); val inA = f.getOrNull(9)?.toLongOrNull() ?: f.getOrNull(10)?.toLongOrNull()
                 val vmax = f.getOrNull(11)?.toLongOrNull(); val pd = f.getOrNull(12) == "1"
-                // The PACK side is normalised from what the daemon learned; the BUS side was left
-                // on a hardcoded microvolt/microamp divide, so a kernel publishing usb/voltage_now
-                // in millivolts printed ~0.007 V and a watts figure to match. Normalise by
-                // magnitude instead, the same way BatteryInfo.getVoltageNow does: a charger bus
-                // is physically 3-24 V and its current 0-10 A, so the scales never overlap.
                 fun busVolts(raw: Long?): Double? = raw?.let {
-                    when { it >= 100000L -> it / 1e6      // microvolts
-                           it >= 100L    -> it / 1e3      // millivolts
-                           else          -> it.toDouble() // already volts
-                    } }
-                // Current CANNOT be scaled by magnitude the way voltage can: 50 mA is 50000 uA,
-                // and 50000 read as milliamps is 50 A. A kernel publishes the whole usb/* group in
-                // ONE convention, so take the scale from the bus VOLTAGE (3-24 V is unambiguous)
-                // and apply it to the current.
-                val busDiv = when { (vbus ?: 0L) >= 100000L -> 1e6   // usb/* is micro-scale
-                                    (vbus ?: 0L) >= 100L    -> 1e3   // usb/* is milli-scale
-                                    else                    -> 1.0 } // already volts/amps
-                fun busAmps(raw: Long?): Double? = raw?.let { it / busDiv }
-                val vbusV = busVolts(vbus); val inAmp = busAmps(inA)
+                    val mv = if (it >= 100000L) it / 1000L else it
+                    mv.takeIf { value -> value in 1000L..50000L }?.div(1000.0)
+                }
+                val vbusV = snapshot?.inputVoltageMv?.div(1000.0)
+                val inAmp = snapshot?.inputCurrentMa?.let { kotlin.math.abs(it / 1000.0) }
                 val inW = if (vbusV != null && inAmp != null) vbusV * inAmp else null
                 lastCharger = chargerLine(online, realType, vbusV, inAmp, inW, pd, busVolts(vmax))
                 speedV = speedVerdict(online, realType, vbusV, inW, pd, busVolts(vmax), mcc)

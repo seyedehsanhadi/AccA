@@ -152,7 +152,11 @@ class DashboardFragment : ScopedFragment()
                 mStateNullStreak++
                 binding.dashBatteryStatusTextView.text = getString(R.string.info_status_extended, dash.batteryInfo.status, dash.batteryInfo.chargeType)
 
-                binding.dashBatteryChargingSpeedTextView.text = if (dash.batteryInfo.isCharging()) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
+                // The scaled current goes in: this branch runs only when `acca --state` has given
+                // us nothing for three refreshes, so the kernel status word is all that is left --
+                // and it is the signal a Fairphone 5 held at "Charging" through a 1.33 A drain.
+                val legacyMa = dash.batteryInfo.getCurrentNow(preferences.currentInputUnitOfMeasure)
+                binding.dashBatteryChargingSpeedTextView.text = if (dash.batteryInfo.isCharging(legacyMa)) getString(R.string.info_charging_speed) else getString(R.string.info_discharging_speed)
 
                 val plus = if (Acc.instance.version < 202107280) dash.batteryInfo.isCharging() else true
                 binding.dashChargingSpeedTextView.text = dash.batteryInfo.getCurrentNow(preferences.currentInputUnitOfMeasure, preferences.currentOutputUnitOfMeasure, plus, true)
@@ -192,7 +196,21 @@ class DashboardFragment : ScopedFragment()
             }
 
             binding.dashResetBatteryStatsButton.setOnClickListener {
-                launch { try { Acc.instance.resetBatteryStats() } catch (e: Exception) { } }
+                // acca -R runs in the foreground and its exit code means something, but the result
+                // was discarded and the exception swallowed, so the button produced no visible
+                // effect of any kind - the user could not tell a reset from a failure to reset.
+                launch {
+                    val ok = try { Acc.instance.resetBatteryStats() } catch (e: Exception) {
+                        LogExt().e(javaClass.simpleName, "resetBatteryStats() failed: $e"); false
+                    }
+                    context?.let { c ->
+                        Toast.makeText(
+                            c,
+                            if (ok) R.string.reset_stats_done else R.string.reset_stats_failed,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
             }
 
             binding.dashEditCargingLimitOnceButton.setOnClickListener {
@@ -206,14 +224,40 @@ class DashboardFragment : ScopedFragment()
                         launch {
                             try {
                                 val limit = getCustomView().findViewById<NumberPicker>(R.id.charging_limit).value
-                                Acc.instance.setChargingLimitForOneCharge(limit)
-                                Toast.makeText(context, getString(R.string.done_applied_charge_limit, limit), Toast.LENGTH_LONG).show()
+                                // Report what happened, not that a command was issued: the launch
+                                // itself always "succeeds", so the toast used to say "Charging to
+                                // N%" even when the mode never engaged.
+                                val ok = Acc.instance.setChargingLimitForOneCharge(limit)
+                                Toast.makeText(
+                                    context,
+                                    if (ok) getString(R.string.done_applied_charge_limit, limit)
+                                    else getString(R.string.charge_once_did_not_start),
+                                    Toast.LENGTH_LONG
+                                ).show()
                             } catch (e: Exception) { }
                         }
                     }
                     negativeButton(android.R.string.cancel) {
                         launch {
                             context?.let { Toast.makeText(it, R.string.charge_limit_not_applied, Toast.LENGTH_LONG).show() }   // A8: guard nullable fragment context after the suspend point
+                        }
+                    }
+                    // A charge once could only end by reaching its target or, with -a, by being
+                    // unplugged. ACC has had `acc -f 0` for the third case the whole time and the
+                    // app never offered it, so a mistyped target ran to completion.
+                    neutralButton(R.string.charge_once_cancel) {
+                        launch {
+                            try {
+                                val ended = Acc.instance.cancelChargingLimitForOneCharge()
+                                context?.let { c ->
+                                    Toast.makeText(
+                                        c,
+                                        if (ended) R.string.charge_once_cancelled
+                                        else R.string.charge_once_not_cancelled,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            } catch (e: Exception) { }
                         }
                     }
                 }
@@ -534,8 +578,11 @@ class DashboardFragment : ScopedFragment()
                 getString(
                     R.string.dash_charge_fmt_held,
                     String.format("%.1f V", vin / 1000f),
-                    String.format("%.2f", (iin ?: 0) / 1000f),
-                    watts ?: 0
+                    // An input current ACC could not read is not zero amps. Printing 0.00 A made a
+                    // missing reading look like a measured one, on the exact row that exists to
+                    // explain why a plugged phone is not charging.
+                    iin?.let { String.format("%.2f", it / 1000f) } ?: "—",
+                    watts ?: 0.0
                 )
             !charging || watts == null || clsRes == null -> null
             vinOk != null && iinOk != null && vbat in 3000..4600 -> {
