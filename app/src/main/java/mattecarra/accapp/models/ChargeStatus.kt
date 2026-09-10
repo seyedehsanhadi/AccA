@@ -7,7 +7,21 @@ package mattecarra.accapp.models
  * firmware stop. Calling that "Idle" contradicted the current printed on the next line.
  */
 fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? = null,
-                     signedMa: Float? = null): String = when {
+                     signedMa: Float? = null): String = chargeStatusWordOf(plugged, measuredClass, status, finiteMa(signedMa))
+
+/**
+ * NaN IS THE ABSENCE OF A READING, NOT A READING.
+ *
+ * signedCurrentMilliAmps() returns Float.NaN for an unreadable current, an unknown unit, or a
+ * value outside +/-100 A - and NaN is not null, so it walked past every `signedMa != null` guard.
+ * Every comparison against NaN is false, so it also walked past both band arms, and landed on the
+ * one that says "Idle". A phone whose current ACC could not read therefore reported Idle with the
+ * same confidence as one measured at 3 mA, which is the exact invention this file exists to stop.
+ */
+private fun finiteMa(signedMa: Float?): Float? = signedMa?.takeIf { it.isFinite() }
+
+private fun chargeStatusWordOf(plugged: Boolean, measuredClass: String?, status: String?,
+                               signedMa: Float?): String = when {
     !plugged -> "Discharging"
     // A DECISIVE MEASUREMENT OUTRANKS EVERY INFERENCE, IN BOTH DIRECTIONS.
     //
@@ -31,7 +45,7 @@ fun chargeStatusWord(plugged: Boolean, measuredClass: String?, status: String? =
     // Charging while ACC was holding it. It then returned "Idle" unconditionally, which put the
     // same contradiction back for a cut phone running off its own pack. Both directions are
     // settled by the two measurement arms above; what is left here is the inference-only case.
-    isChargingNow(measuredClass, status, signedMa) -> "Charging"
+    isChargingNowOf(measuredClass, status, signedMa) -> "Charging"
     // Inside the band, in either direction: the pack really is sitting still. This is the ONLY
     // reading that earns the word.
     signedMa != null -> "Idle"
@@ -58,7 +72,10 @@ const val IDLE_BAND_MA = 50f
  *
  * `signedMa` is the last resort for a daemon that reports neither a class nor a usable status.
  */
-fun isChargingNow(measuredClass: String?, status: String?, signedMa: Float? = null): Boolean = when {
+fun isChargingNow(measuredClass: String?, status: String?, signedMa: Float? = null): Boolean =
+    isChargingNowOf(measuredClass, status, finiteMa(signedMa))
+
+private fun isChargingNowOf(measuredClass: String?, status: String?, signedMa: Float?): Boolean = when {
     // A sustained negative current is a measurement; the class and the kernel status are both
     // inferences and both have been observed wrong together. A laurus charger that collapsed to
     // 5 mA, and a native level latch, each left "charging"/"Charging" standing while the pack

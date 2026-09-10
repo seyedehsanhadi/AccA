@@ -26,7 +26,15 @@ class CaptureVerdictTest {
     @Test fun nineVoltsWithNoMeasurementIsUnproven() {
         val v = verdict(9.0, null, true, null, null, false)
         assertFalse(v.contains("FAST charging is WORKING"))
-        assertTrue(v.contains("no power was measured"))
+        // Nothing measured the input, so the phone may not claim the contract is undelivered.
+        assertTrue(v.contains("unproven"))
+        assertFalse(v.contains("not being delivered"))
+    }
+
+    @Test fun measuredZeroStillAccusesTheAdapter() {
+        val v = verdict(9.0, 0.0, true, null, null, false)
+        assertTrue(v.contains("not being delivered"))
+        assertFalse(v.contains("unproven"))
     }
 
     @Test fun accsOwnFastClassIsBelieved() {

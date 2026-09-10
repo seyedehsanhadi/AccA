@@ -197,7 +197,8 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
             val accSaysSlow = accClass?.lowercase()?.let { it == "slow" || it == "standard" } == true
             // A wattage of zero is not a wattage: a collapsed supply holds 9V and delivers nothing,
             // which is the whole shape of the Fairphone 5 report. Treat 0 like a missing reading.
-            val measuredW = (accWatts ?: inW)?.takeIf { it > 0.1 }
+            val rawW = accWatts ?: inW
+            val measuredW = rawW?.takeIf { it > 0.1 }
             val contractHigh = (vbusV != null && vbusV >= 8.5) || pd
             val fastActive = accSaysFast || (contractHigh && measuredW != null && charging && !accSaysSlow)
             val fastCapable = fastActive || contractHigh || (vmaxV != null && vmaxV >= 8.5) ||
@@ -210,10 +211,19 @@ class ChargeCaptureViewModel(app: Application) : AndroidViewModel(app) {
                 // old wording called that "FAST charging is WORKING".
                 contractHigh && !fastActive ->
                     "a high-voltage contract is negotiated (${vbusV?.let { String.format("%.1f", it) } ?: "?"}V${if (pd) ", PD" else ""}), " +
-                    (if (measuredW == null) "but no power was measured coming in"
-                     else if (!charging) "but the battery is not taking charge"
-                     else "but ACC classes the rate as ${accClass ?: "unremarkable"}") +
-                    " — the adapter agreed to a fast contract that is not being delivered."
+                    when {
+                        // NO READING IS NOT A READING OF ZERO.
+                        // rawW null means nothing measured the input at all; claiming the contract
+                        // "is not being delivered" from that is an assertion the phone cannot back.
+                        rawW == null ->
+                            "but nothing here measures the incoming power, so whether the contract is delivered is unproven."
+                        measuredW == null ->
+                            "but the measured power is ~0W - the adapter agreed to a fast contract that is not being delivered."
+                        !charging ->
+                            "but the battery is not taking charge - the adapter agreed to a fast contract that is not being delivered."
+                        else ->
+                            "but ACC classes the rate as ${accClass ?: "unremarkable"} - the adapter agreed to a fast contract that is not being delivered."
+                    }
                 fastActive -> "FAST charging is WORKING — ~${w}W (${vbusV?.let { String.format("%.1f", it) } ?: "?"}V${if (pd) ", PD" else ""})."
                 fastCapable -> "fast-capable adapter but only ~${vbusV?.let { String.format("%.1f", it) }}V negotiated (~${w}W) — likely a cable/port/handshake problem; try the OEM cable and another port."
                 else -> "standard charging ~${w}W (adapter ${adapter(rt)}, 5V) — this is NOT a fast charger."
