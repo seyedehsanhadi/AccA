@@ -588,6 +588,7 @@
     <string name="charge_meter_battery_line">Battery %1$d%% · %2$s V · %3$s</string>
     <string name="charge_meter_holds_line">Holds at %1$d%%</string>
     <string name="charge_reason_user_limit">your Max current cap is applied</string>
+    <string name="charge_reason_voltage_limit">your Max voltage limit stops it here</string>
     <string name="charge_reason_thermal">slowed by heat</string>
     <string name="charge_reason_taper">topping off, near full</string>
     <string name="charger_tier_5v">5V standard charger</string>

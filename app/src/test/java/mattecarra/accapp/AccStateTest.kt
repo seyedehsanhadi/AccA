@@ -86,6 +86,23 @@ class AccStateTest {
     }
 
     @Test
+    fun parseState_voltageLimitReason_survives() {
+        // rc25-test15 added this reason: the pack sits at or above max_charging_voltage, so the
+        // charger has nothing to push against. Before it existed, that phone was told its CURRENT
+        // cap was the block, which sent one reporter through three rounds of the wrong setting.
+        val json = """
+            {"schemaVersion":1,"battery":{"capacityPct":59,"current_raw":181000,"voltage_raw":4008000,"temp_deci_c":290,"status":"Charging"},
+             "plugged":true,"input":{"voltageMv":5100,"currentMa":480},
+             "charge":{"watts":2.448,"class":"slow","reason":"voltage_limit","approx":false},
+             "sensing":{"currentUnits":"uA","polarity":"normal"},"switch":{"userLocked":true,"measuredClass":"charging"}}
+        """.trimIndent()
+        val s = AccState.parseState(json)!!
+        assertEquals("voltage_limit", s.chargeReason)
+        assertEquals("slow", s.chargeClass)
+        assertFalse(s.chargeApprox)
+    }
+
+    @Test
     fun parseState_chargeBlockAbsent_yieldsNulls() {
         // Old daemon (pre charge block) -> all null, dashboard line hides.
         val s = AccState.parseState(rc12Fixture)!!

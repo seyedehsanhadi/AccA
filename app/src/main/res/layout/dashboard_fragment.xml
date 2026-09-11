@@ -354,15 +354,19 @@
                         <!-- Charger tier + input (rc11): a single full-width line (NOT a label:value
                              row) - the value is a long sentence and a weighted label:value row
                              squeezed the label to zero and overflowed the narrow text column (over
-                             the capacity circle, and off the right edge). maxLines=2 + ellipsize
-                             keeps it tidy. Shown only while charging with input telemetry. -->
+                             the capacity circle, and off the right edge), so it stays full-width.
+                             maxLines was 2, which cut the only line that says WHY a phone is
+                             charging slowly: a OnePlus 8 Pro read "your Max current cap is ap".
+                             A reason the user cannot finish reading is not a reason, and this row
+                             is at most four lines even at the longest wording. Shown only while
+                             charging with input telemetry. -->
                         <TextView
                             android:id="@+id/dash_charger_textView"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:ellipsize="end"
-                            android:maxLines="2"
+                            android:maxLines="4"
                             android:textColor="?android:attr/textColorSecondary"
                             android:textSize="@dimen/label_text"
                             android:visibility="gone" />

@@ -559,6 +559,7 @@ class DashboardFragment : ScopedFragment()
         }
         val reasonRes = when (state.chargeReason) {
             "user_limit" -> R.string.charge_reason_user_limit
+            "voltage_limit" -> R.string.charge_reason_voltage_limit
             "thermal" -> R.string.charge_reason_thermal
             "taper" -> R.string.charge_reason_taper
             else -> null
