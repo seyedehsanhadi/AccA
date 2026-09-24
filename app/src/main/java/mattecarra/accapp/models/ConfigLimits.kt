@@ -20,10 +20,20 @@ object ConfigLimits {
     fun currentMaxValid(value: Int?): Boolean = (value ?: 0) in 1..9999
 
     /**
-     * shutdown_temp, matching ACC's write-config.sh rule exactly: it sits in
-     * [max(max_temp, 40) .. 70]. ACC accepts shutdown == max_temp (50/50), so AccA must too - an
-     * earlier max+3 / floor-50 tightening rejected configs the daemon would have taken.
+     * shutdown_temp, matching ACC's write-config.sh rule exactly: it sits in [40 .. 70], and it
+     * carries no max_temp term.
+     *
+     * The floor used to be max(max_temp, 40), which mirrored an ACC setter that rejected any
+     * cutoff below max_temp. That rule was removed after a field report - "47C and shutdown_temp 45
+     * did not fire", because `acc -s shutdown_temp=45` against the default max_temp 50 stored 55 and
+     * said nothing. The daemon never had the restriction: _temp_shutdown_check band-checks 40..70
+     * with no max_temp term at all. Keeping the old floor here would leave AccA refusing to save
+     * exactly the configuration the daemon now accepts and the reporter asked for.
+     *
+     * The two limits are independent. max_temp pauses CHARGING; this one powers the phone off
+     * whatever the cable is doing, so "power off at 45, pause charging at 50" is coherent - the
+     * pause is simply never reached.
      */
     fun shutdownTempValid(maxTemp: Int, shutdown: Int): Boolean =
-        shutdown in maxOf(maxTemp, 40)..70
+        shutdown in 40..70
 }

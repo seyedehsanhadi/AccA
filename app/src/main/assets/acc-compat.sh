@@ -1,7 +1,60 @@
 #!/system/bin/sh
 
 # AMPS - Adaptive Multi-device Probe & Selector.
-V=7.3.2
+V=7.3.3
+#SQ#
+# Motorola's MMI MediaTek driver exposes CURRENT_MAX as a write-only disable flag.
+# Other MediaTek drivers expose a numeric current limit at the same supply names.
+# Require both the vendor and the unreadable ABI before using boolean semantics.
+mtk_current_flag() {
+  case "/$1" in
+    */mtk-master-charger/current_max|*/mtk-slave-charger/current_max|*/mtk-mst-div-chg/current_max|*/mtk-slv-div-chg/current_max) ;;
+    *) return 1;;
+  esac
+  [ -f "$1" ] || return 1
+  case "$(getprop ro.product.manufacturer 2>/dev/null)" in
+    [Mm][Oo][Tt][Oo][Rr][Oo][Ll][Aa]*) ;;
+    *) return 1;;
+  esac
+  ! cat "$1" >/dev/null 2>&1
+}
+
+mtk_current_flags() {
+  local _mtk_name
+  for _mtk_name in mtk-master-charger mtk-slave-charger mtk-mst-div-chg mtk-slv-div-chg; do
+    mtk_current_flag "${1:-/sys/class/power_supply}/$_mtk_name/current_max" \
+      && printf '%s\n' "${1:-/sys/class/power_supply}/$_mtk_name/current_max"
+  done
+  return 0
+}
+
+# Command nodes are not restoreable settings. Only re-detect a proven dead,
+# low-voltage USB supply; an unknown reading must not destroy a working contract.
+charge_redetect_safe() {
+  local _p=${1:-/sys/class/power_supply} _f _v _i=
+  [ ! -f /dev/.vr25/acc/.hvcontract ] || return 1
+  [ ! -f /data/adb/vr25/acc-data/.rekick-off ] || return 1
+  [ "$(cat "$_p/usb/present" 2>/dev/null)" = 1 ] ||
+    [ "$(cat "$_p/usb/online" 2>/dev/null)" = 1 ] || return 1
+  for _f in real_type usb_type type; do
+    _v=$(cat "$_p/usb/$_f" 2>/dev/null)
+    case $_v in *\[*\]*) _v=${_v#*\[}; _v=${_v%%\]*};; esac
+    case $_v in *HVDCP*|*PD*|*QC*|*PPS*|*VOOC*|*WARP*|*DASH*|*SCP*|*hvdcp*|*pd*) return 1;; esac
+  done
+  _v=$(cat "$_p/usb/voltage_now" 2>/dev/null)
+  case $_v in ''|*[!0-9]*) return 1;; esac
+  [ "$_v" -gt 100000 ] && _v=$((_v / 1000))
+  [ "$_v" -gt 0 ] && [ "$_v" -lt 5500 ] || return 1
+  for _f in input_current_now current_now; do
+    _i=$(cat "$_p/usb/$_f" 2>/dev/null); _i=${_i#-}
+    case $_i in ''|*[!0-9]*) continue;; esac
+    # power_supply current is in uA. Refuse ambiguous/missing sensors.
+    [ "$_i" -le 50000 ] && return 0
+    return 1
+  done
+  return 1
+}
+#/SQ#
 export LC_ALL=C LANG=C
 case "${1:-}" in --selftest|--version) _STONLY=1;; esac
 _AMPSID="$( { sha256sum "$0" 2>/dev/null || sha1sum "$0" 2>/dev/null || md5sum "$0" 2>/dev/null; } | cut -c1-8 )"
@@ -90,13 +143,13 @@ OUTBASE="acc-compat-report-$TS.txt"
 OUT="$OUTDIR/$OUTBASE"
 n=1; while [ -e "$OUT" ]; do OUTBASE="acc-compat-report-$TS-$n.txt"; OUT="$OUTDIR/$OUTBASE"; n=$((n+1)); done
 OUT2="$TMPD/$OUTBASE"
-: > "$OUT" 2>/dev/null; : > "$OUT2" 2>/dev/null; : > "$SNAP" 2>/dev/null; : > "$DISC" 2>/dev/null; : > "$SNLIST" 2>/dev/null
-: > "$SCHG" 2>/dev/null; : > "$SUNP" 2>/dev/null; : > "$SHELD" 2>/dev/null; : > "$GENC" 2>/dev/null; : > "$BK/tested" 2>/dev/null
-: > "$BK/graded" 2>/dev/null
-: > "$BK/dead" 2>/dev/null; : > "$BK/stab" 2>/dev/null
-REG="$BK/switches.tsv"; : > "$REG" 2>/dev/null
-: > "$BK/combo.tsv" 2>/dev/null; : > "$BK/combo_seen" 2>/dev/null
-: > "$SHELD2" 2>/dev/null; : > "$TEACHC" 2>/dev/null; : > "$BK/teach_combo.tsv" 2>/dev/null
+true > "$OUT" 2>/dev/null; true > "$OUT2" 2>/dev/null; true > "$SNAP" 2>/dev/null; true > "$DISC" 2>/dev/null; true > "$SNLIST" 2>/dev/null
+true > "$SCHG" 2>/dev/null; true > "$SUNP" 2>/dev/null; true > "$SHELD" 2>/dev/null; true > "$GENC" 2>/dev/null; true > "$BK/tested" 2>/dev/null
+true > "$BK/graded" 2>/dev/null
+true > "$BK/dead" 2>/dev/null; true > "$BK/stab" 2>/dev/null
+REG="$BK/switches.tsv"; true > "$REG" 2>/dev/null
+true > "$BK/combo.tsv" 2>/dev/null; true > "$BK/combo_seen" 2>/dev/null
+true > "$SHELD2" 2>/dev/null; true > "$TEACHC" 2>/dev/null; true > "$BK/teach_combo.tsv" 2>/dev/null
 fi
 
 log(){ case "$*" in '==== LAYER '*) _lm="${1#==== LAYER }"; lyr_mark "${_lm%% *}";; esac
@@ -192,6 +245,15 @@ survivor_check(){
             *" "*|*"	"*) : ;;
             *) if [ -n "$_rcb" ] && [ "$_rcb" != unknown ] && [ "$_rcb" != "$(bootid)" ]; then
                  bl_add "$_rcn" "$_rcv"
+                 # This branch blacklists and restores NOTHING - there is no journal here, only
+                 # the value that was written. For a node whose release value is known that is
+                 # enough, and leaving a Motorola disable flag latched strands the phone exactly
+                 # as the journal branch did.
+                 command -v mtk_current_flag >/dev/null 2>&1 && mtk_current_flag "$_rcn"                    && { chmod u+w "$_rcn" 2>/dev/null
+                        printf '0
+' > "$_rcn" 2>/dev/null || :
+                        mkdir -p "$AMPSD/logs" 2>/dev/null || :
+                        echo "$(date '+%m-%d %H:%M' 2>/dev/null) restored $_rcn <- 0 (reboot after write)"                           >> "$AMPSD/logs/amps-restore.log" 2>/dev/null || :; }
                  log ""
                  log "  !! Your phone restarted shortly AFTER a scan wrote:"
                  log "  !!   $_rcn${_rcv:+  (value: $_rcv)}"
@@ -240,8 +302,15 @@ survivor_check(){
     *" "*|*"	"*) return 0 ;;
   esac
   bl_add "$_svn" "$_svval"
+  # Motorola's MMI current_max has no getter, so jrn_begin could only record an EMPTY old value
+  # and the restore below was skipped - leaving the disable flag latched and the phone unable to
+  # charge, with nothing left to undo it. Device-proven on a moto g64 5G: a two-line
+  # .acc-compat-inflight naming mtk-mst-div-chg/current_max. Its release value is known (0).
+  [ -n "$_svold" ] || { command -v mtk_current_flag >/dev/null 2>&1     && mtk_current_flag "$_svn" && _svold=0; }
   [ -n "$_svold" ] && [ -e "$_svn" ] && { chmod u+w "$_svn" 2>/dev/null
-    printf '%s\n' "$_svold" > "$_svn" 2>/dev/null || :; }
+    printf '%s\n' "$_svold" > "$_svn" 2>/dev/null || :
+    mkdir -p "$AMPSD/logs" 2>/dev/null || :
+    echo "$(date '+%m-%d %H:%M' 2>/dev/null) restored $_svn <- $_svold (interrupted scan)"       >> "$AMPSD/logs/amps-restore.log" 2>/dev/null || :; }
   log ""
   log "  !! The previous scan did not return: your phone went down while writing"
   log "  !!   $_svn${_svval:+  (it went down writing: $_svval)}"
@@ -250,7 +319,31 @@ survivor_check(){
   log "  !!   --blacklist rm <node>      (see the list: --blacklist)"
   log ""
 }
+kernel_owned_probe(){
+  case "$1" in
+    */charge_control_limit)
+      case "$(rd "${1}_max")" in [1-9]|10) return 0;; esac;;
+    */main/constant_charge_current_max)
+      # SMB5 exposes the effective hardware register here, not the owning vote.
+      # Replaying a throttled reading pins the register below the live FCC vote.
+      [ -f /sys/kernel/debug/pmic-votable/FCC_MAIN/status ] &&
+        [ -f "${1%/main/*}/battery/constant_charge_current_max" ] && return 0;;
+  esac
+  return 1
+}
 wr(){ ex "$1" || return 1
+  kernel_owned_probe "$1" && return 1
+  case "$1" in */apsd_rerun|*/rerun_aicl)
+    # A rejected baseline attempt stays rejected for this scan, including restore.
+    # Keyed by the whole path: usb/apsd_rerun and qcom-battery/apsd_rerun are different nodes.
+    _rk=$BK/redetect-$(printf '%s' "$1" | tr / _)
+    [ ! -e "$_rk" ] || return 1
+    true > "$_rk" || return 1
+    charge_redetect_safe "$PSY" || return 1
+  ;; esac
+  if mtk_current_flag "$1"; then
+    case "$2" in 0|1) :;; *) return 1;; esac
+  fi
   if [ "${_RESTORING:-0}" != 1 ] && bl_has "$1"; then
     case "|${_BLSAID:-}|" in
       *"|$1|"*) : ;;
@@ -270,7 +363,8 @@ wr(){ ex "$1" || return 1
   else { printf '%s\n' "$2" > "$1"; } 2>/dev/null; fi
   _wrc=$?
   jrn_end "$1" "$2"
-  return $_wrc; }
+  return $_wrc
+}
 [ "${_STONLY:-}" = 1 ] || survivor_check 2>/dev/null || :
 
 case "${1:-}" in --blacklist)
@@ -323,7 +417,7 @@ case "${1:-}" in --blacklist)
         layer:*)
           _rml=${2#layer:}; _rmgot=0
           if [ -s "$DLY" ]; then
-            : > "$DLY.tmp" 2>/dev/null || :
+            true > "$DLY.tmp" 2>/dev/null || :
             while IFS= read -r _dline || [ -n "${_dline:-}" ]; do
               _df=${_dline%%"$_BLTAB"*}; _df=${_df%"$_BLCR"}
               [ "$_df" = "$_rml" ] && { _rmgot=1; continue; }
@@ -343,7 +437,7 @@ case "${1:-}" in --blacklist)
       esac
       _rmn=${2##*/power_supply/}; _rmfp=/sys/class/power_supply/$_rmn; _rmgot=0
       if [ -s "$BLF" ]; then
-        : > "$BLF.tmp" 2>/dev/null || :
+        true > "$BLF.tmp" 2>/dev/null || :
         while IFS= read -r _rml || [ -n "${_rml:-}" ]; do
           _rmf=${_rml%%"$_BLTAB"*}; _rmf=${_rmf%"$_BLCR"}
           if [ "$_rmf" = "$2" ] || [ "$_rmf" = "$_rmfp" ] || [ "$_rmf" = "$_rmn" ]; then _rmgot=1; continue; fi
@@ -366,7 +460,7 @@ case "${1:-}" in --blacklist)
       else
         _BLBN=$_rmn; _BLFP=$_rmfp
         if bl_in "$2" "$PBL" ' '; then
-          : > "$PBL.tmp" 2>/dev/null || :
+          true > "$PBL.tmp" 2>/dev/null || :
           while IFS= read -r _rml || [ -n "${_rml:-}" ]; do
             _rmf=${_rml%% *}; _rmf=${_rmf%"$_BLCR"}
             if [ "$_rmf" = "$2" ] || [ "$_rmf" = "$_rmfp" ] || [ "$_rmf" = "$_rmn" ] \
@@ -388,7 +482,7 @@ case "${1:-}" in --blacklist)
       fi;;
     clear)
       rm -f "$BLF" "$DLY" 2>/dev/null || :
-      [ -e "$PBL" ] && { : > "$PBL" 2>/dev/null || :; }
+      [ -e "$PBL" ] && { true > "$PBL" 2>/dev/null || :; }
       sync 2>/dev/null || :
       if [ -s "$BLF" ] || [ -s "$PBL" ] || [ -s "$DLY" ]; then
         echo "could not clear the blocked list (read-only or full /data?)." >&2
@@ -663,7 +757,7 @@ finalist_stress(){
   set -- $_fs_cfg
   _fs_group=0; [ "$#" -gt 3 ] && _fs_group=1
   _fs_primary="$1"
-  _fs_nodes="$BK/fstress.tsv"; : > "$_fs_nodes" 2>/dev/null
+  _fs_nodes="$BK/fstress.tsv"; true > "$_fs_nodes" 2>/dev/null
   while [ "$#" -ge 3 ]; do
     _fs_node="$1"; _fs_ev="$3"
     case "$_fs_node" in /*) :;; *) _fs_node="$PSY/$_fs_node";; esac
@@ -671,6 +765,9 @@ finalist_stress(){
     [ -n "$_fs_ev" ] || return 0
     [ -n "$_fs_node" ] && [ -w "$_fs_node" ] || return 0
     _fs_orig="$(rd "$_fs_node" | sed -n '1p')"
+    # This ABI has no getter; its known release value is zero. The current and
+    # pause/resume checks below still have to prove that the flag controls charge.
+    if command -v mtk_current_flag >/dev/null 2>&1 && mtk_current_flag "$_fs_node"; then _fs_orig=0; fi
     [ -n "$_fs_orig" ] || return 0
     snap_add "$_fs_node"
     printf '%s\t%s\t%s\n' "$_fs_node" "$_fs_ev" "$_fs_orig" >> "$_fs_nodes"
@@ -688,8 +785,10 @@ finalist_stress(){
   while [ "$_fs_i" -lt "${STRESS_HITS:-12}" ]; do
     stop_check; _fs_changed=0
     while IFS="	" read -r _fs_node _fs_ev _fs_orig; do
-      wr "$_fs_node" "$_fs_ev"
-      [ "$(rd "$_fs_node" | sed -n '1p')" != "$_fs_ev" ] && _fs_changed=1
+      wr "$_fs_node" "$_fs_ev" || _fs_changed=1
+      if ! { command -v mtk_current_flag >/dev/null 2>&1 && mtk_current_flag "$_fs_node"; }; then
+        [ "$(rd "$_fs_node" | sed -n '1p')" != "$_fs_ev" ] && _fs_changed=1
+      fi
     done < "$_fs_nodes"
     sleep 1; [ "$_fs_changed" = 1 ] && _fs_ov=$(( _fs_ov + 1 ))
     [ "$(chg_now)" = 1 ] && _fs_chg=$(( _fs_chg + 1 ))
@@ -835,6 +934,8 @@ classify_held(){
 on_sane(){
   local _os_l _os_on _os_ref
   _os_l="$1"
+  [ "$_os_l" = "${_os_l%% *} 0 1" ] && command -v mtk_current_flag >/dev/null 2>&1 \
+    && mtk_current_flag "${_os_l%% *}" && return 0
   case "$_os_l" in
     */constant_charge_current*|*/input_current*|*current_max*) :;;
     *) return 0;;
@@ -1109,13 +1210,18 @@ med3(){ a="$1"; b="$2"; c="$3"
 # only, matching icl_repair's own filter: a 0 is a meaningful original for input_suspend and friends
 # and must still be recorded there.
 snap_add(){ ex "$1" || return 0; grep -qxF "$1" "$SNLIST" 2>/dev/null && return 0
+  kernel_owned_probe "$1" && return 0
+  case "$1" in */apsd_rerun|*/rerun_aicl) return 0;; esac
+  # The MMI flag has no getter. Restore its known enable value, never a guessed cap.
+  mtk_current_flag "$1" && return 0
   _sav="$(rd "$1" | sed -n '1p')"
   case "$1" in
     */current_max)
       case "${_sav:-x}" in ''|0) return 0;; esac
     ;;
   esac
-  printf '%s\n' "$1" >> "$SNLIST"; printf '%s\t%s\n' "$1" "$_sav" >> "$SNAP"; }
+  printf '%s\n' "$1" >> "$SNLIST"; printf '%s\t%s\n' "$1" "$_sav" >> "$SNAP"
+}
 now(){ rd /proc/uptime | cut -d. -f1; }
 START="$(san "$(now)")"
 over(){ n="$(san "$(now)")"; [ "$n" -gt 0 ] || return 1; [ $(( n - START )) -ge "$MAXSEC" ]; }
@@ -1128,7 +1234,7 @@ DDIRS_ALL="$DDIRS"
 
 state_dump(){
   local d f v
-  : > "$1"
+  true > "$1"
   { for d in $DDIRS_ALL; do ex "$d" || continue
       { if [ "$HAVE_TO" = 1 ]; then timeout "$TO" find -L "$d" -maxdepth 2 -type f 2>/dev/null; else find -L "$d" -maxdepth 2 -type f 2>/dev/null; fi; } | awk '!seen[$0]++' | sed -n '1,300p' | while read -r f; do
         printf '%s' "$f" | grep -Eq "$DENY_RE" && continue
@@ -1224,6 +1330,7 @@ $PSY/usb/apsd_rerun 1
 /sys/class/qcom-battery/apsd_rerun 1
 $PSY/battery/rerun_aicl 1
 EOF
+for dn_mtk in $(mtk_current_flags "$PSY"); do printf '%s 0\n' "$dn_mtk"; done
 }
 # Recovery
 defaults_native(){
@@ -1331,7 +1438,7 @@ restore(){
            case "$fst" in
              Charging|Full) log "  charging re-onlined after an APSD/AICL re-kick (firmware had dropped to online=0)";;
              *) case "${PRE_ST:-}" in
-                  Charging|Full|'') log "  ! charging did NOT resume after restore (status=$fst) -- the charger may have dropped negotiation. Try a SLOW/standard USB charger, or REBOOT to clear it.";;
+                  Charging|Full|'') log "  note: charging is not yet reported after replay (status=$fst). Allow firmware and restarted ACC to settle; if charging stays stopped below your limits, unplug and replug once.";;
                   *) log "  note: status is '$fst', which is what this phone read BEFORE the test started ($PRE_ST) -- the tester did not change it. If you expected charging here, it is the charger/port (see CHARGER / SPEED above), not this run.";;
                 esac ;;
            esac ;;
@@ -2077,6 +2184,7 @@ test_switch(){
   [ "$ACTIVE" = 1 ] || return
   over && { log "  [deadline] $lbl"; return; }
   ex "$p" || return
+  kernel_owned_probe "$p" && { log "  [kernel-owned] $lbl (firmware control; not probed or replayed)"; return; }
   printf '%s' "$p" | grep -Eiq "$DANGER_RE" && { log "  [danger-skip] $lbl (never written: matches safety deny-list)"; return; }
   printf '%s' "$p" | grep -Eiq "$SUPERDENY_RE" && { log "  [danger-skip] $lbl (never written: protected node family -- fuel-gauge/bms/PD/regulator/thermal)"; return; }
   grep -qxF "$p" "$BK/dead" 2>/dev/null && { log "  [skip dead] $lbl (a prior write to this node was rejected)"; return; }
@@ -2095,7 +2203,7 @@ test_switch(){
   case "$offv" in
     ''|*[!0-9]*) :;;
     *) _rbv="$(rd "$p" | sed -n '1p')"
-       [ "$_rbv" = "$offv" ] || { log "  $lbl -> off=$offv reads-back $_rbv [no-stick: driver clamped/rejected -- not a real switch]"; printf '%s\n' "$p" >> "$BK/dead" 2>/dev/null; wr "$p" "${cur:-$onv}" 2>/dev/null; sleep 1; return; }
+       [ "$_rbv" = "$offv" ] || mtk_current_flag "$p" || { log "  $lbl -> off=$offv reads-back $_rbv [no-stick: driver clamped/rejected -- not a real switch]"; printf '%s\n' "$p" >> "$BK/dead" 2>/dev/null; wr "$p" "${cur:-$onv}" 2>/dev/null; sleep 1; return; }
        ;;
   esac
   hold_probe
@@ -2330,6 +2438,7 @@ battery/night_charging|0|1
 /sys/kernel/debug/google_charger/chg_suspend|0|1
 /sys/kernel/nubia_charge/charger_bypass|off|on
 EOF
+for ek_mtk in $(mtk_current_flags "$PSY"); do printf '%s|0|1\n' "$ek_mtk"; done
 }
 
 expand_paths(){
@@ -2460,12 +2569,13 @@ log ""
 stop_check; acc_hold_off
 log "==== LAYER 4 - known charge switches (adaptive HOLD verify) ===="
 [ "$ACTIVE" = 1 ] || log "  (active hold-tests skipped -- see warnings)"
-CAND="$BK/cand.tsv"; : > "$CAND"
+CAND="$BK/cand.tsv"; true > "$CAND"
 emit_known | while IFS='|' read -r pat onv offv; do
   [ -n "$pat" ] || continue
   for f in $(expand_paths "$pat"); do
     case "$f" in *current_now*|*voltage*|*temp*|*capacity*|*present*|*status*) continue;; esac
-    printf '%s\t%s\t%s\n' "$f" "$onv" "$offv"
+    if mtk_current_flag "$f"; then printf '%s\t0\t1\n' "$f"
+    else printf '%s\t%s\t%s\n' "$f" "$onv" "$offv"; fi
   done
 done | sort -u > "$CAND"
 _paths_on=""
@@ -2476,7 +2586,7 @@ done
 FAST_CHG=0; _utype="$(read1 $PSY/usb/type 2>/dev/null) $(read1 $PSY/usb/real_type 2>/dev/null)"
 case "$_utype" in *HVDCP*|*PD*|*PPS*|*DASH*|*WARP*|*SCP*|*VOOC*) FAST_CHG=1;; esac
 DEFER_INPUT=0; [ "$FAST_CHG" = 1 ] && [ "${MODE:-quick}" != complete ] && DEFER_INPUT=1
-: > "$BK/deferred"
+true > "$BK/deferred"
 [ "$DEFER_INPUT" = 1 ] && log "  fast charger ($_utype), quick mode -- input-cut switches deferred to last-resort (avoids de-negotiation; Deep maps them all)"
 while IFS="	" read -r f onv offv; do
   stop_check
@@ -2539,7 +2649,7 @@ if [ "$ACTIVE" = 1 ] && [ "${UNKNOWN:-0}" != 1 ]; then
   done
   if [ "$gn" -ge 2 ] && ! over; then
     if gate; then
-      : > "$BK/grp.tsv"
+      true > "$BK/grp.tsv"
       # A GROUP RESTORE MUST NOT REPLAY A COLLAPSED READING EITHER.
       # snap_add already refuses to record 0 for a */current_max node, but grp.tsv is a SECOND,
       # independent snapshot written right here -- and this group is probed after the input_suspend
@@ -2605,7 +2715,7 @@ if [ "$ACTIVE" = 1 ] && [ "${MODE:-quick}" = complete ] && [ "${UNKNOWN:-0}" != 
       set -f; set -- $_cl; set +f
       if [ "$#" -gt 3 ] && [ $(( $# % 3 )) -eq 0 ]; then
         over && { log "  [deadline] stop ACC-list tests"; break; }
-        _gok=1; _gl=""; : > "$BK/acc_grp.tsv"
+        _gok=1; _gl=""; true > "$BK/acc_grp.tsv"
         _gi=1
         while [ "$_gi" -le "$#" ]; do
           eval "_gnode=\${$_gi}"
@@ -2852,7 +2962,7 @@ fi
 
 log ""
 log "==== LAYER 6c - probe GENERATED candidates (learned by WATCHING the firmware) ===="
-: > "$GENC"
+true > "$GENC"
 if [ -s "$SCHG" ]; then
   { [ -s "$SHELD" ] && diff_pairs "$SCHG" "$SHELD" | sed 's/^/6|/'
     [ -s "$SUNP" ] && diff_pairs "$SCHG" "$SUNP" | sed 's/^/4|/'; } 2>/dev/null | sort -t'|' -k1,1nr | awk -F'|' '!seen[$2]++' > "$GENC"
@@ -2993,7 +3103,7 @@ if [ "$ACTIVE" = 1 ] && [ "${EARLY_DONE:-0}" = 0 ] && q_more && [ "$SKIPALL" = 0
     NLEARN="$(wc -l < "$TEACHC" | tr -d ' ')"
     log "  firmware moved $NLEARN node(s) while charging was held off (the learning set):"
     sed -n '1,24p' "$TEACHC" | pclean2 | while read -r l; do log "    ~ $l"; done
-    : > "$BK/teach_rank.tsv"
+    true > "$BK/teach_rank.tsv"
     while IFS='|' read -r tp tcharg theld; do
       [ -n "$tp" ] && [ -w "$tp" ] || continue
       case "$tp" in */current_cmd) continue;; esac
@@ -3010,7 +3120,7 @@ if [ "$ACTIVE" = 1 ] && [ "${EARLY_DONE:-0}" = 0 ] && q_more && [ "$SKIPALL" = 0
       fi
     done < "$TEACHC"
     sort -t'	' -k1,1nr "$BK/teach_rank.tsv" > "$BK/teach_sorted.tsv" 2>/dev/null
-    : > "$BK/teach_combo.tsv"; TEACHED=0; TBUILT=0
+    true > "$BK/teach_combo.tsv"; TEACHED=0; TBUILT=0
     _l6e_t0=$(date +%s 2>/dev/null); _l6e_budget=60; [ "${MODE:-quick}" = complete ] && _l6e_budget=150
     while IFS='	' read -r rs tp tcharg theld; do
       over && { log "  [deadline] stop teaching tests"; break; }

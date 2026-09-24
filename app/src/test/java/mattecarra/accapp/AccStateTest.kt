@@ -196,18 +196,24 @@ class AccStateTest {
         mattecarra.accapp.models.ConfigLimits.shutdownTempValid(maxTemp, shutdown)
 
     @Test
-    fun shutdownTempBound_respectsMaxFloorAndCeiling() {
-        // max_temp below 40 -> floor is 40.
+    fun shutdownTempBound_isTheBandOnly_withNoMaxTempTerm() {
+        // The band is 40..70 whatever max_temp is.
         assertTrue(shutdownTempValid(35, 40))
         assertFalse(shutdownTempValid(35, 39))
-        // max_temp above 40 -> floor is max_temp.
         assertTrue(shutdownTempValid(50, 50))
-        assertFalse(shutdownTempValid(50, 49))
-        // ceiling is 70 regardless.
         assertTrue(shutdownTempValid(50, 70))
         assertFalse(shutdownTempValid(50, 71))
         // typical default config (max 50, shutdown 55) is valid.
         assertTrue(shutdownTempValid(50, 55))
+        // The reported case: a cutoff BELOW max_temp. The daemon fires it at 45 and the setter now
+        // stores it, so the editor must stop refusing the save. This assertion is the regression -
+        // with the old max(max_temp,40) floor it returns false.
+        assertTrue(shutdownTempValid(50, 45))
+        assertTrue(shutdownTempValid(60, 42))
+        // Still refused below the band, which is what stops a numeric 9 powering the phone off at
+        // room temperature.
+        assertFalse(shutdownTempValid(50, 39))
+        assertFalse(shutdownTempValid(50, 9))
     }
 
     // The unplugged rc25 payload, captured verbatim from a Mi A3 on 2026-09-08. Every field the
