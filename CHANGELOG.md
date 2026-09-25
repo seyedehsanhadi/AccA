@@ -4,18 +4,18 @@ Notable changes to this fork. Format follows [Keep a Changelog](https://keepacha
 
 ## 2.0.1-rc24 (229)
 
-Pairs with ACC v2025.5.18-6.5.1-rc25. Install both. Bundles AMPS v7.3.3, byte-identical to the module's copy.
+Folds the rc24 changes into one release. Pairs with ACC v2025.5.18-6.5.1-rc25. Install both. Bundles AMPS v7.3.3, byte-identical to the module's copy.
 
 Fixed
 - The shutdown temperature can be set anywhere from 40 to 70 °C, independent of the max temperature, matching ACC rc25.
-- Clearing a voltage limit releases the hardware cap, not only the value shown in the app.
-- The dashboard no longer says "Idle" or shows 0.00 A when nothing was measured; it says "Unknown". A measured current always wins over the daemon's label and the kernel status.
-- "Fast charging is working" is shown only when the battery is actually taking charge, not just because the charger agreed to 9 V.
-- The charger row shows the whole reason charging is slow instead of cutting it off.
-- A stopped daemon or a failed config read no longer shows the default 70/80 config as if it were being enforced.
+- Clearing a voltage limit releases the hardware cap after reboot or clean initialization, not only the value shown in the app.
+- The dashboard no longer says "Idle" or shows 0.00 A when nothing was measured; it says "Unknown". Unreadable or `NaN` current is not treated as a measurement. A measured current wins over the daemon's label and kernel status in both directions.
+- "Fast charging is working" is shown only when the battery is actually taking charge, not just because the charger agreed to 9 V. Without a measured rate, the app says the contract exists but speed is unproven.
+- The charger row no longer invents 0.00 A or 0.000 W for unreadable values and shows the whole reason charging is slow instead of cutting it off.
+- A stopped daemon, failed config read, or failed read-back after apply no longer shows the default 70/80 config as if it were being enforced.
 - When ACC corrects a value you entered, the app shows why instead of looking like it ignored you.
-- A scheduled apply reports every refused command, not only the last one.
-- Charge-once can be cancelled from the app, and a leftover marker is no longer mistaken for a running charge-once.
+- A scheduled apply reports every refused command when the app next opens, not only the last command's result.
+- Charge-once can be cancelled from the app. A leftover marker is no longer mistaken for a running charge-once; confirmation requires a live daemon, and `status=Full` is recognised when an aged pack finishes below the requested percentage.
 
 Added
 - The reason line explains a battery held at the voltage limit.
