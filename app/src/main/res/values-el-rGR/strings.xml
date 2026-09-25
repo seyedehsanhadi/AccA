@@ -126,7 +126,7 @@
     <string name="installation_failed_busybox_title">Το busybox δεν είναι εγκατεστημένο</string>
     <string name="share">Κοινοποίηση</string>
     <string name="logs_not_found">Δε βρέθηκε το αρχείο καταγραφής.</string>
-    <string name="acc_telegram">Για περισσότερη υποστήριξη, επισκεφθείτε την ομάδα ACC στο Telegram (t.me/acc_group)!</string>
+    <string name="acc_telegram">Για περισσότερη υποστήριξη, επισκεφθείτε την ομάδα ACC στο Telegram (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">Το ACC ανακτά πληροφορίες φόρτισης από το περιβάλλον συστήματος.
         Κάποια συστήματα εκφράζουν την ένταση µA (μικροαμπέρ), άλλα σε mA (μιλιαμπέρ).
         Εάν η εντοπισμένη μονάδα είναι λανθασμένη, μπορείτε να την ορίσετε χειροκίνητα.
@@ -174,7 +174,6 @@
     <string name="edit_schedule">Επεξεργασία προγράμματος</string>
     <string name="create_schedule">Δημιουργία προγράμματος</string>
     <!-- About Activity -->
-    <string name="about_team_title">Γνωρίστε την Ομάδα</string>
     <string name="about_attributes">Χαρακτηριστικά</string>
     <string name="about_attrib_telegram_icon">Το εικονίδιο στο Telegram δημιουργήθηκε από την Pixel perfect από το www.flaticon.com</string>
     <string name="about_github">GitHub</string>

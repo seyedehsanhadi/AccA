@@ -16,9 +16,11 @@ Fixed
 - When ACC corrects a value you entered, the app shows why instead of looking like it ignored you.
 - A scheduled apply reports every refused command when the app next opens, not only the last command's result.
 - Charge-once can be cancelled from the app. A leftover marker is no longer mistaken for a running charge-once; confirmation requires a live daemon, and `status=Full` is recognised when an aged pack finishes below the requested percentage.
+- Missing ACC and a failed AccA startup now show distinct errors. The missing-module dialog links to this fork's ACC release; startup errors point to this fork's issue tracker.
 
 Added
 - The reason line explains a battery held at the voltage limit.
+- The About screen credits the original project authors and current fork maintainer. The APK includes GPLv3 and CircleProgressBar's Apache 2.0 license text.
 
 ## 2.0.1-rc23 (223)
 

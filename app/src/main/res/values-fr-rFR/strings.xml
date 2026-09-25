@@ -59,8 +59,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">Installation du service ACC</string>
     <string name="reboot">Redémarrage</string>
-    <string name="acc_installation_failed">Veuillez archiver et envoyer le logcat et /data/adb/acc-data/logs/ aux développeurs
-        sur t.me/acc_group/ ou github.com/MatteCarra/AccA/issues/.
+    <string name="acc_installation_failed">Veuillez archiver et envoyer le logcat et /data/adb/vr25/acc-data/logs/ aux développeurs
+        sur t.me/+hU1oF-BCf5hmM2Rk/ ou github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="acc_installation_failed_title">L\'installation du service ACC a échoué !</string>
     <!-- DJS installation -->
@@ -71,7 +71,7 @@
     </string>
     <string name="installing_djs">Installation du service DJS</string>
     <string name="djs_installation_failed">Veuillez archiver et envoyer le logcat et /data/adb/djs-data/logs/ aux développeurs
-        sur t.me/acc_group/ ou github.com/MatteCarra/AccA/issues/.
+        sur t.me/+hU1oF-BCf5hmM2Rk/ ou github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="djs_installation_failed_title">L\'installation du service DJS a échoué !</string>
     <string name="voltage_control_file_not_set">Non configuré.</string>
@@ -151,7 +151,7 @@
     <string name="installation_failed_busybox_title">BusyBox n\'est pas installé</string>
     <string name="share">Partager</string>
     <string name="logs_not_found">Fichier journal introuvable.</string>
-    <string name="acc_telegram">Pour un support supplémentaire, rejoignez le groupe ACC Telegram (t.me/acc_group)!</string>
+    <string name="acc_telegram">Pour un support supplémentaire, rejoignez le groupe ACC Telegram (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC récupère les informations de chargement depuis l\'interface système.
         Certains systèmes expriment le courant en μA (microampères), d\'autres en mA (milliampères).
         Si l\'unité détectée est incorrecte, vous pouvez la définir manuellement.
@@ -199,7 +199,6 @@
     <string name="edit_schedule">Modifier la planification</string>
     <string name="create_schedule">Créer une planification</string>
     <!-- About Activity -->
-    <string name="about_team_title">Rencontrer l\'équipe</string>
     <string name="about_attributes">Attributs</string>
     <string name="about_attrib_telegram_icon">Icône de télégramme réalisée par Pixel perfect à partir de www.flaticon.com</string>
     <string name="about_project_github">AccA GitHub</string>

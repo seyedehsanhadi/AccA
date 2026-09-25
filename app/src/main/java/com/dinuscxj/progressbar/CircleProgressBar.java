@@ -1,3 +1,9 @@
+/*
+ * Copyright 2015-2019 dinuscxj
+ * Licensed under the Apache License, Version 2.0.
+ * See app/src/main/assets/Apache-2.0.txt for the full license.
+ * Adapted for AccA in 2026 (resource reference).
+ */
 package com.dinuscxj.progressbar;
 
 import android.content.Context;

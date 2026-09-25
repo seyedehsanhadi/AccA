@@ -94,7 +94,7 @@ class BatteryDialogActivity : ScopedAppActivity()
 
         fun updateTextStatusACC()
         {
-            content.wdtDaemonAccBtn.text = if (!isAccdInstalled) getString(R.string.acc_installation_failed_title)
+            content.wdtDaemonAccBtn.text = if (!isAccdInstalled) getString(R.string.acc_not_installed_title)
             else if (isAccdRunning) getString(R.string.acc_daemon_status_running)
             else getString(R.string.acc_daemon_status_not_running)
         }

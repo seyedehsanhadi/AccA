@@ -59,8 +59,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">正在安裝 ACC</string>
     <string name="reboot">重新啟動</string>
-    <string name="acc_installation_failed">請將 logcat 與 /data/adb/acc-data/logs/ 打包並發送給開發者：
-        t.me/acc_group/ 或 github.com/MatteCarra/AccA/issues/
+    <string name="acc_installation_failed">請將 logcat 與 /data/adb/vr25/acc-data/logs/ 打包並發送給開發者：
+        t.me/+hU1oF-BCf5hmM2Rk/ 或 github.com/seyedehsanhadi/AccA/issues/
     </string>
     <string name="acc_installation_failed_title">ACC 安裝失敗！</string>
     <!-- DJS installation -->
@@ -70,8 +70,8 @@
         \nDJS與ACC將會在開機後同時啟動.
     </string>
     <string name="installing_djs">正在安裝 DJS</string>
-    <string name="djs_installation_failed">請將 logcat 與 /data/adb/acc-data/logs/ 壓縮為一個檔案後傳送給開發者：
-        t.me/acc_group/ 或 github.com/MatteCarra/AccA/issues/
+    <string name="djs_installation_failed">請將 logcat 與 /data/adb/vr25/acc-data/logs/ 壓縮為一個檔案後傳送給開發者：
+        t.me/+hU1oF-BCf5hmM2Rk/ 或 github.com/seyedehsanhadi/AccA/issues/
     </string>
     <string name="djs_installation_failed_title">DJS 安裝失敗！</string>
     <string name="voltage_control_file_not_set">未設定。</string>
@@ -161,7 +161,7 @@
     <string name="installation_failed_busybox">請先安裝 busybox，或直接把二進製文件放入 /data/adb/bin/</string>
     <string name="share">分享</string>
     <string name="logs_not_found">找不到 Log 文件。</string>
-    <string name="acc_telegram">歡迎加入 ACC Telegram 群組 ，可以瞭解更多的使用方法, (t.me/acc_group)!</string>
+    <string name="acc_telegram">歡迎加入 ACC Telegram 群組 ，可以瞭解更多的使用方法, (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC 從系統取得充電資訊。
         有些系統以 µA（微安），有的則是 mA (毫安)。
         如果取得的單位不正確，您可以手動選擇。
@@ -202,7 +202,7 @@
     <string name="djs_installation_failed_log">DJS 安裝失敗記錄檔</string>
     <string name="select_different_version">切換 ACC 版本</string>
     <string name="installation_failed_non_bundled">安裝其他 ACC 版本失敗。
-        \n請考慮將 /data/adb/acc-data/logs/ 壓縮為一個檔案後傳送給開發者。
+        \n請考慮將 /data/adb/vr25/acc-data/logs/ 壓縮為一個檔案後傳送給開發者。
     </string>
     <string name="prioritize_battery_idle">優先使用電池 idle mode</string>
     <string name="schedule_profile_edit_current">編輯當前文件</string>
@@ -221,11 +221,6 @@
     <string name="edit_schedule">編輯排程</string>
     <string name="create_schedule">新增排程</string>
     <!-- About Activity -->
-    <string name="about_team_title">團隊介紹</string>
-    <string name="about_team_blurb">感謝您使用 AccA！
-        \n\n我們在此應用上投入了大量時間，以便您輕鬆管理 ACC！
-        \n\n特別感謝以各種方式向 ACC 或 AccA項目做出貢獻的人們！
-    </string>
     <string name="about_attributes">屬性</string>
     <string name="about_attrib_telegram_icon">Telegram頻道圖案由Pixel perfect(www.flaticon.com)提供</string>
     <string name="about_acca_version_label">ACCA 版本：</string>

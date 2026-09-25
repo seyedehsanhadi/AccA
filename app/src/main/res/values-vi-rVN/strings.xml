@@ -59,7 +59,7 @@
     <!-- ACC installation -->
     <string name="installing_acc">Đang cài đặt ACC</string>
     <string name="reboot">Khởi động lại</string>
-    <string name="acc_installation_failed">Vui lòng gửi logcat trong /data/adb/acc-data/logs/ cho nhà phát triển qua t.me/acc_group/ hoặc github.com/MatteCarra/AccA/issues/.    </string>
+    <string name="acc_installation_failed">Vui lòng gửi logcat trong /data/adb/vr25/acc-data/logs/ cho nhà phát triển qua t.me/+hU1oF-BCf5hmM2Rk/ hoặc github.com/seyedehsanhadi/AccA/issues/.    </string>
     <string name="acc_installation_failed_title">Cài đặt ACC không thành công!</string>
     <!-- DJS installation -->
     <string name="install_djs_title">DJS là bắt buộc</string>
@@ -67,7 +67,7 @@
 DJS (Trình lập lịch công việc hàng ngày) là một tiện ích bổ sung nhỏ để lên lịch cài đặt ACC.
 Tiến trình nền DJS sẽ được bắt đầu khi khởi động cùng với ACC.    </string>
     <string name="installing_djs">Đang cài đặt DJS</string>
-    <string name="djs_installation_failed">Vui lòng gửi logcat trong /data/adb/acc-data/logs/ cho nhà phát triển qua t.me/acc_group/ hoặc github.com/MatteCarra/AccA/issues/.    </string>
+    <string name="djs_installation_failed">Vui lòng gửi logcat trong /data/adb/vr25/acc-data/logs/ cho nhà phát triển qua t.me/+hU1oF-BCf5hmM2Rk/ hoặc github.com/seyedehsanhadi/AccA/issues/.    </string>
     <string name="djs_installation_failed_title">Cài đặt DJS thất bại!</string>
     <string name="voltage_control_file_not_set">Không được thiết lập.</string>
     <string name="edit_on_boot">Chỉnh sửa cài đặt apply_on_boot</string>
@@ -151,7 +151,7 @@ Tiến trình nền DJS sẽ được bắt đầu khi khởi động cùng vớ
     <string name="installation_failed_busybox">Cài đặt busybox trước hoặc cài đặt mã nhị phân vào /data/adb/bin/</string>
     <string name="share">Chia sẻ</string>
     <string name="logs_not_found">Không tìm thấy tập tin Log.</string>
-    <string name="acc_telegram">Để được hỗ trợ thêm, hãy tham gia nhóm ACC Telegram (t.me/acc_group)!</string>
+    <string name="acc_telegram">Để được hỗ trợ thêm, hãy tham gia nhóm ACC Telegram (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC lấy thông tin sạc từ giao diện hệ thống.
 Một số hệ thống thể hiện dòng điện trong dòngA (microamps), số khác trong mA (milliamps).
 If the detected unit is incorrect, you can set it manually.    </string>
@@ -190,7 +190,7 @@ Nếu đơn vị được phát hiện không chính xác, bạn có thể đặ
     <string name="djs_installation_failed_log">Cài đặt DJS thất bại</string>
     <string name="select_different_version">Thay đổi phiên bản ACC</string>
     <string name="installation_failed_non_bundled">Việc cài đặt các biến thể ACC khác nhau không thành công.
-        \nVui lòng xem xét và chia sẻ /data/adb/acc-data/logs/ với các nhà phát triển.    </string>
+        \nVui lòng xem xét và chia sẻ /data/adb/vr25/acc-data/logs/ với các nhà phát triển.    </string>
     <string name="prioritize_battery_idle">Ưu tiên chế độ không sử dụng pin</string>
     <string name="schedule_profile_edit_current">Chỉnh sửa cấu hình hiện tại</string>
     <string name="schedule_profile_keep_current">Giữ cấu hình hiện tại</string>
@@ -206,10 +206,6 @@ Nếu đơn vị được phát hiện không chính xác, bạn có thể đặ
     <string name="edit_schedule">Chỉnh sửa lịch biểu</string>
     <string name="create_schedule">Tạo Lịch</string>
     <!-- About Activity -->
-    <string name="about_team_title">Đội ngũ phát triển</string>
-    <string name="about_team_blurb">Cảm ơn bạn đã sử dụng AccA!
-        \n\nChúng tôi đã dành rất nhiều thời gian cho việc này để bạn có thể quản lý ACC một cách dễ dàng!
-        \n\nĐặc biệt cảm ơn những người đã đóng góp bằng mọi cách cho các dự án của ACC &amp; AccA!    </string>
     <string name="about_attributes">Thuộc Tính</string>
     <string name="about_attrib_telegram_icon">Biểu tượng Telegram do Pixel hoàn thiện từ www.flaticon.com</string>
     <string name="about_project_github">AccA GitHub</string>

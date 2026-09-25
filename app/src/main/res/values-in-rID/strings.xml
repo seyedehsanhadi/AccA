@@ -60,9 +60,9 @@
     <string name="installing_acc">Menginstal ACC</string>
     <string name="reboot">Mulai ulang</string>
     <string name="acc_installation_failed">Mohon simpan dan kirim logcat
-/data/adb/acc-data/log/ ke developers
-di --> t.me/acc_group
-atau --> github.com/MatteCarra/AccA/issues.    </string>
+/data/adb/vr25/acc-data/logs/ ke developers
+di --> t.me/+hU1oF-BCf5hmM2Rk
+atau --> github.com/seyedehsanhadi/AccA/issues.    </string>
     <string name="acc_installation_failed_title">Instalasi ACC Gagal!</string>
     <!-- DJS installation -->
     <string name="install_djs_title">Diperlukan DJS</string>
@@ -73,8 +73,8 @@ atau --> github.com/MatteCarra/AccA/issues.    </string>
     <string name="installing_djs">Menginstal DJS</string>
     <string name="djs_installation_failed">Mohon simpan dan kirim logcat
 /data/adb/djs-data/log/ ke developers 
-di --> t.me/acc_group
-atau --> github.com/MatteCarra/AccA/issues.    </string>
+di --> t.me/+hU1oF-BCf5hmM2Rk
+atau --> github.com/seyedehsanhadi/AccA/issues.    </string>
     <string name="djs_installation_failed_title">Pemasangan DJS Gagal!</string>
     <string name="voltage_control_file_not_set">Tidak diatur.</string>
     <string name="edit_on_boot">Ubah pengaturan apply_on_boot</string>
@@ -159,7 +159,7 @@ atau --> github.com/MatteCarra/AccA/issues.    </string>
     <string name="installation_failed_busybox">Pasang busybox terlebih dahulu atau letakkan binari di /data/adb/bin/</string>
     <string name="share">Bagikan</string>
     <string name="logs_not_found">File log tidak ditemukan.</string>
-    <string name="acc_telegram">Untuk dukungan tambahan, bergabunglah dengan grup ACC Telegram (t.me/acc_group)!</string>
+    <string name="acc_telegram">Untuk dukungan tambahan, bergabunglah dengan grup ACC Telegram (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC mengambil informasi pengisian dari antarmuka sys.
          Beberapa sistem mengekspresikan arus dalam μA (microamps), yang lain dalam mA (milliamps).
          Jika unit yang terdeteksi salah, Anda dapat mengaturnya secara manual.
@@ -202,7 +202,7 @@ atau --> github.com/MatteCarra/AccA/issues.    </string>
     <string name="djs_installation_failed_log">Instalasi DJS gagal log</string>
     <string name="select_different_version">Ubah versi ACC</string>
     <string name="installation_failed_non_bundled">Pemasangan varian ACC yang berbeda gagal.
-         \nSilakan pertimbangkan pengarsipan dan berbagi /data/adb/acc-data/log/ dengan devs.
+         \nSilakan pertimbangkan pengarsipan dan berbagi /data/adb/vr25/acc-data/logs/ dengan devs.
     </string>
     <string name="prioritize_battery_idle">Prioritaskan mode siaga baterai</string>
     <string name="schedule_profile_edit_current">Edit konfigurasi saat ini</string>
@@ -219,11 +219,6 @@ atau --> github.com/MatteCarra/AccA/issues.    </string>
     <string name="edit_schedule">Edit jadwal</string>
     <string name="create_schedule">Buat jadwal</string>
     <!-- About Activity -->
-    <string name="about_team_title">Temui Tim</string>
-    <string name="about_team_blurb">Terima kasih telah menggunakan AccA!
-         \n\nKami menghabiskan banyak waktu untuk hal ini sehingga Anda dapat mengelola ACC dengan mudah!
-         \n\nTerima kasih khusus kepada mereka yang telah ikut dalam satu atau lain cara untuk proyek ACC &amp; AccA!
-    </string>
     <string name="about_attributes">Atribut</string>
     <string name="about_attrib_telegram_icon">Avatar Telegram digambar oleh Pixel perfect dari www.flaticon.com</string>
     <string name="about_project_github">AccA GitHub</string>

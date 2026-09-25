@@ -56,8 +56,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">Встановлення ACC</string>
     <string name="reboot">Перезавантажити</string>
-    <string name="acc_installation_failed">Будь ласка, заархівуйте та надішліть logcat та /data/adb/acc-data/logs/ розробникам
-        в t.me/acc_group/ або github.com/MatteCarra/AccA/issues/.
+    <string name="acc_installation_failed">Будь ласка, заархівуйте та надішліть logcat та /data/adb/vr25/acc-data/logs/ розробникам
+        в t.me/+hU1oF-BCf5hmM2Rk/ або github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="acc_installation_failed_title">Помилка встановлення ACC!</string>
     <!-- DJS installation -->
@@ -68,7 +68,7 @@
     </string>
     <string name="installing_djs">Встановлення DJS</string>
     <string name="djs_installation_failed">Будь ласка, заархівуйте та надішліть logcat та /data/adb/djs-data/logs/ розробникам
-        в t.me/acc_group/ або github.com/MatteCarra/AccA/issues/.
+        в t.me/+hU1oF-BCf5hmM2Rk/ або github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="djs_installation_failed_title">Помилка встановлення DJS!</string>
     <string name="voltage_control_file_not_set">Не задано.</string>
@@ -152,7 +152,7 @@
     <string name="installation_failed_busybox">Спочатку встановіть busybox або просто помістіть бінарний файл в /data/adb/bin/</string>
     <string name="share">Поділитися</string>
     <string name="logs_not_found">Файл звіту не знайдено.</string>
-    <string name="acc_telegram">Для отримання додаткової підтримки приєднуйтесь до групи ACC в Telegram (t.me/acc_group)!</string>
+    <string name="acc_telegram">Для отримання додаткової підтримки приєднуйтесь до групи ACC в Telegram (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="voltage_measure_unit_preference_title_description">ACC отримує інформацію про зарядку з системного інтерфейсу.
         Деякі системи показують напругу в мкВ (мікровольт), інші в мВ (мілівольт).
         Якщо виявлена одиниця виміру невірна, ви можете встановити її вручну.
@@ -191,7 +191,7 @@
     <string name="djs_installation_failed_log">Журнал помилки встановлення DJS</string>
     <string name="select_different_version">Змінити версію ACC</string>
     <string name="installation_failed_non_bundled">Встановлення іншого варіанту ACC не вдалося.
-        \nБудь ласка, розгляньте можливість архівування та обміну /data/adb/acc-data/logs/ з розробниками.
+        \nБудь ласка, розгляньте можливість архівування та обміну /data/adb/vr25/acc-data/logs/ з розробниками.
     </string>
     <string name="prioritize_battery_idle">Пріоритет режиму очікування батареї</string>
     <string name="schedule_profile_edit_current">Редагувати поточну конфігурацію</string>
@@ -208,11 +208,6 @@
     <string name="edit_schedule">Змінити розклад</string>
     <string name="create_schedule">Створити розклад</string>
     <!-- About Activity -->
-    <string name="about_team_title">Познайомтеся з Командою</string>
-    <string name="about_team_blurb">Дякуємо, що користуєтесь AccA!
-        \n\nМи витратили купу часу, щоб з легкістю керувати ACC!
-        \n\nОсоблива подяка тим, хто вніс свій внесок в той чи інший проект ACC &amp; AccA!
-    </string>
     <string name="about_attributes">Атрибути</string>
     <string name="about_attrib_telegram_icon">Значок Telegram, зроблений Pixel perfect з www.flaticon.com</string>
     <string name="about_project_github">AccA GitHub</string>

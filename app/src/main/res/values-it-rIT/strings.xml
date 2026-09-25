@@ -59,7 +59,7 @@
     <!-- ACC installation -->
     <string name="installing_acc">Installazione ACC</string>
     <string name="reboot">Riavvia</string>
-    <string name="acc_installation_failed">Per favore, comprimere ed inviare un logcat insieme alla cartella /data/adb/acc-data/logs/ agli sviluppatori presso t.me/acc_group/ o github.com/MatteCarra/AccA/issues/.    </string>
+    <string name="acc_installation_failed">Per favore, comprimere ed inviare un logcat insieme alla cartella /data/adb/vr25/acc-data/logs/ agli sviluppatori presso t.me/+hU1oF-BCf5hmM2Rk/ o github.com/seyedehsanhadi/AccA/issues/.    </string>
     <string name="acc_installation_failed_title">Installazione di ACC fallita!</string>
     <!-- DJS installation -->
     <string name="install_djs_title">È richiesto DJS</string>
@@ -67,7 +67,7 @@
         \nDJS (Daily Job Scheduler) è un componente aggiuntivo per programmare profili/impostazioni di ACC.
         \nIl servizio DJS sarà inizializzato all\'avvio assiemene a ACC.    </string>
     <string name="installing_djs">Installazione DJS</string>
-    <string name="djs_installation_failed">Per favore, comprimere ed inviare un logcat /data/adb/djs-data/logs/ agli sviluppatori presso t.me/acc_group/ o github.com/MatteCarra/AccA/issues/.    </string>
+    <string name="djs_installation_failed">Per favore, comprimere ed inviare un logcat /data/adb/djs-data/logs/ agli sviluppatori presso t.me/+hU1oF-BCf5hmM2Rk/ o github.com/seyedehsanhadi/AccA/issues/.    </string>
     <string name="djs_installation_failed_title">Installazione di DJS fallita!</string>
     <string name="voltage_control_file_not_set">Non impostato.</string>
     <string name="edit_on_boot">Modifica impostazioni apply_on_boot</string>
@@ -155,7 +155,7 @@
     <string name="installation_failed_busybox">Installare prima busybox o semplicemente posizionare il binario in /data/adb/bin/</string>
     <string name="share">Condividi</string>
     <string name="logs_not_found">File di log non trovato.</string>
-    <string name="acc_telegram">Per support aggiuntivo, unisciti al canale Telegram di ACC (t.me/acc_group)!</string>
+    <string name="acc_telegram">Per support aggiuntivo, unisciti al canale Telegram di ACC (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC ottiene le informazioni di carica dall\'interfaccia sys.
         Alcuni sistemi esprimono la corrente in μA (microampere), altri in mA (milliampere).
         Se l\'unità rilevata non è corretta, puoi impostarla manualmente.
@@ -197,7 +197,7 @@
     <string name="djs_installation_failed_log">Log dell\'installazione fallita di DJS</string>
     <string name="select_different_version">Cambia la versione di ACC</string>
     <string name="installation_failed_non_bundled">L\'installazione di diverse varianti ACC non è riuscita.
-        \nSi prega di considerare l\'archiviazione e la condivisione /data/adb/acc-data/logs/ con i devs.
+        \nSi prega di considerare l\'archiviazione e la condivisione /data/adb/vr25/acc-data/logs/ con i devs.
     </string>
     <string name="prioritize_battery_idle">Priorità alla modalità inattività batteria</string>
     <string name="schedule_profile_edit_current">Modifica configurazione corrente</string>
@@ -216,11 +216,6 @@
     <string name="edit_schedule">Modifica pianificazione</string>
     <string name="create_schedule">Crea una pianificazione</string>
     <!-- About Activity -->
-    <string name="about_team_title">Incontra il Team</string>
-    <string name="about_team_blurb">Grazie per aver utilizzato AccA!
-        \n\nAbbiamo speso un sacco di tempo su questa applicazione in modo che tu possa gestire ACC con facilità!
-        \n\nUn ringraziamento speciale a coloro che hanno contribuito in un modo o nell\'altro ai progetti ACC &amp; AccA!
-    </string>
     <string name="about_attributes">Attributi</string>
     <string name="about_attrib_telegram_icon">Icona Telegram realizzata da Pixel perfezionata da www.flaticon.com</string>
     <string name="about_acca_version_label">Versione di AccA:</string>

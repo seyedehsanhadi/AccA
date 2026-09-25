@@ -59,8 +59,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">Instalando ACC</string>
     <string name="reboot">Reiniciar</string>
-    <string name="acc_installation_failed">Por favor, archiva y envía logcat y /data/adb/acc-data/logs/ a los desarrolladores
-        en t.me/acc_group/ o github.com/MatteCarra/AccA/issues/.
+    <string name="acc_installation_failed">Por favor, archiva y envía logcat y /data/adb/vr25/acc-data/logs/ a los desarrolladores
+        en t.me/+hU1oF-BCf5hmM2Rk/ o github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="acc_installation_failed_title">ACC Instalación fallida!</string>
     <!-- DJS installation -->
@@ -70,8 +70,8 @@
         \nEl daemon de DJS se iniciará en el arranque junto con el de ACC.
     </string>
     <string name="installing_djs">Instalando DJS</string>
-    <string name="djs_installation_failed">Por favor, archiva y envía logcat y /data/adb/acc-data/logs/ a los desarrolladores
-        en t.me/acc_group/ o github.com/MatteCarra/AccA/issues/.
+    <string name="djs_installation_failed">Por favor, archiva y envía logcat y /data/adb/vr25/acc-data/logs/ a los desarrolladores
+        en t.me/+hU1oF-BCf5hmM2Rk/ o github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="djs_installation_failed_title">¡Instalación de DJS fallida!</string>
     <string name="voltage_control_file_not_set">No establecido.</string>
@@ -162,7 +162,7 @@
     <string name="installation_failed_busybox">Instalar busybox primero o simplemente colocar el binario en /data/adb/bin/</string>
     <string name="share">Compartir</string>
     <string name="logs_not_found">Archivo de registro no encontrado.</string>
-    <string name="acc_telegram">Para soporte adicional, únase al grupo de Telegram ACC (t.me/acc_group)!</string>
+    <string name="acc_telegram">Para soporte adicional, únase al grupo de Telegram ACC (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC recupera información de carga desde la interfaz de sys.
         Algunos sistemas expresan la corriente en µA (microamps), otros en mA (miliiamps).
         Si la unidad detectada es incorrecta, puedes configurarla manualmente.
@@ -205,7 +205,7 @@
     <string name="djs_installation_failed_log">Registro de errores al instalar DJS</string>
     <string name="select_different_version">Cambiar la versión de ACC</string>
     <string name="installation_failed_non_bundled">La instalación de una variante distinta de ACC ha fallado.
-        \nPor favor, considera compartir /data/adb/acc-data/logs/ con los desarrolladores.
+        \nPor favor, considera compartir /data/adb/vr25/acc-data/logs/ con los desarrolladores.
     </string>
     <string name="prioritize_battery_idle">Priorizar modo inactivo de batería</string>
     <string name="schedule_profile_edit_current">Editar configuración actual</string>
@@ -224,11 +224,6 @@
     <string name="edit_schedule">Editar programación</string>
     <string name="create_schedule">Crear programación</string>
     <!-- About Activity -->
-    <string name="about_team_title">Conoce al Equipo</string>
-    <string name="about_team_blurb">¡Gracias por usar AccA!
-        \n\n¡Hemos dedicado mucho tiempo a esto para que puedas gestionar ACC con facilidad!
-        \n\n¡Un agradecimiento especial a quienes han contribuido de una u otra manera a los proyectos ACC &amp; AccA!
-    </string>
     <string name="about_attributes">Atributos</string>
     <string name="about_attrib_telegram_icon">Icono de Telegram hecho por Pixel perfect de www.flaticon.com</string>
     <string name="about_acca_version_label">Versión de ACCA:</string>

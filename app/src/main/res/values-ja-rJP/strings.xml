@@ -55,8 +55,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">ACC インストール中</string>
     <string name="reboot">再起動</string>
-    <string name="acc_installation_failed">アーカイブし, logcat と /data/adb/acc-data/logs/ を開発者に送信してください.
-        t.me/acc_group/ もしくは github.com/MatteCarra/AccA/issues/ まで.
+    <string name="acc_installation_failed">アーカイブし, logcat と /data/adb/vr25/acc-data/logs/ を開発者に送信してください.
+        t.me/+hU1oF-BCf5hmM2Rk/ もしくは github.com/seyedehsanhadi/AccA/issues/ まで.
     </string>
     <string name="acc_installation_failed_title">ACC インストール失敗！</string>
     <!-- DJS installation -->
@@ -67,7 +67,7 @@
     </string>
     <string name="installing_djs">DJS インストール中</string>
     <string name="djs_installation_failed">アーカイブし, logcat と /data/adb/djs-data/logs/ を開発者に送信してください.
-        t.me/acc_group/ もしくは github.com/MatteCarra/AccA/issues/ まで.
+        t.me/+hU1oF-BCf5hmM2Rk/ もしくは github.com/seyedehsanhadi/AccA/issues/ まで.
     </string>
     <string name="djs_installation_failed_title">DJS インストール失敗！</string>
     <string name="voltage_control_file_not_set">未設定</string>
@@ -142,7 +142,7 @@
     <string name="installation_failed_busybox">busybox を最初にインストールするか, バイナリを /data/adb/bin/ に配置せよ</string>
     <string name="share">共有</string>
     <string name="logs_not_found">ログファイルが見つかりません.</string>
-    <string name="acc_telegram">追加のサポートのために, ACC Telegram group (t.me/acc_group) に参加して！</string>
+    <string name="acc_telegram">追加のサポートのために, ACC Telegram group (t.me/+hU1oF-BCf5hmM2Rk) に参加して！</string>
     <string name="current_measure_unit_preference_description">ACC は sys インターフェースから充電情報を読み出します.
         いくつかのシステムではµA (マイクロアンペア) で表現され, 他のシステムでは mA (ミリアンペア) で表現されます.
         検出された単位が正しくない場合, 手動で設定できます.
@@ -185,7 +185,7 @@
     <string name="djs_installation_failed_log">DJS インストール失敗ログ</string>
     <string name="select_different_version">ACC バージョンの変更</string>
     <string name="installation_failed_non_bundled">異なる ACC のインストールに失敗しました.
-        \n開発に /data/adb/acc-data/logs/ をアーカイブし, 共有することを検討してください.
+        \n開発に /data/adb/vr25/acc-data/logs/ をアーカイブし, 共有することを検討してください.
     </string>
     <string name="prioritize_battery_idle">バッテリーアイドルモード優先</string>
     <string name="schedule_profile_edit_current">現在の設定を編集</string>

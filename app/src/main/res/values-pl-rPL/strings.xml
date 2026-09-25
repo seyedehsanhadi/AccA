@@ -59,8 +59,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">Instalowanie ACC</string>
     <string name="reboot">Uruchom ponownie</string>
-    <string name="acc_installation_failed">Proszę wysłać logcat i /data/adb/acc-data/logs/ do deweloperów
-        na t.me/acc_group/ lub github.com/MatteCarra/AccA/issues/.
+    <string name="acc_installation_failed">Proszę wysłać logcat i /data/adb/vr25/acc-data/logs/ do deweloperów
+        na t.me/+hU1oF-BCf5hmM2Rk/ lub github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="acc_installation_failed_title">Instalacja ACC nie powiodła się!</string>
     <!-- DJS installation -->
@@ -70,8 +70,8 @@
         \ndemon DJS zostanie uruchomiony przy starcie wraz z ACC.
     </string>
     <string name="installing_djs">Instalowanie DJS</string>
-    <string name="djs_installation_failed">Proszę wysłać logcat i /data/adb/acc-data/logs/ do deweloperów
-        na t.me/acc_group/ lub github.com/MatteCarra/AccA/issues/.
+    <string name="djs_installation_failed">Proszę wysłać logcat i /data/adb/vr25/acc-data/logs/ do deweloperów
+        na t.me/+hU1oF-BCf5hmM2Rk/ lub github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="djs_installation_failed_title">Instalacja DJS nie powiodła się!</string>
     <string name="voltage_control_file_not_set">Nie ustawiono.</string>
@@ -158,7 +158,7 @@
     <string name="installation_failed_busybox">Zainstaluj busybox najpierw lub umieść skrypty w /data/adb/bin/</string>
     <string name="share">Udostępnij</string>
     <string name="logs_not_found">Nie znaleziono pliku z logiem.</string>
-    <string name="acc_telegram">Aby uzyskać dodatkowe wsparcie, dołącz do grupy ACC na Telegramie (t.me/acc_group)!</string>
+    <string name="acc_telegram">Aby uzyskać dodatkowe wsparcie, dołącz do grupy ACC na Telegramie (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC pobiera informacje o ładowaniu z interfejsu sys.
         Niektóre systemy wyrażają natężenie prądu w µA (mikroamperach), inne w mA (miliamperach).
         Jeśli wykryta jednostka jest nieprawidłowa, możesz ją ustawić ręcznie.
@@ -199,7 +199,7 @@ Wersja Bundled jest testowana pod kątem działania z aplikacją AccA, dlatego j
     <string name="djs_installation_failed_log">Log nieudanej instalacji DJS</string>
     <string name="select_different_version">Zmień wersję ACC</string>
     <string name="installation_failed_non_bundled">Instalacja innego wariantu ACC nie powiodła się.
-        \nRozważ archiwizację i udostępnianie /data/adb/acc-data/logs/ z develeporami.
+        \nRozważ archiwizację i udostępnianie /data/adb/vr25/acc-data/logs/ z develeporami.
     </string>
     <string name="prioritize_battery_idle">Spriorytetyzuj tryb bezczynności baterii</string>
     <string name="schedule_profile_edit_current">Edytuj obecną konfigurację</string>
@@ -216,11 +216,6 @@ Wersja Bundled jest testowana pod kątem działania z aplikacją AccA, dlatego j
     <string name="edit_schedule">Edytuj harmonogram</string>
     <string name="create_schedule">Utwórz harmonogram</string>
     <!-- About Activity -->
-    <string name="about_team_title">Poznaj nasz zespół</string>
-    <string name="about_team_blurb">Dziękujemy za korzystanie z AccA!
-        \n\nSpędziliśmy na tym mnóstwo czasu, abyś mógł z łatwością zarządzać ACC!
-        \n\nSpecjalne podziękowania dla tych, którzy w taki lub inny sposób przyczynili się do realizacji projektów ACC &amp; AccA!
-    </string>
     <string name="about_attributes">Atrybuty</string>
     <string name="about_attrib_telegram_icon">Ikona Telegram wykonana przez Pixel perfect z www.flaticon.com</string>
     <string name="about_project_github">AccA GitHub</string>

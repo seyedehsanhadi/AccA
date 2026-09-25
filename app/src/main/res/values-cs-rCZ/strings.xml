@@ -59,7 +59,7 @@
     <!-- ACC installation -->
     <string name="installing_acc">Instalace ACC</string>
     <string name="reboot">Restart</string>
-    <string name="acc_installation_failed">Pošlete prosím logcat a /data/adb/acc-data/logs/ vývojářům na         t.me/acc_group/ nebo github.com/MatteCarra/AccA/issues/.    </string>
+    <string name="acc_installation_failed">Pošlete prosím logcat a /data/adb/vr25/acc-data/logs/ vývojářům na         t.me/+hU1oF-BCf5hmM2Rk/ nebo github.com/seyedehsanhadi/AccA/issues/.    </string>
     <string name="acc_installation_failed_title">Instalace ACC neúspěšná!</string>
     <!-- DJS installation -->
     <string name="install_djs_title">Vyžadováno DJS</string>

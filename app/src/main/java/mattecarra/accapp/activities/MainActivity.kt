@@ -452,8 +452,8 @@ class MainActivity : ScopedAppActivity(), BottomNavigationView.OnNavigationItemS
                     catch (e: Exception) {
                         LogExt().e(javaClass.simpleName, "initUi failed: ${e.message}")
                         if (!isFinishing) MaterialDialog(this@MainActivity).show {
-                            title(R.string.acc_installation_failed_title)
-                            message(R.string.acc_installation_failed)
+                            title(R.string.acca_start_failed_title)
+                            message(R.string.acca_start_failed_message)
                             positiveButton(R.string.retry) { detectAccAndInit() }
                             neutralButton(R.string.exit) { finish() }
                             cancelOnTouchOutside(false)

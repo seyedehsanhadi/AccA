@@ -59,7 +59,7 @@
     <!-- ACC installation -->
     <string name="installing_acc">ACC Kuruluyor</string>
     <string name="reboot">Yeniden Başlat</string>
-    <string name="acc_installation_failed">Lütfen logcat dosyasını /data/adb/acc-data/logs/ geliştiricilere t.me/acc_group/ veya github.com/MatteCarra/AccA/issues/ adreslerinden yollayın.    </string>
+    <string name="acc_installation_failed">Lütfen logcat dosyasını /data/adb/vr25/acc-data/logs/ geliştiricilere t.me/+hU1oF-BCf5hmM2Rk/ veya github.com/seyedehsanhadi/AccA/issues/ adreslerinden yollayın.    </string>
     <string name="acc_installation_failed_title">ACC Kurulumu Başarısız!</string>
     <!-- DJS installation -->
     <string name="install_djs_title">DJS Gerekli</string>
@@ -69,7 +69,7 @@
     </string>
     <string name="installing_djs">DJS Yükleniyor</string>
     <string name="djs_installation_failed">Lütfen logcat ve /data/adb/djs-data/logs/logs/
-        t.me/acc_group/ veya github.com/MatteCarra/AccA/issues/\'daki geliştiricilere arşivleyin ve gönderin.
+        t.me/+hU1oF-BCf5hmM2Rk/ veya github.com/seyedehsanhadi/AccA/issues/\'daki geliştiricilere arşivleyin ve gönderin.
     </string>
     <string name="djs_installation_failed_title">DJS Kurulumu Başarısız!</string>
     <string name="voltage_control_file_not_set">Ayarlı değil.</string>
@@ -156,7 +156,7 @@
     <string name="installation_failed_busybox">İlk olarak busybox kur ya da basitçe binary dosyasını /data/adb/bin/ içine yerleştir</string>
     <string name="share">Paylaş</string>
     <string name="logs_not_found">Günlük (Log) dosyası bulunamadı.</string>
-    <string name="acc_telegram">Ek destek için ACC Telegram grubuna katılın (t.me/acc_group)!</string>
+    <string name="acc_telegram">Ek destek için ACC Telegram grubuna katılın (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC, sys arayüzünden şarj durumu bilgisini alır.
         Bazı sistemler akımı µA (mikroamper) veya mA (miliamper) şeklinde gösterir.
         Öngörülen birim yanlış ise, el ile değiştirebilirsiniz.
@@ -199,7 +199,7 @@
     <string name="djs_installation_failed_log">DJS kurulumu başarısız günlüğü (log)</string>
     <string name="select_different_version">ACC versiyonunu değiştir</string>
     <string name="installation_failed_non_bundled">Farklı ACC varyantının yüklenmesi başarısız oldu.
-        \nLütfen /data/adb/acc-data/logs/ klasörünü-dosyalarını geliştiricilerle paylaşmayı düşünün.
+        \nLütfen /data/adb/vr25/acc-data/logs/ klasörünü-dosyalarını geliştiricilerle paylaşmayı düşünün.
     </string>
     <string name="prioritize_battery_idle">Pil boşta moduna öncelik verin</string>
     <string name="schedule_profile_edit_current">Mevcut yapılandırayı düzenle</string>
@@ -216,11 +216,6 @@
     <string name="edit_schedule">Zamanlamayı düzenle</string>
     <string name="create_schedule">Zamanlama yarat</string>
     <!-- About Activity -->
-    <string name="about_team_title">Ekiple Tanışın</string>
-    <string name="about_team_blurb">AccA kullandığınız için teşekkürler!
-        \n\nACC\'yi kolaylıkla yönetebilmeniz için çok zaman harcadık!
-        \n\nACC &amp; AccA projelerine öyle ya da böyle katkıda bulunanlara özel teşekkürler!
-    </string>
     <string name="about_attributes">Öznitelikler</string>
     <string name="about_attrib_telegram_icon">Pixel perfect tarafından www.flaticon.com\'dan yapılan telegram simgesi</string>
     <string name="about_project_github">AccA GitHub</string>

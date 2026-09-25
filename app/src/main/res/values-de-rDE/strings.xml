@@ -60,8 +60,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">ACC wird installiert</string>
     <string name="reboot">Neustart</string>
-    <string name="acc_installation_failed">Bitte archiviere und sende den Logcat und /data/adb/acc-data/logs/ an die Entwickler
-        an t.me/acc_group/ oder github.com/MatteCarra/AccA/issues/.
+    <string name="acc_installation_failed">Bitte archiviere und sende den Logcat und /data/adb/vr25/acc-data/logs/ an die Entwickler
+        an t.me/+hU1oF-BCf5hmM2Rk/ oder github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="acc_installation_failed_title">ACC Installation fehlgeschlagen!</string>
     <!-- DJS installation -->
@@ -72,7 +72,7 @@
     </string>
     <string name="installing_djs">Installiere DJS</string>
     <string name="djs_installation_failed">Bitte archiviere und sende den Logcat und /data/adb/djs-data/logs/ an die Entwickler
-        an t.me/acc_group/ oder github.com/MatteCarra/AccA/issues/.
+        an t.me/+hU1oF-BCf5hmM2Rk/ oder github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="djs_installation_failed_title">DJS Installation fehlgeschlagen!</string>
     <string name="voltage_control_file_not_set">Nicht festgelegt.</string>
@@ -176,7 +176,7 @@
     <string name="installation_failed_busybox">Installiere zuerst Busybox oder lege einfach die Binärdatei in /data/adb/bin/</string>
     <string name="share">Empfehlen</string>
     <string name="logs_not_found">Log-Datei nicht gefunden.</string>
-    <string name="acc_telegram">Für weitere Unterstützung trete der AC-Telegramgruppe (t.me/acc_group) bei!</string>
+    <string name="acc_telegram">Für weitere Unterstützung trete der AC-Telegramgruppe (t.me/+hU1oF-BCf5hmM2Rk) bei!</string>
     <string name="current_measure_unit_preference_description">ACC ruft Ladeinformationen von der Sys-Schnittstelle ab.
         Einige Systeme zeigen Strom in µA (Mikroampere), andere in mA (Milliampere).
         Wenn die erkannte Einheit falsch ist, kann sie manuell festgelegt werden.
@@ -219,7 +219,7 @@
     <string name="djs_installation_failed_log">DJS-Installationsfehler-Log</string>
     <string name="select_different_version">ACC-Version ändern</string>
     <string name="installation_failed_non_bundled">Die Installation einer verschiedener ACC-Variante ist fehlgeschlagen.
-        \nBitte archiviere und teile /data/adb/acc-data/logs/ mit den Entwicklern.
+        \nBitte archiviere und teile /data/adb/vr25/acc-data/logs/ mit den Entwicklern.
     </string>
     <string name="prioritize_battery_idle">Akku-Leerlaufmodus vorziehen</string>
     <string name="schedule_profile_edit_current">Aktuelle Konfiguration bearbeiten</string>
@@ -242,11 +242,6 @@
     <string name="edit_schedule">Zeitplan bearbeiten</string>
     <string name="create_schedule">Zeitplan erstellen</string>
     <!-- About Activity -->
-    <string name="about_team_title">Über das Team</string>
-    <string name="about_team_blurb">Vielen Dank für die Verwendung von AccA!
-        \n\nWir haben damit eine Menge Zeit verbracht, sodass Du ACC problemlos verwalten kannst!
-        \n\nBesonderen Dank an diejenigen, die auf die eine oder andere Weise zu ACC- &amp; AccA-Projekten beigetragen haben!
-    </string>
     <string name="about_attributes">Eigenschaften</string>
     <string name="about_attrib_telegram_icon">Das Telegram-Symbol wurde von Pixel perfekt auf www.flaticon.com gemacht</string>
     <string name="about_acca_version_label">ACCA-Version:</string>

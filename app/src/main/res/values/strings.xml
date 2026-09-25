@@ -129,7 +129,9 @@
     <!-- ACC installation -->
     <string name="installing_acc">Installing ACC</string>
     <string name="acc_not_installed_title">ACC module not found</string>
-    <string name="acc_not_installed_message">AccA controls the ACC module but does not install it. Install ACC separately (flash the module in Magisk/KernelSU), then return and tap Retry.</string>
+    <string name="acc_not_installed_message">ACC is not installed. Download this fork\'s ACC release and flash it in Magisk, KernelSU or APatch, then return and tap Retry.</string>
+    <string name="acca_start_failed_title">AccA could not start</string>
+    <string name="acca_start_failed_message">ACC was found, but AccA could not load its controls. Tap Retry. If this continues, report it at github.com/seyedehsanhadi/AccA/issues/.</string>
     <string name="get_acc">Get ACC</string>
     <string name="exit">Exit</string>
     <string name="reboot">Reboot</string>
@@ -491,13 +493,11 @@
     <string name="create_schedule">Create schedule</string>
 
     <!-- About Activity -->
-    <string name="about_team_title">Meet the Team</string>
-    <string name="about_team_blurb">Thank you for using AccA!
-        \n\nWe spent heaps of time on this so that you can manage ACC with ease!
-        \n\nSpecial thanks to those who have contributed in one way or another to ACC &amp; AccA projects!
-    </string>
+    <string name="about_team_title">Development and credits</string>
+    <string name="about_team_blurb">Seyed Ehsan Hadi maintains and develops this ACC and AccA fork and created AMPS. Original ACC by VR-25; original AccA by Matteo Carrara and Squabbi.</string>
+    <string name="about_original_authors">Original project authors</string>
 
-    <string name="about_role_hadi">Fork maintainer - AMPS engine, AccA 2.0</string>
+    <string name="about_role_hadi">Current developer and maintainer · ACC, AccA, AMPS</string>
     <string name="app_update_title">Update available</string>
     <string name="app_update_message">AccA %1$s is available on GitHub (you have %2$s). Update to get the latest fixes.</string>
     <string name="app_update_get">Get update</string>

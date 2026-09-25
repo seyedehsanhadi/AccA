@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- CircleProgressBar attributes: Copyright 2015-2019 dinuscxj, Apache-2.0. Adapted for AccA in 2026 (progress_style). License: app/src/main/assets/Apache-2.0.txt. -->
 <resources>
   <declare-styleable name="CircleProgressBar">
     <attr name="line_count" format="integer|reference"/>

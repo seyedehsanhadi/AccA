@@ -59,8 +59,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">正在安装 ACC</string>
     <string name="reboot">重启</string>
-    <string name="acc_installation_failed">请将 logcat 和 /data/adb/acc-data/logs/ 打包发送给开发者
-        于 t.me/acc_group/ or github.com/MatteCarra/ AccA/issues/ 。
+    <string name="acc_installation_failed">请将 logcat 和 /data/adb/vr25/acc-data/logs/ 打包发送给开发者
+        于 t.me/+hU1oF-BCf5hmM2Rk/ or github.com/MatteCarra/ AccA/issues/ 。
     </string>
     <string name="acc_installation_failed_title">ACC 安装失败！</string>
     <!-- DJS installation -->
@@ -70,8 +70,8 @@
         \nDJS 进程将在设备开机时与ACC守护程序一同启动。
     </string>
     <string name="installing_djs">正在安装 DJS</string>
-    <string name="djs_installation_failed">请将 logcat 和 /data/adb/acc-data/logs/ 打包发送给开发者
-        于 t.me/acc_group/ or github.com/MatteCarra/ AccA/issues/ 。
+    <string name="djs_installation_failed">请将 logcat 和 /data/adb/vr25/acc-data/logs/ 打包发送给开发者
+        于 t.me/+hU1oF-BCf5hmM2Rk/ or github.com/MatteCarra/ AccA/issues/ 。
     </string>
     <string name="djs_installation_failed_title">DJS 安装失败！</string>
     <string name="voltage_control_file_not_set">未设置。</string>
@@ -162,7 +162,7 @@
     <string name="installation_failed_busybox">请先安装 busybox，或直接把二进制文件放入 /data/adb/bin/</string>
     <string name="share">分享</string>
     <string name="logs_not_found">找不到日志文件。</string>
-    <string name="acc_telegram">加入 ACC Telegram 群 (t.me/acc_group) 以获得更多额外支援。</string>
+    <string name="acc_telegram">加入 ACC Telegram 群 (t.me/+hU1oF-BCf5hmM2Rk) 以获得更多额外支援。</string>
     <string name="current_measure_unit_preference_description">ACC 从系统接口获取充电信息。
         有些系统以 µA(微安培) 表示电流，有些以 mA (毫安培).
         如果检测单位不正确，您可以手动设置。
@@ -205,7 +205,7 @@
     <string name="djs_installation_failed_log">DJS 安装失败日志</string>
     <string name="select_different_version">更换 ACC 版本</string>
     <string name="installation_failed_non_bundled">安装其他 ACC 版本失败。
-        \n请考虑将 /data/adb/acc-data/logs/ 打包并分享给开发者。
+        \n请考虑将 /data/adb/vr25/acc-data/logs/ 打包并分享给开发者。
     </string>
     <string name="prioritize_battery_idle">电池闲置模式优先</string>
     <string name="schedule_profile_edit_current">编辑当前配置</string>
@@ -224,11 +224,6 @@
     <string name="edit_schedule">编辑计划</string>
     <string name="create_schedule">创建计划</string>
     <!-- About Activity -->
-    <string name="about_team_title">团队介绍</string>
-    <string name="about_team_blurb">感谢您使用 AccA！
-        \n\n我们在此应用上投入了大量时间，以便您轻松管理 ACC！
-        \n\n特别感谢以各种方式向 ACC 或 AccA项目做出贡献的人们！
-    </string>
     <string name="about_attributes">致谢</string>
     <string name="about_attrib_telegram_icon">电报头像由 Pixel perfect 绘制
 取自 www.flaticon.com</string>

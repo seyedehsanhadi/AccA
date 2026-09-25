@@ -59,8 +59,8 @@
     <!-- ACC installation -->
     <string name="installing_acc">Bezig met installeren ACC</string>
     <string name="reboot">Opnieuw opstarten</string>
-    <string name="acc_installation_failed">Archiveer en verstuur logcat en /data/adb/acc-data/logs/ naar de ontwikkelaars
-        op t.me/acc_group/ of github.com/MatteCarra/AccA/issues/.
+    <string name="acc_installation_failed">Archiveer en verstuur logcat en /data/adb/vr25/acc-data/logs/ naar de ontwikkelaars
+        op t.me/+hU1oF-BCf5hmM2Rk/ of github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="acc_installation_failed_title">ACC installatie mislukt!</string>
     <!-- DJS installation -->
@@ -71,7 +71,7 @@
     </string>
     <string name="installing_djs">DJS installeren</string>
     <string name="djs_installation_failed">Archiveer en verstuur logcat en /data/adb/djs-data/logs/ naar de ontwikkelaars
-        op t.me/acc_group/ of github.com/MatteCarra/AccA/issues/.
+        op t.me/+hU1oF-BCf5hmM2Rk/ of github.com/seyedehsanhadi/AccA/issues/.
     </string>
     <string name="djs_installation_failed_title">DJS installatie mislukt!</string>
     <string name="voltage_control_file_not_set">Niet ingesteld.</string>
@@ -161,7 +161,7 @@
     <string name="installation_failed_busybox">Installeer eerst busybox of plaats de binary in /data/adb/bin/</string>
     <string name="share">Delen</string>
     <string name="logs_not_found">Logbestand niet gevonden.</string>
-    <string name="acc_telegram">Voor extra ondersteuning, neem deel aan ACC Telegram groep (t.me/acc_group)!</string>
+    <string name="acc_telegram">Voor extra ondersteuning, neem deel aan ACC Telegram groep (t.me/+hU1oF-BCf5hmM2Rk)!</string>
     <string name="current_measure_unit_preference_description">ACC haalt oplaadinformatie uit de sys interface.
         Sommige systemen geven huidige uitdrukking in µA (microamps), andere in mA (milliamps).
         Als de gedetecteerde eenheid onjuist is, kunt u deze handmatig instellen.
@@ -204,7 +204,7 @@
     <string name="djs_installation_failed_log">DJS installatie mislukt log</string>
     <string name="select_different_version">Wijzig ACC versie</string>
     <string name="installation_failed_non_bundled">De installatie van een andere ACC-variant is mislukt.
-        \nOverweeg om /data/adb/acc-data/logs/ te delen met de devs.
+        \nOverweeg om /data/adb/vr25/acc-data/logs/ te delen met de devs.
     </string>
     <string name="prioritize_battery_idle">Prioriteer batterij inactieve modus</string>
     <string name="schedule_profile_edit_current">Bewerk huidige configuratie</string>
@@ -222,11 +222,6 @@
     <string name="edit_schedule">Bewerk schema</string>
     <string name="create_schedule">Maak schema</string>
     <!-- About Activity -->
-    <string name="about_team_title">Maak kennis met het team</string>
-    <string name="about_team_blurb">Bedankt voor het gebruik van AccA!
-        \n\nWe besteden hier veel tijd aan zodat je ACC gemakkelijk kunt beheren!
-        \n\nSpeciale dank aan degenen die op de een of andere manier hebben bijgedragen aan ACC &amp; AccA projecten!
-    </string>
     <string name="about_attributes">Kenmerken</string>
     <string name="about_attrib_telegram_icon">Telegram-pictogram gemaakt door Pixel perfect van www.flaticon.com</string>
     <string name="about_acca_version_label">ACCA Versie:</string>
